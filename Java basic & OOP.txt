@@ -1,0 +1,7 @@
+https://www.youtube.com/watch?v=uuvJ79vjKw8 - Java SE 01 - Introduction to Java [Alexander Kharichkin]
+https://www.youtube.com/watch?list=PL5_3skiENg3-PcGZD7khriyQGQi46F9UF&v=RG8p5vxdJj0 - Java SE 02 - Java code basics. Operators, Flow
+https://www.youtube.com/watch?list=PL5_3skiENg38wAGhgjh4z2SnsWJvOOqHG&v=6S1bFUsuWYg - Java SE 03 - OOP Basics [Maxim Bukasov]
+https://www.youtube.com/watch?list=PL5_3skiENg3_SBvFg5TBIsdFDIjTQ3LgE&v=CykX1xnuhx4 - Java SE 04 - OOP part 2 [Maxim Bukasov]
+https://www.youtube.com/watch?list=PL5_3skiENg380wcGgQiU1WBZZrQhxyNtD&v=KuiInFk1PpQ - Java SE 05 - Generics [Vasiliy Orlov]
+https://www.youtube.com/watch?list=PL5_3skiENg3_MG-p8rjZxhCm2-tK6fbe9&v=Ydcu6SJeKk8 - Java SE 05 - Collections [Maxim Bukasov]
+https://www.youtube.com/watch?list=PL5_3skiENg38S45Ro7bEJO18WabIoCFpn&v=l6MnyLthF0c - Java SE 06 - Exceptions. Debug [Sergey Kolesnikov]
