@@ -2,16 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="d39190d2-98c7-4904-8bfb-9e0d43f9839f" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/client/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/client/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/main/java/messenger2/App.java" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/main/java/messenger2/App.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/main/java/messenger2/Controllers/LoginController.java" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/main/java/messenger2/Controllers/LoginController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/main/java/messenger2/Controllers/RegistrationController.java" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/main/java/messenger2/Controllers/RegistrationController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/main/java/messenger2/Controllers/n.java" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/main/java/messenger2/Controllers/n.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/main/java/messenger2/views/Login.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/main/java/messenger2/views/Login.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/main/java/messenger2/views/Registration.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/main/java/messenger2/views/Registration.fxml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/client/src/main/java/messenger2/views/n.fxml" beforeDir="false" afterPath="$PROJECT_DIR$/client/src/main/java/messenger2/views/n.fxml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/client/target/client-1.0-SNAPSHOT.jar" beforeDir="false" afterPath="$PROJECT_DIR$/client/target/client-1.0-SNAPSHOT.jar" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/server/pom.xml" afterDir="false" />
     </list>
     <ignored path="$PROJECT_DIR$/out/" />
     <ignored path="$PROJECT_DIR$/target/" />
@@ -35,12 +28,21 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/client/pom.xml">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="312">
-              <caret line="104" column="22" selection-start-line="104" selection-start-column="22" selection-end-line="104" selection-end-column="22" />
+            <state relative-caret-position="1428">
+              <caret line="94" column="50" selection-start-line="94" selection-start-column="50" selection-end-line="94" selection-end-column="50" />
               <folding>
                 <element signature="n#dependencies#0;n#project#0;n#!!top" />
                 <element signature="n#properties#0;n#project#0;n#!!top" />
               </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/pom.xml">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="238">
+              <caret line="14" selection-start-line="14" selection-end-line="14" />
             </state>
           </provider>
         </entry>
@@ -54,15 +56,6 @@
                 <element signature="imports" expanded="true" />
                 <element signature="e#762#796#0" />
               </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/server/pom.xml">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="408">
-              <caret line="24" selection-start-line="24" selection-end-line="24" />
             </state>
           </provider>
         </entry>
@@ -93,7 +86,7 @@
           </provider>
         </entry>
       </file>
-      <file pinned="false" current-in-tab="true">
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/client/src/main/java/messenger2/views/Registration.fxml">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="251">
@@ -140,7 +133,6 @@
     <option name="CHANGED_PATHS">
       <list>
         <option value="$PROJECT_DIR$/server/src/main/java/messenger2/App.java" />
-        <option value="$PROJECT_DIR$/pom.xml" />
         <option value="$PROJECT_DIR$/server/pom.xml" />
         <option value="$PROJECT_DIR$/client/src/main/java/messenger2/views/n.fxml" />
         <option value="$PROJECT_DIR$/client/src/main/java/messenger2/views/Login.fxml" />
@@ -148,6 +140,7 @@
         <option value="$PROJECT_DIR$/client/src/main/java/messenger2/App.java" />
         <option value="$PROJECT_DIR$/client/src/main/java/messenger2/Controllers/LoginController.java" />
         <option value="$PROJECT_DIR$/client/src/main/java/messenger2/views/Registration.fxml" />
+        <option value="$PROJECT_DIR$/pom.xml" />
       </list>
     </option>
   </component>
@@ -169,14 +162,6 @@
           <item name="" type="16c1761:MavenProjectsStructure$RootNode" />
           <item name="client" type="9519ce18:MavenProjectsStructure$ProjectNode" />
           <item name="Lifecycle" type="58874e2:MavenProjectsStructure$LifecycleNode" />
-        </path>
-        <path>
-          <item name="" type="16c1761:MavenProjectsStructure$RootNode" />
-          <item name="messenger2" type="9519ce18:MavenProjectsStructure$ProjectNode" />
-        </path>
-        <path>
-          <item name="" type="16c1761:MavenProjectsStructure$RootNode" />
-          <item name="server" type="9519ce18:MavenProjectsStructure$ProjectNode" />
         </path>
       </expand>
       <select />
@@ -213,7 +198,7 @@
   <component name="PropertiesComponent">
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="aspect.path.notification.shown" value="true" />
-    <property name="com.android.tools.idea.instantapp.provision.ProvisionBeforeRunTaskProvider.myTimeStamp" value="1548505196786" />
+    <property name="com.android.tools.idea.instantapp.provision.ProvisionBeforeRunTaskProvider.myTimeStamp" value="1548506153596" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$/../messenger1" />
     <property name="nodejs_interpreter_path.stuck_in_default_project" value="undefined stuck path" />
     <property name="nodejs_npm_path_reset_for_default_project" value="true" />
@@ -238,23 +223,10 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Application.App (1)">
+  <component name="RunManager" selected="Application.App">
     <configuration name="App (1)" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
       <option name="MAIN_CLASS_NAME" value="messenger2.App" />
       <module name="client" />
-      <extension name="coverage">
-        <pattern>
-          <option name="PATTERN" value="messenger2.*" />
-          <option name="ENABLED" value="true" />
-        </pattern>
-      </extension>
-      <method v="2">
-        <option name="Make" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="App (2)" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
-      <option name="MAIN_CLASS_NAME" value="messenger2.App" />
-      <module name="server" />
       <extension name="coverage">
         <pattern>
           <option name="PATTERN" value="messenger2.*" />
@@ -291,24 +263,37 @@
         <option name="Make" enabled="true" />
       </method>
     </configuration>
+    <configuration name="App" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="messenger2.App" />
+      <module name="client" />
+      <extension name="coverage">
+        <pattern>
+          <option name="PATTERN" value="messenger2.*" />
+          <option name="ENABLED" value="true" />
+        </pattern>
+      </extension>
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="client-1.0-SNAPSHOT.jar" type="JarApplication" factoryName="JAR Application" temporary="true">
       <option name="JAR_PATH" value="$PROJECT_DIR$/client/target/client-1.0-SNAPSHOT.jar" />
       <method v="2" />
     </configuration>
     <list>
       <item itemvalue="Application.App (1)" />
-      <item itemvalue="Application.App (2)" />
       <item itemvalue="Application.App (3)" />
       <item itemvalue="Application.App (4)" />
       <item itemvalue="JAR Application.client-1.0-SNAPSHOT.jar" />
+      <item itemvalue="Application.App" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Application.App" />
         <item itemvalue="Application.App (1)" />
         <item itemvalue="JAR Application.client-1.0-SNAPSHOT.jar" />
         <item itemvalue="Application.App (4)" />
         <item itemvalue="Application.App (3)" />
-        <item itemvalue="Application.App (2)" />
       </list>
     </recent_temporary>
   </component>
@@ -323,12 +308,12 @@
       <option name="presentableId" value="Default" />
       <updated>1548490674553</updated>
       <workItem from="1548490681929" duration="4247000" />
-      <workItem from="1548500652422" duration="4398000" />
+      <workItem from="1548500652422" duration="5363000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="8645000" />
+    <option name="totallyTimeSpent" value="9610000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="-7" y="-7" width="1550" height="838" extended-state="6" />
@@ -389,13 +374,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/pom.xml">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="374">
-          <caret line="22" column="18" selection-start-line="22" selection-start-column="18" selection-end-line="22" selection-end-column="18" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/client/src/main/java/messenger2/views/n.fxml">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="170">
@@ -436,17 +414,6 @@
       </provider>
       <provider editor-type-id="JavaFX-Scene-Builder" />
     </entry>
-    <entry file="file://$PROJECT_DIR$/client/pom.xml">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="312">
-          <caret line="104" column="22" selection-start-line="104" selection-start-column="22" selection-end-line="104" selection-end-column="22" />
-          <folding>
-            <element signature="n#dependencies#0;n#project#0;n#!!top" />
-            <element signature="n#properties#0;n#project#0;n#!!top" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/client/src/main/java/messenger2/Controllers/RegistrationController.java">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="85">
@@ -482,6 +449,24 @@
         </state>
       </provider>
       <provider editor-type-id="JavaFX-Scene-Builder" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/client/pom.xml">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1428">
+          <caret line="94" column="50" selection-start-line="94" selection-start-column="50" selection-end-line="94" selection-end-column="50" />
+          <folding>
+            <element signature="n#dependencies#0;n#project#0;n#!!top" />
+            <element signature="n#properties#0;n#project#0;n#!!top" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/pom.xml">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="238">
+          <caret line="14" selection-start-line="14" selection-end-line="14" />
+        </state>
+      </provider>
     </entry>
   </component>
 </project>
