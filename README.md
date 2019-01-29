@@ -1,6 +1,7 @@
 [![Java 8+](https://img.shields.io/badge/java-8%2b-green.svg)](http://www.oracle.com/technetwork/java/javase/downloads/index.html)
 
-[![Build Status](https://semaphoreci.com/api/v1/<тут_ссылка_на_проект>/shields_badge.svg)](https://semaphoreci.com/<ссылка_на_проект>)
+[![Build Status](https://semaphoreci.com/api/v1/<тут_ссылка_на_проект>/shields_badge.svg)](https://semaphoreci.com/https://github.com/Andee13)
+
 # messenger
 
 Общение сервера и клиента состоит из обработки пересланных объектов типа Message, представленных в XML-формате. Экземпляр данного класса может быть представлен как request (сообщение от клиента серверу, запрос на выполнение конкретного действия) либо же response (ответ сервера клиенту на request). За идентификацию типа сообщения отвечает final-поле  type : Type, инициализируемое при создании.
