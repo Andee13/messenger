@@ -37,6 +37,7 @@ public class LoginController {
             System.out.println(b + " " + a);
         });
         Register.setOnAction(event -> {
+
             try {
                 Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Registration.fxml"));
                 App.getStage().setTitle("Hello World");
