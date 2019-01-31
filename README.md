@@ -1,6 +1,6 @@
 [![Java 8+](https://img.shields.io/badge/java-8%2b-green.svg)](http://www.oracle.com/technetwork/java/javase/downloads/index.html)
 
-[![Build Status](https://semaphoreci.com/api/v1/<тут_ссылка_на_проект>/shields_badge.svg)](https://semaphoreci.com/https://github.com/Andee13)
+[![Build Status](https://semaphoreci.com/api/v1/andee13/messenger/branches/master/badge.svg)](https://semaphoreci.com/andee13/messenger)
 
 # messenger
 
