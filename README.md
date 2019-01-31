@@ -1,4 +1,4 @@
-[![Java 8+](https://img.shields.io/badge/java-8%2b-green.svg)](http://www.oracle.com/technetwork/java/javase/downloads/index.html)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/e5478ccbaf4a4485baef769243da4f68)](https://www.codacy.com/app/Andee13/messenger?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Andee13/messenger&amp;utm_campaign=Badge_Grade)
 
 [![Build Status](https://semaphoreci.com/api/v1/andee13/messenger/branches/master/badge.svg)](https://semaphoreci.com/andee13/messenger)
 
