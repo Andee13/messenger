@@ -1,22 +1,28 @@
 package server;
 
 import common.message.Message;
-import common.message.XMLMessageBuilder;
-import common.message.XMLMessageParser;
-import common.message.status.ResponseStatus;
+import common.message.status.MessageStatus;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
+import javax.xml.bind.*;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import javax.xml.xpath.*;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.Scanner;
 
 public class Main {
-    public static void main(String[] args) throws ParserConfigurationException, IOException, SAXException, XMLStreamException {
+    public static void main(String[] args) throws ParserConfigurationException, IOException, SAXException, XMLStreamException, JAXBException, XPathExpressionException {
         /*DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
         documentBuilderFactory.setValidating(true);
         DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
@@ -39,10 +45,10 @@ public class Main {
         Document document = documentBuilder.parse("src/server.xml");
         Element root = document.getDocumentElement();
         System.out.println(root.getTextContent());*/
-        /*Message message = new Message(RequestStatus.AUTH).setLogin("leader228228").setPassword("12345");
+        /*Message message = new Message(MessageStatus.AUTH).setLogin("leader228228").setPassword("12345");
         XMLMessageBuilder xmlMessageBuilder = new XMLMessageBuilder(message);
 
-        Message message1 = new Message(RequestStatus.REGISTRATION).setLogin("leader228228").setPassword("12345");
+        Message message1 = new Message(MessageStatus.REGISTRATION).setLogin("leader228228").setPassword("12345");
         xmlMessageBuilder = new XMLMessageBuilder(message1);
 
         Message message2 = new Message(ResponseStatus.ERROR).setText(new IllegalStateException("some test info").getText());
@@ -80,6 +86,83 @@ public class Main {
                 System.out.println(xmlStreamReader.getText());
             }
         }*/
+
+        //System.out.println(Server.class.getProtectionDomain().getCodeSource().getLocation().getPath());
+        /*Message message = new Message(MessageStatus.REGISTRATION).setLogin("Mike").setPassword("1234");
+
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+        marshaller.marshal(message, new File("myMessage.txt"));*/
+
+        /*Room room = new Room();
+        room.setRoomId(1);
+        room.setAdminId(2);
+        room.setMessageHistory(FXCollections.observableArrayList());
+
+        room.getMessageHistory().add(new Message(MessageStatus.MESSAGE).setText("hello"));
+        room.getMessageHistory().add(new Message(MessageStatus.MESSAGE).setText("world"));
+        room.getMessageHistory().add(new Message(MessageStatus.MESSAGE).setText("everything will be ok"));
+
+        room.setAllClients(new HashSet<>());
+        room.getAllClients().add(1);
+        room.getAllClients().add(2);
+        room.getAllClients().add(3);
+        room.getAllClients().add(4);
+
+        JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+        File myRoom = new File("myRoom.xml");
+        File myRoom1 = new File("myRoom.xml");
+        marshaller.marshal(room, myRoom);
+
+        Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+        System.out.println(unmarshaller);
+        Room unmarshRoom = (Room) unmarshaller.unmarshal(myRoom1);
+        System.out.println(unmarshRoom);*/
+
+        Room room = new Room();
+        room.getMessageHistory().add(new Message(MessageStatus.MESSAGE).setText("Hello").setFromId(1));
+        room.getMessageHistory().add(new Message(MessageStatus.MESSAGE).setText("World").setFromId(1));
+        room.getMessageHistory().add(new Message(MessageStatus.MESSAGE).setText("Everything will be ok").setFromId(2));
+        room.getMembers().add(777);
+        room.getMembers().add(123);
+        room.getMembers().add(65);
+        room.getMembers().add(93);
+        JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+        File file = new File("myRoom.xml");
+        marshaller.marshal(room,file);
+
+
+        Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+        Room room1 = (Room) unmarshaller.unmarshal(file);
+        System.out.println(room1);
+
+
+        /*int clientId = 777;
+
+        XPath xPath = XPathFactory.newInstance().newXPath();
+        XPathExpression xPathExpression = null;
+        try {
+            xPathExpression = xPath.compile("room/members/clientId");
+        } catch (XPathExpressionException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
+        NodeList resultNodeList = (NodeList) xPathExpression.evaluate(
+                new InputSource(new BufferedReader(new FileReader(file))), XPathConstants.NODESET);
+        for(int i = 0; i < resultNodeList.getLength(); i++) {
+            if(clientId == Integer.parseInt(resultNodeList.item(i).getTextContent())) {
+                System.err.println(true);
+                return;
+            }
+        }
+        System.err.println(false);
+        */
+
 
     }
 }

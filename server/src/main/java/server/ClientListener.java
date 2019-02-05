@@ -1,27 +1,19 @@
 package server;
 
 import common.message.Message;
-import common.message.XMLMessageBuilder;
-import common.message.XMLMessageParser;
-import common.message.status.RequestStatus;
-import common.message.status.ResponseStatus;
-import common.message.status.Type;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
+import common.message.status.MessageStatus;
+import org.jetbrains.annotations.NotNull;
+import org.xml.sax.InputSource;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.Unmarshaller;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
+import javax.xml.xpath.XPathExpressionException;
 import java.io.*;
 import java.net.Socket;
 import java.time.LocalDateTime;
@@ -31,50 +23,77 @@ public class ClientListener extends Thread{
     private Server server;
     private DataOutputStream out;
     private DataInputStream in;
-    private XMLMessageBuilder xmlMessageBuilder;
     private LocalDateTime lastInputMessage;
-    private int lastRoomIdTextMessage = DEFAULT_VALUE;
-    private int userId = DEFAULT_VALUE;
-    private static final int DEFAULT_VALUE = -1;
     private boolean logged;
-    private final LocalDateTime connected;
+    private LocalDateTime connected;
+    private Client client;
 
-    public ClientListener(Server server, Socket socket) {
+    public Client getClient() {
+        return client;
+    }
+
+    public void setClient(Client client) {
+        this.client = client;
+    }
+
+    public ClientListener(){
+
+    }
+
+    public ClientListener(Server server, Socket socket) throws IOException {
         this.server = server;
         this.socket = socket;
         connected = LocalDateTime.now();
-        xmlMessageBuilder = new XMLMessageBuilder();
-        try {
-            out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-            in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
-        } catch (IOException e) {
-            e.printStackTrace();
-            try {
-                server.closeClientSession(this);
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
-        }
+        out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+        in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
     }
 
     // TODO logging the exceptions
     @Override
     public void run() {
-        while (true) {
-            try {
-                lastInputMessage = LocalDateTime.now();
-                handle((new XMLMessageParser(in.readUTF())).parseInput().getMessage());
-            } catch (Exception e) {
-                e.printStackTrace();
-                xmlMessageBuilder.setMessage(new Message(ResponseStatus.ERROR).setException(e));
-                xmlMessageBuilder.buildXML();
+        // TODO
+        JAXBContext jaxbContext = null;
+        try{
+            jaxbContext = JAXBContext.newInstance(Message.class);
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            while (!logged) {
+                Message firstMessage = (Message) unmarshaller.unmarshal(new InputSource(new StringReader(in.readUTF())));
+                if(!MessageStatus.AUTH.equals(firstMessage.getStatus()) && !MessageStatus.REGISTRATION.equals(firstMessage.getStatus())){
+                    Message wrongFirstMessage = new Message(MessageStatus.ERROR)
+                            .setText(new StringBuilder("The first message must be either ")
+                                    .append(MessageStatus.AUTH).append(" or ").append(MessageStatus.REGISTRATION)
+                                    .append(" status. But found ").append(firstMessage.getStatus()).toString());
+                    Marshaller marshaller = jaxbContext.createMarshaller();
+                    StringWriter stringWriter = new StringWriter();
+                    marshaller.marshal(wrongFirstMessage, stringWriter);
+                    out.writeUTF(stringWriter.toString());
+                }
                 try {
-                    out.writeUTF(xmlMessageBuilder.getXmlText());
-                } catch (IOException e1) {
-                    e1.printStackTrace();
+                    auth(firstMessage);
+                } catch (XMLStreamException e) {
+                    sendResponseMessage(new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage()));
                 }
             }
+        } catch(JAXBException | IOException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
 
+        while (true) {
+            try {
+                // TODO handle the input
+                in.read();
+                lastInputMessage = LocalDateTime.now();
+            } catch (Exception e) {
+                e.printStackTrace();
+                try {
+                    sendResponseMessage(new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage()));
+                }catch (JAXBException | IOException e1){
+                    e1.printStackTrace();
+                    // TODO logging the exceptions
+                    System.err.println("Response message has not been sent");
+                }
+            }
         }
     }
 
@@ -95,25 +114,29 @@ public class ClientListener extends Thread{
     }
 
     private void handle(Message message) throws Exception{
-        if(message == null){
+        /*if(message == null){
             throw new NullPointerException("Message must not be null");
-        }
-        if(message.getType() == Type.RESPONSE){
-            throw new IOException(new StringBuilder("The message coming from client must be ")
-                    .append(Type.REQUEST.toString()).append(" type").toString());
-        }
-        switch ((RequestStatus)(message.getStatus())){
+        }*/
+        switch ((MessageStatus)(message.getStatus())){
             case AUTH:
                 auth(message);
+                if(logged){
+                    sendResponseMessage(new Message(MessageStatus.ACCEPTED));
+                } else {
+                    sendResponseMessage(new Message(MessageStatus.DENIED));
+                }
                 break;
             case REGISTRATION:
-                registration(message);
+                Message response = registration(message);
+                sendResponseMessage(response);
                 break;
             case MESSAGE:
+                sendTextMessage(message);
                 break;
             case USERBAN:
                 break;
             case CREATE_ROOM:
+                createRoom(message);
                 break;
             case DELETE_ROOM:
                 break;
@@ -126,13 +149,11 @@ public class ClientListener extends Thread{
         }
     }
 
-    private void auth(Message message) throws IOException, XMLStreamException {
+    private void auth(Message message) throws IOException, XMLStreamException, JAXBException {
         String login = message.getLogin();
         String password = message.getPassword();
-        File userFile = new File(new StringBuilder(Server.getUsersDir().getAbsolutePath())
-                .append(login)
-                .append(".txt")
-                .toString());
+        File userFile = new File(new StringBuilder(server.getClientsDir().getAbsolutePath())
+                .append(login.hashCode()).append(".xml").toString());
         if(userFile.exists()){
             XMLInputFactory xmlInputFactory = XMLInputFactory.newInstance();
             XMLStreamReader xmlStreamReader = xmlInputFactory.createXMLStreamReader(
@@ -145,66 +166,114 @@ public class ClientListener extends Thread{
                     break;
                 }
                 xmlStreamReader.next();
-                out.writeUTF((new XMLMessageBuilder()).setMessage(
-                        (logged = xmlStreamReader.getText().equals(password)) ?
-                                (new Message(ResponseStatus.ACCEPTED)) :
-                                (new Message(ResponseStatus.DENIED))
-                ).getXmlText());
-                out.flush();
+                logged = xmlStreamReader.getText().equals(password);
                 return;
             }
-            out.writeUTF((new XMLMessageBuilder())
-                    .setMessage(new Message(ResponseStatus.DENIED))
-                    .buildXML()
-                    .getXmlText());
-            out.flush();
         }
     }
 
-    private void registration(Message message) throws IOException, ParserConfigurationException, TransformerException {
+    private Message registration(Message message) {
         if(message == null){
-            throw new NullPointerException("Message must not be null");
+            try{
+                throw new NullPointerException("Message must not be null");
+            } catch (NullPointerException e){
+                // TODO logging the exception
+                e.printStackTrace();
+                throw e;
+            }
         }
+        File clients = Server.getClientsDir();
         String login = message.getLogin();
         String password = message.getPassword();
-        File userFile = new File(new StringBuilder(Server.getUsersDir().getAbsolutePath())
-                .append(login)
-                .append(".txt")
-                .toString());
-        if(userFile.exists()){
-            out.writeUTF((new XMLMessageBuilder()).setMessage(
-                    new Message(ResponseStatus.DENIED)
-                    .setText(new StringBuilder("The login ").append(login).append(" is already taken").toString())
-            ).buildXML().getXmlText());
-            out.flush();
-            return;
+        File clientFile = new File(new StringBuilder(clients.getAbsolutePath()).append(login.hashCode())
+                .append(".xml").toString());
+        if(clientFile.exists()) {
+            return new Message(MessageStatus.DENIED).setText(new StringBuilder("The login ")
+                    .append(login).append(" is already taken").toString());
         }
-        if(userFile.createNewFile()){
-            DocumentBuilder documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-            Document document = documentBuilder.newDocument();
-            Element user = document.createElement("user");
-            Element loginTag = document.createElement("login");
-            Element passwordTag = document.createElement("password");
-            loginTag.setTextContent(login);
-            passwordTag.setTextContent(password);
-            user.appendChild(loginTag);
-            user.appendChild(passwordTag);
-            document.appendChild(user);
-            Transformer transformer = TransformerFactory.newInstance().newTransformer();
-            transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-            transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
-            transformer.setOutputProperty(OutputKeys.METHOD, "xml");
-            StreamResult streamResult = new StreamResult(userFile);
-            transformer.transform(new DOMSource(document), streamResult);
-            streamResult.getWriter().flush();
-            logged = true;
-            return;
+        try{
+            if(clientFile.createNewFile()) {
+                Client client = new Client();
+                client.setLogin(login);
+                client.setPassword(password);
+                client.setClientId(login.hashCode());
+                JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+                Marshaller marshaller = jaxbContext.createMarshaller();
+                marshaller.marshal(client,clientFile);
+                return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
+                        .append(login).append(" has been successfully created").toString());
+            }
+        } catch (JAXBException | IOException e) {
+            // TODO logging the exceptions
+            e.printStackTrace();
+            return new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage());
         }
-        out.writeUTF((new XMLMessageBuilder().setMessage(new Message(ResponseStatus.DENIED)).buildXML().getXmlText()));
-        out.flush();
+        return new Message(MessageStatus.DENIED).setText("Registration has not been finished successfully");
+    }
+
+    private Message createRoom(@NotNull Message message) throws FileNotFoundException, XPathExpressionException {
+        /*if (!message.getStatus().equals(MessageStatus.CREATE_ROOM)) {
+            return new Message(MessageStatus.ERROR)
+                    .setText(new StringBuilder("The message status must be ").append(MessageStatus.CREATE_ROOM)
+                            .append(" but found ").append(message.getStatus()).toString());
+        }
+        if(Client.isMember(message.getFromId(), message.getRoomId())){
+
+        }*/
+        /*
+        * Just a stub // TODO complete the method
+        * */
+        return null;
+    }
+
+    // TODO sending a message to the specific room
+    private void sendTextMessage(Message message) {
+        /*if(!message.getStatus().equals(MessageStatus.MESSAGE)){
+            throw new IllegalArgumentException(new StringBuilder("Status ")
+                    .append(MessageStatus.MESSAGE)
+                    .append(" is expected, but found: ")
+                    .append(message.getStatus()).toString());
+        }
+        if(message.getFromId() != userId){
+            throw new IllegalAccessException("Clients id mismatch");
+        }
+        if(message.getToId() != )*/
     }
 
     public LocalDateTime getConnected() {
         return LocalDateTime.from(connected);
+    }
+
+    public void sendResponseMessage(Message message) throws IOException, JAXBException{
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+        StringWriter stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        out.writeUTF(stringWriter.toString());
+        out.flush();
+    }
+
+    public void saveClient() throws JAXBException {
+        if(client == null) {
+            // TODO decide what to do with a case when the client hasn't been set
+            return;
+        }
+        JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        File clientFile = new File(new StringBuilder(Server.getClientsDir().getAbsolutePath())
+                .append(client.getClientId()).append(".xml").toString());
+        marshaller.marshal(client, clientFile);
+    }
+
+    public void closeClientSession() throws IOException, JAXBException {
+        if(isAlive() && ! isInterrupted()){
+            in.close();
+            out.close();
+            socket.close();
+            saveClient();
+            server.getClients().remove(this);
+            interrupt();
+        }
     }
 }

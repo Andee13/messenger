@@ -1,33 +1,42 @@
 package common.message;
 
-import common.message.status.RequestStatus;
-import common.message.status.ResponseStatus;
-import common.message.status.Type;
+import common.message.status.MessageStatus;
+import server.Server;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.adapters.XmlAdapter;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.time.LocalDateTime;
 
+@XmlAccessorType(XmlAccessType.FIELD)
+@XmlRootElement(name = "message")
 public class Message {
+    @XmlJavaTypeAdapter(value = Message.LocalDateTimeAdapter.class)
     private LocalDateTime creationDateTime;
-    private final Type type;
-    private final Enum<? extends Enum> status;
+    @XmlElement
+    private MessageStatus status;
+    @XmlElement
     private String text;
+    @XmlElement
     private String login;
+    @XmlElement
     private String password;
-    private Throwable exception;
-    private int fromId = ID_DEFAULT_VALUE;
-    private int toId = ID_DEFAULT_VALUE;
-    private int roomId = ID_DEFAULT_VALUE;
-    private static final int ID_DEFAULT_VALUE = -1;
+    @XmlElement
+    private Integer fromId;
+    @XmlElement
+    private Integer toId;
+    @XmlElement
+    private Integer roomId;
 
-    public Message(ResponseStatus status) {
-        creationDateTime = LocalDateTime.now();
-        type = Type.RESPONSE;
-        this.status = status;
+    public Message() {
+        setCreationDateTime(LocalDateTime.now());
     }
 
-    public Message(RequestStatus status) {
-        creationDateTime = LocalDateTime.now();
-        type = Type.REQUEST;
+    public Message(MessageStatus status) {
+        setCreationDateTime(LocalDateTime.now());
         this.status = status;
     }
 
@@ -36,18 +45,8 @@ public class Message {
     }
 
     public Message setRoomId(int roomId) {
-        if (this.roomId != ID_DEFAULT_VALUE) {
-            throw new IllegalStateException("\"roomId\" value is already set");
-        }
-        if (roomId < 0) {
-            throw new IllegalArgumentException("Id must not be less than zero");
-        }
         this.roomId = roomId;
         return this;
-    }
-
-    public Type getType() {
-        return type;
     }
 
     public String getText() {
@@ -55,12 +54,6 @@ public class Message {
     }
 
     public Message setText(String text) {
-        if(this.text != null) {
-            throw new IllegalStateException("The text is already set");
-        }
-        if (text == null) {
-            throw new NullPointerException("Specified string must not be null");
-        }
         this.text = text;
         return this;
     }
@@ -70,12 +63,6 @@ public class Message {
     }
 
     public Message setLogin(String login) {
-        if(this.login != null) {
-            throw new IllegalStateException("The login is already set");
-        }
-        if (login == null) {
-            throw new NullPointerException("Specified login String must not be null");
-        }
         this.login = login;
         return this;
     }
@@ -85,34 +72,12 @@ public class Message {
     }
 
     public Message setPassword(String password) {
-        if (password == null) {
-            throw new NullPointerException("Specified string must not be null");
-        }
-        if(this.password != null) {
-            throw new IllegalStateException("The password is already set");
-        }
         this.password = password;
         return this;
     }
 
-    public Enum<? extends Enum> getStatus() {
+    public MessageStatus getStatus() {
         return status;
-    }
-
-    public Throwable getException() {
-        return exception;
-    }
-
-    public Message setException(Throwable exception) {
-        if (exception == null) {
-            throw new NullPointerException("Specified exception must not be null");
-        }
-        if(this.exception != null) {
-            throw new IllegalStateException("The exception is already set value is already set");
-        }
-        this.exception = exception;
-        this.text = exception.getLocalizedMessage();
-        return this;
     }
 
     public int getFromId() {
@@ -120,12 +85,6 @@ public class Message {
     }
 
     public Message setFromId(int fromId) {
-        if (this.fromId != ID_DEFAULT_VALUE) {
-            throw new IllegalStateException("\"fromId\" value is already set");
-        }
-        if(fromId < 0) {
-            throw new IllegalArgumentException("Id must not be less than zero");
-        }
         this.fromId = fromId;
         return this;
     }
@@ -135,67 +94,32 @@ public class Message {
     }
 
     public Message setToId(int toId) {
-        if(this.toId != ID_DEFAULT_VALUE) {
-            throw new IllegalStateException("\"toId\" value is already set");
-        }
-        if(toId < 0) {
-            throw new IllegalArgumentException("Id must not be less than zero");
-        }
         this.toId = toId;
         return this;
     }
 
     public Message setFromId(String stringToParse) {
-        if (stringToParse == null) {
-            throw new NullPointerException("Specified source string must not be null");
-        }
-        if(fromId != ID_DEFAULT_VALUE) {
-            throw new IllegalStateException("\"fromId\" value is already set");
-        }
-        if(Integer.parseInt(stringToParse) < 0) {
-            throw new IllegalArgumentException("Id must not be less than zero");
-        }
         fromId = Integer.parseInt(stringToParse);
         return this;
     }
 
     public Message setToId(String stringToParse) {
-        if (stringToParse == null) {
-            throw new NullPointerException("Specified source string must not be null");
-        }
-        if(toId != ID_DEFAULT_VALUE) {
-            throw new IllegalStateException("\"toId\" value is already set");
-        }
-        if(Integer.parseInt(stringToParse) < 0) {
-            throw new IllegalArgumentException("Id must not be less than zero");
-        }
         toId = Integer.parseInt(stringToParse);
         return this;
     }
 
     public Message setRoomId(String stringToParse) {
-        if (stringToParse == null) {
-            throw new NullPointerException("Specified source string must not be null");
-        }
-        if(roomId != ID_DEFAULT_VALUE) {
-            throw new IllegalStateException("Room id is already set");
-        }
-        if(Integer.parseInt(stringToParse) < 0) {
-            throw new IllegalArgumentException("Id must not be less than zero");
-        }
         roomId = Integer.parseInt(stringToParse);
         return this;
     }
 
-    @Override
     public String toString() {
         return "Message{" +
-                "type=" + type +
+                "creationDateTime=" + creationDateTime +
                 ", status=" + status +
                 ", text='" + text + '\'' +
                 ", login='" + login + '\'' +
                 ", password='" + password + '\'' +
-                ", exception=" + exception +
                 ", fromId=" + fromId +
                 ", toId=" + toId +
                 ", roomId=" + roomId +
@@ -203,11 +127,21 @@ public class Message {
     }
 
     public LocalDateTime getCreationDateTime() {
-        return LocalDateTime.from(creationDateTime);
+        return creationDateTime;
     }
 
     public Message setCreationDateTime(LocalDateTime creationDateTime) {
         this.creationDateTime = creationDateTime;
         return this;
+    }
+
+    public static class LocalDateTimeAdapter extends XmlAdapter<String, LocalDateTime> {
+        public LocalDateTime unmarshal(String v) throws Exception {
+            return LocalDateTime.from(Server.dateTimeFormatter.parse(v));
+        }
+
+        public String marshal(LocalDateTime v) throws Exception {
+            return Server.dateTimeFormatter.format(v);
+        }
     }
 }
