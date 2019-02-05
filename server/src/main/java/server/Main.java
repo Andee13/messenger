@@ -122,7 +122,12 @@ public class Main {
         Room unmarshRoom = (Room) unmarshaller.unmarshal(myRoom1);
         System.out.println(unmarshRoom);*/
 
-        Room room = new Room();
+
+
+
+
+
+        /*Room room = new Room();
         room.getMessageHistory().add(new Message(MessageStatus.MESSAGE).setText("Hello").setFromId(1));
         room.getMessageHistory().add(new Message(MessageStatus.MESSAGE).setText("World").setFromId(1));
         room.getMessageHistory().add(new Message(MessageStatus.MESSAGE).setText("Everything will be ok").setFromId(2));
@@ -139,7 +144,11 @@ public class Main {
 
         Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
         Room room1 = (Room) unmarshaller.unmarshal(file);
-        System.out.println(room1);
+        System.out.println(room1);*/
+
+
+
+
 
 
         /*int clientId = 777;

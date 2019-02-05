@@ -5,14 +5,14 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.ObservableSet;
 
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Unmarshaller;
+import javax.xml.bind.*;
 import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Array;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @XmlRootElement
@@ -29,44 +29,95 @@ public class Room {
     @XmlTransient
     private Server server;
 
-    public Room(){
+    private Room(){
         messageHistory = FXCollections.observableArrayList(new ArrayList<>());
         members = FXCollections.observableSet(new HashSet<>());
     }
 
-    public  static Room getRoom(int roomId) throws JAXBException {
+    /**
+     * The method {@code getRoom} returns an instance of {@code Room} - representation of a place for communication
+     * of two or more clients
+     *
+     * @param roomId is an id of the room to be searched
+     *
+     * @return an instance of Room that has {@code roomId} equal to the specified parameter
+     *          if there is not such room in the rooms directory of the server
+     *          than the method will return {@code null}
+     *
+     * */
+    public static Room getRoom(int roomId) {
         File roomFile = new File(new StringBuilder(Server.getRoomsDir().getAbsolutePath())
                 .append(roomId).append(".xml").toString());
         if(roomFile.exists()) {
-            JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            Room room = (Room) unmarshaller.unmarshal(roomFile);
-            return room;
+            try {
+                JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
+                Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+                Room room = (Room) unmarshaller.unmarshal(roomFile);
+                return room;
+            } catch (JAXBException e) {
+                // TODO logging the exceptions
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        } else {
+            return null;
         }
-        throw new NoSuchElementException(new StringBuilder("The room id ")
-                .append(roomId).append(" has not been found").toString());
     }
 
-    public Room createRoom(int adminId, int... userIds) throws IOException, JAXBException {
-        /*Room room = new Room();
-        room.setAdminId(adminId);
-        for(int userId : userIds){
-            room.getMembers().add(userId);
+    /**
+     * The method {@code createRoom} registers a new room and adds the specified clients to it
+     *
+     * @param adminId is an id of the room creator
+     * @param clientsIds is an array of the clients' ids that must be added to the room initially
+     *
+     * @return an instance of the {@code Room} that has been created
+     *          or {@code null} if the room has not been created
+     *
+     * @throws NoSuchElementException if of one of the passed ids does not match any registered client's id
+     * */
+    public static Room createRoom(int adminId, int... clientsIds) {
+        /*
+        * Checking whether the clients with specified ids have been registered
+        * */
+        if(!Server.clientExists(adminId)) { // checking the admin's id
+            throw new NoSuchElementException(
+                    new StringBuilder("There is not such client id (passed as an admin's id): ")
+                            .append(adminId).append(" on the server").toString());
         }
-        room.roomId = server.getAmOfRooms() + 1;
-        server.setAmOfRooms(server.getAmOfRooms() + 1);
-        File file = new File(new StringBuilder(
-                server.getClientsDir().getAbsolutePath()).append(room.roomId).append(".xml").toString());
-        if(!file.exists()){
-            file.createNewFile();
+        for(int i = 0; i < clientsIds.length; i++){ // checking other clients' ids
+            if(!Server.clientExists(clientsIds[i])) {
+                throw new NoSuchElementException(
+                        new StringBuilder("There is not such client id: ")
+                                .append(clientsIds[i]).append(" on the server").toString());
+            }
+        }
+        Room newRoom = new Room();
+        newRoom.adminId = adminId;
+        for(int id : clientsIds) {
+            newRoom.members.add(id); // adding members of the new room
+        }
+        File roomsDir = Server.getRoomsDir();
+        File newRoomFile;
+        /*
+        * Trying to generate an id for the room
+        * The loop prevents an id collision in case if it occurs
+        * */
+        do  {
+            int newRoomId = Objects.hash(adminId, LocalDateTime.now());
+            newRoom.roomId = newRoomId;
+            newRoomFile = new File(
+                    new StringBuilder(roomsDir.getAbsolutePath()).append(newRoomId).append(".xml").toString());
+        } while (newRoomFile.exists());
+        try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
-            marshaller.marshal(room, file);
-            return room;
+            marshaller.marshal(newRoom, newRoomFile);
+        } catch(JAXBException e) {
+            // TODO logging the exception
+            e.printStackTrace();
+            throw new RuntimeException(e);
         }
-        throw new RuntimeException(new StringBuilder("The file ")
-                .append(file.getAbsolutePath()).append(" already exists"). toString());*/
-        return null;
+        return getRoom(newRoom.roomId);
     }
 
     public int getRoomId() {

@@ -51,7 +51,6 @@ public class ClientListener extends Thread{
     // TODO logging the exceptions
     @Override
     public void run() {
-        // TODO
         JAXBContext jaxbContext = null;
         try{
             jaxbContext = JAXBContext.newInstance(Message.class);
@@ -211,19 +210,26 @@ public class ClientListener extends Thread{
         return new Message(MessageStatus.DENIED).setText("Registration has not been finished successfully");
     }
 
-    private Message createRoom(@NotNull Message message) throws FileNotFoundException, XPathExpressionException {
-        /*if (!message.getStatus().equals(MessageStatus.CREATE_ROOM)) {
+    // TODO remove the JAXBException
+    private Message createRoom(@NotNull Message message) throws IOException, JAXBException {
+        if (!message.getStatus().equals(MessageStatus.CREATE_ROOM)) {
             return new Message(MessageStatus.ERROR)
                     .setText(new StringBuilder("The message status must be ").append(MessageStatus.CREATE_ROOM)
                             .append(" but found ").append(message.getStatus()).toString());
         }
-        if(Client.isMember(message.getFromId(), message.getRoomId())){
-
-        }*/
         /*
-        * Just a stub // TODO complete the method
+        * The field toId is considered as an id of the initial room member, thus it must be valid
+        * i.e. the client with such id must exists
         * */
-        return null;
+        Room room = Room.createRoom(message.getFromId(), message.getToId());
+        if (room == null){
+            return new Message(MessageStatus.ERROR).setText("Some error has occurred during the room creation");
+        } else {
+            return new Message(MessageStatus.ACCEPTED).setRoomId(room.getRoomId())
+                    .setText(new StringBuilder("The room id: ").append(room.getRoomId())
+                            .append(" has been successfully created").toString());
+        }
+
     }
 
     // TODO sending a message to the specific room
@@ -244,6 +250,7 @@ public class ClientListener extends Thread{
         return LocalDateTime.from(connected);
     }
 
+    // TODO resolve the JAXBException
     public void sendResponseMessage(Message message) throws IOException, JAXBException{
         JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();

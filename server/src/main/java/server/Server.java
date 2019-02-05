@@ -228,4 +228,19 @@ public class Server extends Thread {
     public static void setRoomsDir(File roomsDir) {
         Server.roomsDir = roomsDir;
     }
+
+    /**
+     * The method {@code clientExists} informs whether a client with the specified {@code clientId} has been registered
+     *
+     * @param clientId is the id to be searched for
+     *
+     * @return {@code true} if and only if the client denoted by this {@code clientId} has been registered
+     *                      and the file with his data is a normal file {@code false} otherwise
+     * */
+    public static boolean clientExists(int clientId){
+        File file = new File(
+                new StringBuilder(clientsDir.getAbsolutePath()).append(clientId).append(".xml").toString()
+        );
+        return file.isFile();
+    }
 }
