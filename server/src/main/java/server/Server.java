@@ -1,16 +1,16 @@
 package server;
 
+import javafx.beans.property.adapter.JavaBeanStringPropertyBuilder;
+import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
+import org.apache.log4j.Logger;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.xml.sax.ErrorHandler;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
+import javax.xml.bind.*;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
@@ -21,8 +21,11 @@ import javax.xml.parsers.ParserConfigurationException;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URISyntaxException;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @XmlRootElement
 public class Server extends Thread {
@@ -33,8 +36,11 @@ public class Server extends Thread {
     private static File clientsDir;
     @XmlJavaTypeAdapter(FileAdapter.class)
     private static File roomsDir;
-    private Map<Integer, Room> onlineRooms;
+    private ObservableMap<Integer, Room> onlineRooms;
     public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME;
+    private static final Logger LOGGER = Logger.getLogger("Server");
+    private static Server server;
+    private static Client admin;
 
     public ObservableMap<Integer, ClientListener> getClients() {
         return clients;
@@ -49,112 +55,194 @@ public class Server extends Thread {
     }
 
     public void setOnlineRooms(Map<Integer, Room> onlineRooms) {
-        this.onlineRooms = onlineRooms;
+        this.onlineRooms = FXCollections.observableMap(onlineRooms);
     }
 
     private Server(){
-        onlineRooms = new HashMap<>();
-        File config = new File(new StringBuilder(
+        onlineRooms = FXCollections.observableMap(new TreeMap<>());
+        clients = FXCollections.observableMap(new TreeMap<>());
+    }
+
+    private static void startServer() {
+
+        File serverConfig = new File(new StringBuilder(
                 Server.class.getProtectionDomain().getCodeSource().getLocation().getPath())
-                .append("server.cfg").toString());
-        if(!config.exists()){
-            try {
-                config.createNewFile();
-                (new BufferedWriter(new FileWriter(config)))
-                        .write(new StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-                                .append("<!DOCTYPE server [\n")
-                                .append("        <!ELEMENT server (port)>\n")
-                                .append("        <!ELEMENT port ANY>\n")
-                                .append("        ]>\n")
-                                .append("<server>\n")
-                                .append("    <port>5940</port>\n")
-                                .append("</server>")
-                                .toString());
-                // TODO create a tray notification
-                System.out.println((new StringBuilder("Please, set the server parameters in the file ")
-                        .append(config.getAbsolutePath()).append(" and restart the server")));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            System.exit(0);
-        }
-        // TODO logging the exceptions
+                .append("server.xml").toString());
+        /*
+         * Here we set the default server properties
+         * in case if server starts for the first time
+         * */
         try {
-            loadConfiguration(new FileInputStream(config));
-        } catch (Exception e) {
-            e.printStackTrace();
+            JAXBContext jaxbContext = JAXBContext.newInstance(Server.class);
+            Server server;
+            if (!serverConfig.exists()) {
+                server = new Server();
+                server.setPort(5940); // sets the default port number
+                Marshaller marshaller = jaxbContext.createMarshaller();
+                marshaller.marshal(server, serverConfig);
+            } else {
+                Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+                server = (Server) unmarshaller.unmarshal(serverConfig);
+                LOGGER.info(new StringBuilder("Server configuration file ")
+                        .append(serverConfig.getAbsolutePath()).append(" has been successfully created").toString());
+            }
+            server.start();
+            Server.server = server;
+            LOGGER.info("Server has been launched");
+        } catch (JAXBException e) {
+            LOGGER.error(e);
             throw new RuntimeException(e);
+        }
+
+    }
+
+    private static void printCommandsList(){
+        System.out.println("The server commands: ");
+        System.out.println("\uD836\uDD11 start to start the server with current configurations");
+        System.out.println("\uD836\uDD11 stop to stop the server");
+        System.out.println("\uD836\uDD11 restart to restart the server");
+        System.out.println("\uD836\uDD11 login [your_login_here] [your password here] to login as an admin");
+    }
+
+    private static void handle(String command){
+        String [] commandParts = command.split("\\W+");
+        if(commandParts.length == 0) {
+            return;
+        }
+        switch (commandParts[0]) {
+            case "help" :
+                printCommandsList();
+                break;
+            case "start" :
+                if(server != null) {
+                    System.out.println("The server is running");
+                } else {
+                    startServer();
+                }
+                break;
+            case "stop":
+                if (server != null && (Thread.State.RUNNABLE.equals(server.getState()))) {
+                    try {
+                        server.stopServer();
+                    } catch (IOException e) {
+                        LOGGER.fatal(e.getLocalizedMessage());
+                    }
+                } else {
+                    System.out.println("The server has not been started yet");
+                    System.out.println("Print help to see the available commands");
+                }
+            case "restart" :
+                if (server != null && (Thread.State.RUNNABLE.equals(server.getState()))){
+                    handle("stop");
+                    server = null;
+                    handle("start");
+                } else {
+                    System.out.println("The server has not been launched yet");
+                }
+                break;
+            case "login" :
+                Pattern pattern = Pattern.compile("^login (\\S+){1} (\\S+){1}$");
+                Matcher matcher = pattern.matcher(command);
+                if (!matcher.matches()) {
+                    System.out.println("Please, enter login using the following format:\n" +
+                            "login [here_your_login] [here_your_password]");
+                    return;
+                }
+                String login = matcher.group(1);
+                String password = matcher.group(2);
+                if(clientExists(login.hashCode())) {
+                    try {
+                        JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+                        Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+                        Client client = (Client) unmarshaller.unmarshal(new File(new StringBuilder(
+                                clientsDir.getAbsolutePath()).append(login.hashCode()).append(".xml").toString()));
+                        if(client.isAdmin() && password.equals(client.getPassword())) {
+                            admin = client;
+                            System.out.println(new StringBuilder("Welcome, ").append(admin.getLogin()));
+                            break;
+                        }
+                    } catch (JAXBException e) {
+                        LOGGER.fatal(e.getLocalizedMessage());
+                        break;
+                    }
+                }
+                System.out.println("Check your login and password, please");
+                break;
+                default:
+                    System.out.println(new StringBuilder("Unable to execute command: \"").append(command).append('"'));
+                    printCommandsList();
+                    break;
         }
     }
 
-    public static void main(String[] args) throws JAXBException {
+    public static void main(String[] args) {
         clientsDir = new File(new StringBuilder(
                 Server.class.getProtectionDomain().getCodeSource().getLocation().getPath())
                 .append("users").toString());
-        // TODO logging about directory creation
+
+        //System.err.println(clientsDir.getAbsolutePath());
+        /*for(int i = 0; i < clientsDir.getAbsolutePath().length(); i++){
+            System.out.println(clientsDir.getAbsolutePath().charAt(i));
+        }
+        System.out.println(Server.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
+        new Scanner(System.in).nextLine();
+        */
         if(!clientsDir.exists()){
             if(!clientsDir.mkdir()){
                 throw new RuntimeException(new StringBuilder("Unable to create a directory: ")
                         .append(clientsDir.getAbsolutePath()).toString());
             }
+            LOGGER.info(new StringBuilder("The clients directory ")
+                    .append(clientsDir.getAbsolutePath()).append(" has been created").toString());
         }
         roomsDir = new File(new StringBuilder(
                 Server.class.getProtectionDomain().getCodeSource().getLocation().getPath())
                 .append("rooms").toString());
-        // TODO logging about directory creation
         if(!roomsDir.exists()){
             if(!roomsDir.mkdir()){
                 throw new RuntimeException(new StringBuilder("Unable to create a directory: ")
                         .append(roomsDir.getAbsolutePath()).toString());
             }
+            LOGGER.info(new StringBuilder("The rooms directory ")
+                    .append(roomsDir.getAbsolutePath()).append(" has been created").toString());
         }
-        File serverConfig = new File(new StringBuilder(
-                Server.class.getProtectionDomain().getCodeSource().getLocation().getPath())
-                .append("server.xml").toString());
-        /*
-        * Here we set the default server properties
-        * in case if server starts for the first time
-        * */
-        JAXBContext jaxbContext = JAXBContext.newInstance(Server.class);
-        Server server;
-        if (!serverConfig.exists()) {
-            server = new Server();
-            server.setPort(5940); // sets the default port number
-            Marshaller marshaller = jaxbContext.createMarshaller();
-            marshaller.marshal(server, serverConfig);
-        } else {
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            server = (Server) unmarshaller.unmarshal(serverConfig);
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Hello, please, enter commands here");
+        while (true) {
+            String comand = scanner.nextLine();
+            if(comand == null){
+                continue;
+            }
+            handle(comand);
         }
-        server.start();
     }
 
-    // TODO logging the exceptions
     @Override
     public void run() {
         ServerSocket serverSocket = null;
-        Socket socket = null;
+        Socket socket;
         while (true) {
             try {
-                ClientListener clientListener = new ClientListener(this, serverSocket.accept());
+                socket = serverSocket.accept();
+                LOGGER.info(new StringBuilder("Incoming connection from: ")
+                        .append(socket.getInetAddress()).toString());
+                ClientListener clientListener = new ClientListener(this, socket);
                 clientListener.run();
             } catch (IOException e) {
-                e.printStackTrace();
-                continue;
+               LOGGER.error(e.getLocalizedMessage());
             }
         }
     }
 
-    // TODO logging exceptions
-    public void close() throws IOException, JAXBException {
+    public void stopServer() throws IOException {
+        LOGGER.info("Stopping the server");
         for (Map.Entry<Integer, ClientListener> client : clients.entrySet()) {
             client.getValue().closeClientSession();
         }
         interrupt();
     }
 
-    private void loadConfiguration(InputStream is)
-            throws SAXException, IOException, ParserConfigurationException{
+    private void loadConfiguration(InputStream is) throws SAXException, IOException, ParserConfigurationException {
         DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
         documentBuilderFactory.setValidating(true);
         DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
@@ -217,7 +305,7 @@ public class Server extends Thread {
         return port;
     }
 
-    public void setPort(int port) {
+    private void setPort(int port) {
         this.port = port;
     }
 

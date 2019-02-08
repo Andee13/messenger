@@ -1,5 +1,7 @@
 package server;
 
+import org.apache.log4j.Logger;
+import org.apache.log4j.PropertyConfigurator;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
@@ -13,6 +15,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
+
 @XmlRootElement(name="client")
 public class Client {
     @XmlElement
@@ -25,6 +28,16 @@ public class Client {
     private String login;
     @XmlElement
     private String password;
+    @XmlElement
+    private boolean isAdmin;
+
+    public boolean isAdmin() {
+        return isAdmin;
+    }
+
+    public void setAdmin(boolean admin) {
+        isAdmin = admin;
+    }
 
     public int getClientId() {
         return clientId;
@@ -118,8 +131,7 @@ public class Client {
         try {
             xPathExpression = xPath.compile("room/members/clientId");
         } catch (XPathExpressionException e) {
-            e.printStackTrace();
-            // TODO logging the exceptions
+
             throw new RuntimeException(e);
         }
         NodeList resultNodeList = (NodeList) xPathExpression.evaluate(

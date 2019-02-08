@@ -4,6 +4,8 @@ import common.message.Message;
 import common.message.status.MessageStatus;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import org.apache.log4j.Logger;
+import org.apache.log4j.spi.LoggerFactory;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
@@ -22,6 +24,9 @@ import java.util.LinkedList;
 import java.util.Scanner;
 
 public class Main {
+
+    private static final Logger logger = Logger.getLogger(Main.class);
+
     public static void main(String[] args) throws ParserConfigurationException, IOException, SAXException, XMLStreamException, JAXBException, XPathExpressionException {
         /*DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
         documentBuilderFactory.setValidating(true);
@@ -171,6 +176,14 @@ public class Main {
         }
         System.err.println(false);
         */
+
+        /*for (int i = 0; i < 9999; i++){
+            logger.debug(i + " debug");
+            logger.warn(i + " warn");
+            logger.error(i + " error");
+        }*/
+
+
 
 
     }

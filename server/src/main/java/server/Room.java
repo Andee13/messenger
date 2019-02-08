@@ -4,14 +4,14 @@ import common.message.Message;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.ObservableSet;
+import org.apache.log4j.Logger;
+import org.apache.log4j.PropertyConfigurator;
 
 import javax.xml.bind.*;
 import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Array;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -28,6 +28,8 @@ public class Room {
     private ObservableSet<Integer> members;
     @XmlTransient
     private Server server;
+
+    private static Logger LOGGER = Logger.getLogger("Room");
 
     private Room(){
         messageHistory = FXCollections.observableArrayList(new ArrayList<>());
@@ -55,8 +57,7 @@ public class Room {
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
                 return room;
             } catch (JAXBException e) {
-                // TODO logging the exceptions
-                e.printStackTrace();
+                LOGGER.error(e.getLocalizedMessage());
                 throw new RuntimeException(e);
             }
         } else {
@@ -113,8 +114,7 @@ public class Room {
             Marshaller marshaller = jaxbContext.createMarshaller();
             marshaller.marshal(newRoom, newRoomFile);
         } catch(JAXBException e) {
-            // TODO logging the exception
-            e.printStackTrace();
+            LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
         return getRoom(newRoom.roomId);

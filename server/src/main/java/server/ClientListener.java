@@ -2,6 +2,7 @@ package server;
 
 import common.message.Message;
 import common.message.status.MessageStatus;
+import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.xml.sax.InputSource;
 
@@ -37,8 +38,9 @@ public class ClientListener extends Thread{
     }
 
     public ClientListener(){
-
     }
+
+    private final Logger LOGGER = Logger.getLogger("ClientListener");
 
     public ClientListener(Server server, Socket socket) throws IOException {
         this.server = server;
@@ -48,7 +50,6 @@ public class ClientListener extends Thread{
         in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
     }
 
-    // TODO logging the exceptions
     @Override
     public void run() {
         JAXBContext jaxbContext = null;
@@ -70,6 +71,7 @@ public class ClientListener extends Thread{
                 try {
                     auth(firstMessage);
                 } catch (XMLStreamException e) {
+                    LOGGER.error(e);
                     sendResponseMessage(new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage()));
                 }
             }
@@ -88,9 +90,7 @@ public class ClientListener extends Thread{
                 try {
                     sendResponseMessage(new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage()));
                 }catch (JAXBException | IOException e1){
-                    e1.printStackTrace();
-                    // TODO logging the exceptions
-                    System.err.println("Response message has not been sent");
+                    LOGGER.error(e1.getLocalizedMessage());
                 }
             }
         }
@@ -176,7 +176,6 @@ public class ClientListener extends Thread{
             try{
                 throw new NullPointerException("Message must not be null");
             } catch (NullPointerException e){
-                // TODO logging the exception
                 e.printStackTrace();
                 throw e;
             }
@@ -203,8 +202,7 @@ public class ClientListener extends Thread{
                         .append(login).append(" has been successfully created").toString());
             }
         } catch (JAXBException | IOException e) {
-            // TODO logging the exceptions
-            e.printStackTrace();
+            LOGGER.error(e.getLocalizedMessage());
             return new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage());
         }
         return new Message(MessageStatus.DENIED).setText("Registration has not been finished successfully");
@@ -261,19 +259,24 @@ public class ClientListener extends Thread{
         out.flush();
     }
 
-    public void saveClient() throws JAXBException {
+    public void saveClient() {
         if(client == null) {
             // TODO decide what to do with a case when the client hasn't been set
             return;
         }
-        JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
-        Marshaller marshaller = jaxbContext.createMarshaller();
-        File clientFile = new File(new StringBuilder(Server.getClientsDir().getAbsolutePath())
-                .append(client.getClientId()).append(".xml").toString());
-        marshaller.marshal(client, clientFile);
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            File clientFile = new File(new StringBuilder(Server.getClientsDir().getAbsolutePath())
+                    .append(client.getClientId()).append(".xml").toString());
+            marshaller.marshal(client, clientFile);
+        } catch (JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
+        }
     }
 
-    public void closeClientSession() throws IOException, JAXBException {
+    public void closeClientSession() throws IOException {
         if(isAlive() && ! isInterrupted()){
             in.close();
             out.close();
