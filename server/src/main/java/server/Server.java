@@ -1,23 +1,12 @@
 package server;
 
-import javafx.beans.property.adapter.JavaBeanStringPropertyBuilder;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.xml.sax.ErrorHandler;
-import org.xml.sax.SAXException;
-import org.xml.sax.SAXParseException;
+import org.jetbrains.annotations.NotNull;
 
-import javax.xml.bind.*;
-import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.JAXBException;
 import javax.xml.bind.annotation.XmlRootElement;
-import javax.xml.bind.annotation.adapters.XmlAdapter;
-import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -29,18 +18,25 @@ import java.util.regex.Pattern;
 
 @XmlRootElement
 public class Server extends Thread {
-    @XmlElement
-    private int port;
     private ObservableMap<Integer, ClientListener> clients;
-    @XmlJavaTypeAdapter(FileAdapter.class)
-    private static File clientsDir;
-    @XmlJavaTypeAdapter(FileAdapter.class)
-    private static File roomsDir;
     private ObservableMap<Integer, Room> onlineRooms;
     public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME;
     private static final Logger LOGGER = Logger.getLogger("Server");
-    private static Server server;
-    private static Client admin;
+    private Properties config;
+    private static final Set inputKeys;
+
+    public Properties getConfig() {
+        return config;
+    }
+
+    static {
+        inputKeys = new TreeSet<String>();
+        inputKeys.addAll(Arrays.asList("start", "stop" , "restart"));
+    }
+
+    public File getRoomsDir() {
+        return new File(config.getProperty("roomsDir"));
+    }
 
     public ObservableMap<Integer, ClientListener> getClients() {
         return clients;
@@ -58,163 +54,254 @@ public class Server extends Thread {
         this.onlineRooms = FXCollections.observableMap(onlineRooms);
     }
 
-    private Server(){
-        onlineRooms = FXCollections.observableMap(new TreeMap<>());
-        clients = FXCollections.observableMap(new TreeMap<>());
-    }
-
-    private static void startServer() {
-
-        File serverConfig = new File(new StringBuilder(
-                Server.class.getProtectionDomain().getCodeSource().getLocation().getPath())
-                .append("server.xml").toString());
-        /*
-         * Here we set the default server properties
-         * in case if server starts for the first time
-         * */
-        try {
-            JAXBContext jaxbContext = JAXBContext.newInstance(Server.class);
-            Server server;
-            if (!serverConfig.exists()) {
-                server = new Server();
-                server.setPort(5940); // sets the default port number
-                Marshaller marshaller = jaxbContext.createMarshaller();
-                marshaller.marshal(server, serverConfig);
-            } else {
-                Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-                server = (Server) unmarshaller.unmarshal(serverConfig);
-                LOGGER.info(new StringBuilder("Server configuration file ")
-                        .append(serverConfig.getAbsolutePath()).append(" has been successfully created").toString());
-            }
-            server.start();
-            Server.server = server;
-            LOGGER.info("Server has been launched");
-        } catch (JAXBException e) {
-            LOGGER.error(e);
-            throw new RuntimeException(e);
-        }
-
-    }
-
-    private static void printCommandsList(){
-        System.out.println("The server commands: ");
-        System.out.println("\uD836\uDD11 start to start the server with current configurations");
-        System.out.println("\uD836\uDD11 stop to stop the server");
-        System.out.println("\uD836\uDD11 restart to restart the server");
-        System.out.println("\uD836\uDD11 login [your_login_here] [your password here] to login as an admin");
-    }
-
-    private static void handle(String command){
-        String [] commandParts = command.split("\\W+");
-        if(commandParts.length == 0) {
-            return;
-        }
-        switch (commandParts[0]) {
-            case "help" :
-                printCommandsList();
-                break;
-            case "start" :
-                if(server != null) {
-                    System.out.println("The server is running");
-                } else {
-                    startServer();
-                }
-                break;
-            case "stop":
-                if (server != null && (Thread.State.RUNNABLE.equals(server.getState()))) {
-                    try {
-                        server.stopServer();
-                    } catch (IOException e) {
-                        LOGGER.fatal(e.getLocalizedMessage());
-                    }
-                } else {
-                    System.out.println("The server has not been started yet");
-                    System.out.println("Print help to see the available commands");
-                }
-            case "restart" :
-                if (server != null && (Thread.State.RUNNABLE.equals(server.getState()))){
-                    handle("stop");
-                    server = null;
-                    handle("start");
-                } else {
-                    System.out.println("The server has not been launched yet");
-                }
-                break;
-            case "login" :
-                Pattern pattern = Pattern.compile("^login (\\S+){1} (\\S+){1}$");
-                Matcher matcher = pattern.matcher(command);
-                if (!matcher.matches()) {
-                    System.out.println("Please, enter login using the following format:\n" +
-                            "login [here_your_login] [here_your_password]");
-                    return;
-                }
-                String login = matcher.group(1);
-                String password = matcher.group(2);
-                if(clientExists(login.hashCode())) {
-                    try {
-                        JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
-                        Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-                        Client client = (Client) unmarshaller.unmarshal(new File(new StringBuilder(
-                                clientsDir.getAbsolutePath()).append(login.hashCode()).append(".xml").toString()));
-                        if(client.isAdmin() && password.equals(client.getPassword())) {
-                            admin = client;
-                            System.out.println(new StringBuilder("Welcome, ").append(admin.getLogin()));
-                            break;
-                        }
-                    } catch (JAXBException e) {
-                        LOGGER.fatal(e.getLocalizedMessage());
-                        break;
-                    }
-                }
-                System.out.println("Check your login and password, please");
-                break;
-                default:
-                    System.out.println(new StringBuilder("Unable to execute command: \"").append(command).append('"'));
-                    printCommandsList();
-                    break;
-        }
+    private Server(Properties serverConfig) {
+        config = serverConfig;
     }
 
     public static void main(String[] args) {
-        clientsDir = new File(new StringBuilder(
-                Server.class.getProtectionDomain().getCodeSource().getLocation().getPath())
-                .append("users").toString());
+        /*
 
-        //System.err.println(clientsDir.getAbsolutePath());
-        /*for(int i = 0; i < clientsDir.getAbsolutePath().length(); i++){
-            System.out.println(clientsDir.getAbsolutePath().charAt(i));
-        }
-        System.out.println(Server.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
-        new Scanner(System.in).nextLine();
+        defaultProperties.setProperty("clientsDir", new StringBuilder(new File(Server.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI().getPath()).getAbsolutePath()).append("clients").toString());
+            defaultProperties.setProperty("roomsDir", new StringBuilder(new File(Server.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI().getPath()).getAbsolutePath()).append("rooms").toString());
+
         */
-        if(!clientsDir.exists()){
-            if(!clientsDir.mkdir()){
-                throw new RuntimeException(new StringBuilder("Unable to create a directory: ")
-                        .append(clientsDir.getAbsolutePath()).toString());
+
+
+        if (args.length == 0) {
+            File rootDir = null;
+            try {
+                rootDir = new File(Server.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            } catch (URISyntaxException e) {
+                LOGGER.fatal(new StringBuilder("The root folder definition has failed:\n")
+                        .append(e.getLocalizedMessage()).toString());
             }
-            LOGGER.info(new StringBuilder("The clients directory ")
-                    .append(clientsDir.getAbsolutePath()).append(" has been created").toString());
-        }
-        roomsDir = new File(new StringBuilder(
-                Server.class.getProtectionDomain().getCodeSource().getLocation().getPath())
-                .append("rooms").toString());
-        if(!roomsDir.exists()){
-            if(!roomsDir.mkdir()){
-                throw new RuntimeException(new StringBuilder("Unable to create a directory: ")
-                        .append(roomsDir.getAbsolutePath()).toString());
+            if (isRootStructure(rootDir)) {
+                File propertiesFile = new File(rootDir.getAbsolutePath().concat("serverConfig.xml"));
+                Properties serverProperties = new Properties();
+                if (!arePropertiesValid(propertiesFile)) {
+                    LOGGER.error("The property file is not valid. See more in logs");
+                    return;
+                } else {
+                    Server server = new Server(serverProperties);
+                    server.run();
+                }
+            } else {
+
             }
-            LOGGER.info(new StringBuilder("The rooms directory ")
-                    .append(roomsDir.getAbsolutePath()).append(" has been created").toString());
-        }
-        Scanner scanner = new Scanner(System.in);
-        System.out.println("Hello, please, enter commands here");
-        while (true) {
-            String comand = scanner.nextLine();
-            if(comand == null){
-                continue;
+        } else {
+            String inputString;
+            StringBuilder stringBuilder = new StringBuilder();
+            for (String arg : args) {
+                stringBuilder.append(arg).append(' ');
             }
-            handle(comand);
+            inputString = stringBuilder.toString().trim();
+            // TODO
         }
+    }
+
+    /**
+     *  The method {@code parseInput} decides what the server has to do depending on passed parameters
+     *
+     * @param           args is the program input parameters
+     * */
+    private static void parseInput(@NotNull String [] args) {
+        /*  If any input parameters have not been passed it is thought
+         * that the serverConfig.xml is in the current folder.
+         * */
+        if(args.length == 0) {
+            File currentFolder = null;
+            try {
+                currentFolder = new File(new File(Server.class.getProtectionDomain()
+                        .getCodeSource().getLocation().toURI()).getAbsolutePath());
+            } catch (URISyntaxException e) {
+                LOGGER.fatal(e.getLocalizedMessage());
+                return;
+            }
+            File propertiesFile = new File(currentFolder.getAbsolutePath()
+                    .concat(File.pathSeparator).concat("serverConfig.xml"));
+            if(arePropertiesValid(propertiesFile)) {
+                Properties serverConfig = new Properties();
+                try {
+                    serverConfig.load(new BufferedInputStream(new FileInputStream(propertiesFile)));
+                    Server server = new Server(serverConfig);
+                    server.run();
+                    if (server.getState() == State.RUNNABLE) {
+                        LOGGER.info("Server has been successfully launched");
+                    } else {
+                        LOGGER.warn(new StringBuilder("Please, check the server. Server thread status is ")
+                                .append(server.getState()));
+                    }
+                } catch (IOException e) {
+                    LOGGER.fatal(e.getLocalizedMessage());
+                }
+            } else {
+                LOGGER.info("The server has not been started. For more info, please, check logs");
+            }
+        } else {
+
+        }
+    }
+
+    /**
+     * The method {@code divideInputParametersOnKeys} divides the input parameters into separate parts e.g.
+     * "-login gandalf -password youshallnotpass" will be sorted into
+     * login=ivan
+     * passowrd=youshallnotpass
+     * */
+    private static Properties divideInputParametersOnKeys(@NotNull String input) throws IOException {
+        input = input.trim();
+        Properties executeProperties = new Properties();
+        String keysParametersPatternString = "^(((-\\w+) (\\S+))( )*)+$";
+        Pattern keysParameterPattern = Pattern.compile(keysParametersPatternString);
+        Matcher matcher = keysParameterPattern.matcher(input);
+        if (!matcher.matches()) {
+            throw new IOException(new StringBuilder("Wrong input: ").append(input).toString());
+        }
+        String [] splittedInputParameters = input.split("-");
+        for(int i = 0; i < splittedInputParameters.length; i++) {
+            splittedInputParameters[i] = splittedInputParameters[i].trim();
+            String key = splittedInputParameters[i].split(" ")[0];
+            String value = splittedInputParameters[i].split(" ")[1];
+            /*
+            * Checks if the entered key is valid
+            * */
+            if(!inputKeys.contains(key)) {
+                throw new IllegalArgumentException(new StringBuilder("Unknown key: ").append(key).toString());
+            }
+            if (executeProperties.setProperty(key, value) != null) {
+                throw new IOException(new StringBuilder("Duplicating the key ").append(key).toString());
+            }
+
+        }
+
+        // TODO
+        return null;
+    }
+
+    /**
+     *  The method {@code arePropertiesValid} checks if the passed abstract path is a valid file.
+     * Returns {@code true} if and only if the specified by the abstract path file exists and contains
+     * properties about existing clients and rooms directories, {@code false} otherwise.
+     *
+     * @param           properties a set of properties are to be validated
+     * */
+    public static boolean arePropertiesValid(Properties properties) {
+        try {
+            int port = Integer.parseInt(properties.getProperty("port"));
+            if (port < 0 || port > 65536) {
+                throw new IllegalArgumentException(
+                        new StringBuilder("The port value was expected to be between 0 and 65536, but found ")
+                                .append(port).toString());
+            }
+        } catch (Exception e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false;
+        }
+        if (!new File(properties.getProperty("roomsDir")).isDirectory()) {
+            LOGGER.error(new StringBuilder("Invalid roomsDir value was set: ")
+                    .append(properties.getProperty("roomsDir")));
+            return false;
+        }
+        if (!new File(properties.getProperty("clientsDir")).isDirectory()) {
+            LOGGER.error(new StringBuilder("Invalid clientsDir value was set: ")
+                    .append(properties.getProperty("clientsDir")));
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     *  The method creates an instance of {@code Property} and loads the properties
+     * from the specified file.
+     *
+     *  The result is the same as a result of invocation {@code arePropertiesValid()}
+     * */
+    public static boolean arePropertiesValid(@NotNull File propertyFile) {
+        Properties properties = new Properties();
+        try {
+            properties.load(new BufferedInputStream(new FileInputStream(propertyFile)));
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false;
+        }
+        return arePropertiesValid(properties);
+    }
+
+    /**
+     * @return          @code true} if and only if there are necessary files in the specified root folder of a server
+     *
+     * @param rootDir   the root folder of a server
+     *
+     * @exception       IllegalArgumentException if {@code rootDir} is not a folder
+     * */
+    private static boolean isRootStructure(@NotNull File rootDir) {
+        File serverConfig = new File(new StringBuffer(rootDir.getAbsolutePath()).append("serverConfig.xml").toString());
+        File clientsDir = new File(new StringBuffer(rootDir.getAbsolutePath()).append("clients").toString());
+        File roomsDir = new File(new StringBuffer(rootDir.getAbsolutePath()).append("rooms").toString());
+        return serverConfig.isFile() && clientsDir.isDirectory() && roomsDir.isDirectory();
+    }
+
+    /**
+     *  Organizes the necessary server root folder structure described above the {@code ServerConfig.class}
+     * The method creates one of more demanded element. If there is not such one, the {@code createRootStructure}
+     * creates it. The method does not delete or re-write already existing ones.
+     *
+     * @param           rootDir a server root folder
+     * */
+    private static void createRootStructure(@NotNull File rootDir) {
+        if (!rootDir.isDirectory()) {
+            throw new IllegalArgumentException("rootDir is expected to be an existing folder");
+        }
+        File serverConfig = new File(new StringBuffer(rootDir.getAbsolutePath()).append("serverConfig.xml").toString());
+        File clientsDir = new File(new StringBuffer(rootDir.getAbsolutePath()).append("clients").toString());
+        File roomsDir = new File(new StringBuffer(rootDir.getAbsolutePath()).append("rooms").toString());
+        if (!serverConfig.isFile()) {
+            LOGGER.info(new StringBuilder("Creating the default server configuration file: ")
+                    .append(serverConfig.getAbsolutePath()));
+            try {
+                if(!serverConfig.createNewFile()){
+                    throw new RuntimeException(new StringBuilder("Unable to create a default server configuration file: ")
+                            .append(serverConfig.getAbsolutePath()).toString());
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        if (!clientsDir.isDirectory()) {
+            LOGGER.info(new StringBuilder("Creating the clients folder: ")
+                    .append(clientsDir.getAbsolutePath()));
+            try {
+                if(!serverConfig.createNewFile()){
+                    throw new RuntimeException(new StringBuilder("Unable to create a clients folder: ")
+                            .append(clientsDir.getAbsolutePath()).toString());
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        if (!roomsDir.isDirectory()) {
+            LOGGER.info(new StringBuilder("Creating the rooms folder: ")
+                    .append(roomsDir.getAbsolutePath()));
+            try {
+                if(!serverConfig.createNewFile()){
+                    throw new RuntimeException(new StringBuilder("Unable to create a clients folder: ")
+                            .append(roomsDir.getAbsolutePath()).toString());
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    /**
+     *  Starts the server for which {@code rootDir} is the root folder
+     * */
+    private static void startServer(File rootDir) {
+        // TODO
     }
 
     @Override
@@ -235,99 +322,41 @@ public class Server extends Thread {
     }
 
     public void stopServer() throws IOException {
-        LOGGER.info("Stopping the server");
+        LOGGER.info("Stopping the serverProcessing");
         for (Map.Entry<Integer, ClientListener> client : clients.entrySet()) {
             client.getValue().closeClientSession();
         }
         interrupt();
     }
 
-    private void loadConfiguration(InputStream is) throws SAXException, IOException, ParserConfigurationException {
-        DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
-        documentBuilderFactory.setValidating(true);
-        DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
-        documentBuilder.setErrorHandler(new ErrorHandler() {
-            @Override
-            public void warning(SAXParseException exception) throws SAXException {
-                throw exception;
-            }
-
-            @Override
-            public void error(SAXParseException exception) throws SAXException {
-                throw exception;
-            }
-
-            @Override
-            public void fatalError(SAXParseException exception) throws SAXException {
-                throw exception;
-            }
-        });
-
-        Document document = documentBuilder.parse(new BufferedInputStream(is));
-        Element root = document.getDocumentElement();
-        port = Integer.parseInt(root.getElementsByTagName("port").item(0).getTextContent());
-    }
-
     public void closeClientSession (ClientListener client) throws IOException, JAXBException {
         client.closeClientSession();
     }
 
-    public static File getClientsDir() {
-        return clientsDir;
-    }
-
-    public static File getRoomsDir() {
-        return roomsDir;
-    }
-
     public void runRoom(int id){
+        if (config == null) {
+            throw new IllegalStateException("The configurations have not been set yet");
+        }
         if(id < 0){
             throw new IllegalArgumentException(new StringBuilder("Room id is expected to be greater than 0, but found: ")
                     .append(id).toString());
         }
-        File roomFile = new File(new StringBuilder(roomsDir.getAbsolutePath())
+        File roomFile = new File(new StringBuilder((new File(config.getProperty("roomsDir"))).getAbsolutePath())
                 .append(String.valueOf(id)).append(".xml").toString());
     }
 
-    private static class FileAdapter extends XmlAdapter<String, File> {
-        @Override
-        public File unmarshal(String pathname) throws Exception {
-            return new File(pathname);
-        }
-
-        @Override
-        public String marshal(File v) throws Exception {
-            return v.getAbsolutePath();
-        }
-    }
-
-    public int getPort() {
-        return port;
-    }
-
-    private void setPort(int port) {
-        this.port = port;
-    }
-
-    public static void setClientsDir(File clientsDir) {
-        Server.clientsDir = clientsDir;
-    }
-
-    public static void setRoomsDir(File roomsDir) {
-        Server.roomsDir = roomsDir;
-    }
-
     /**
-     * The method {@code clientExists} informs whether a client with the specified {@code clientId} has been registered
+     *  The method {@code clientExists} informs whether a client with the specified {@code clientId} has been registered
      *
-     * @param clientId is the id to be searched for
+     * @param           clientId is the id to be searched for
      *
-     * @return {@code true} if and only if the client denoted by this {@code clientId} has been registered
-     *                      and the file with his data is a normal file {@code false} otherwise
+     * @return          {@code true} if and only if the client denoted by this {@code clientId} has been registered
+     *                  and the file with his data is a normal file {@code false} otherwise
      * */
-    public static boolean clientExists(int clientId){
+    public boolean clientExists(int clientId) {
         File file = new File(
-                new StringBuilder(clientsDir.getAbsolutePath()).append(clientId).append(".xml").toString()
+                new StringBuilder((new File(config.getProperty("clientsDir")))
+                        .getAbsolutePath()).append(clientId).append(".xml").toString()
         );
         return file.isFile();
     }

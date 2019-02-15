@@ -14,7 +14,6 @@ import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
-import javax.xml.xpath.XPathExpressionException;
 import java.io.*;
 import java.net.Socket;
 import java.time.LocalDateTime;
@@ -151,12 +150,12 @@ public class ClientListener extends Thread{
     private void auth(Message message) throws IOException, XMLStreamException, JAXBException {
         String login = message.getLogin();
         String password = message.getPassword();
-        File userFile = new File(new StringBuilder(server.getClientsDir().getAbsolutePath())
-                .append(login.hashCode()).append(".xml").toString());
-        if(userFile.exists()){
+        File clientFile = new File(new StringBuilder(server.getConfig().getProperty("clientsDir"))
+                .append(File.pathSeparator).append(login.hashCode()).append(".xml").toString());
+        if(clientFile.exists()){
             XMLInputFactory xmlInputFactory = XMLInputFactory.newInstance();
             XMLStreamReader xmlStreamReader = xmlInputFactory.createXMLStreamReader(
-                    new BufferedReader(new FileReader(userFile)));
+                    new BufferedReader(new FileReader(clientFile)));
             while (xmlStreamReader.hasNext()){
                 int event = xmlStreamReader.next();
                 if(event == XMLStreamConstants.START_ELEMENT &&
@@ -180,10 +179,10 @@ public class ClientListener extends Thread{
                 throw e;
             }
         }
-        File clients = Server.getClientsDir();
+        File clientsDir = new File(server.getConfig().getProperty("clientsDir"));
         String login = message.getLogin();
         String password = message.getPassword();
-        File clientFile = new File(new StringBuilder(clients.getAbsolutePath()).append(login.hashCode())
+        File clientFile = new File(new StringBuilder(clientsDir.getAbsolutePath()).append(login.hashCode())
                 .append(".xml").toString());
         if(clientFile.exists()) {
             return new Message(MessageStatus.DENIED).setText(new StringBuilder("The login ")
@@ -219,7 +218,7 @@ public class ClientListener extends Thread{
         * The field toId is considered as an id of the initial room member, thus it must be valid
         * i.e. the client with such id must exists
         * */
-        Room room = Room.createRoom(message.getFromId(), message.getToId());
+        Room room = RoomProcessing.createRoom(server.getConfig(), message.getFromId() , message.getToId());
         if (room == null){
             return new Message(MessageStatus.ERROR).setText("Some error has occurred during the room creation");
         } else {
@@ -267,8 +266,8 @@ public class ClientListener extends Thread{
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
-            File clientFile = new File(new StringBuilder(Server.getClientsDir().getAbsolutePath())
-                    .append(client.getClientId()).append(".xml").toString());
+            File clientFile = new File(new StringBuilder(server.getConfig().getProperty("clientsDir"))
+                    .append(File.pathSeparator).append(client.getClientId()).append(".xml").toString());
             marshaller.marshal(client, clientFile);
         } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());

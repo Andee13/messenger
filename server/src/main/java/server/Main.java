@@ -4,6 +4,8 @@ import common.message.Message;
 import common.message.status.MessageStatus;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import lombok.extern.java.Log;
+import lombok.extern.log4j.Log4j;
 import org.apache.log4j.Logger;
 import org.apache.log4j.spi.LoggerFactory;
 import org.w3c.dom.NodeList;
@@ -18,16 +20,18 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.xpath.*;
 import java.io.*;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Scanner;
 
+@Log4j
 public class Main {
 
-    private static final Logger logger = Logger.getLogger(Main.class);
-
-    public static void main(String[] args) throws ParserConfigurationException, IOException, SAXException, XMLStreamException, JAXBException, XPathExpressionException {
+    //private static final Logger logger = Logger.getLogger(Main.class);
+    public static void main(String[] args) throws ParserConfigurationException, IOException, SAXException, XMLStreamException, JAXBException, XPathExpressionException, URISyntaxException {
+        
         /*DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
         documentBuilderFactory.setValidating(true);
         DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
@@ -183,8 +187,8 @@ public class Main {
             logger.error(i + " error");
         }*/
 
-
-
+        File file = new File(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
+        System.out.println(file.getAbsolutePath());
 
     }
 }

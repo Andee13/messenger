@@ -1,7 +1,5 @@
 package server;
 
-import org.apache.log4j.Logger;
-import org.apache.log4j.PropertyConfigurator;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
@@ -13,21 +11,28 @@ import javax.xml.xpath.*;
 import java.io.*;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 
 
 @XmlRootElement(name="client")
 public class Client {
+
     @XmlElement
     private int clientId;
+
     @XmlJavaTypeAdapter(SetAdapter.class)
     private Set<Integer> rooms;
+
     @XmlJavaTypeAdapter(SetAdapter.class)
     private Set<Integer> friends;
+
     @XmlElement
     private String login;
+
     @XmlElement
     private String password;
+
     @XmlElement
     private boolean isAdmin;
 
@@ -117,12 +122,12 @@ public class Client {
      * @return {@code true} if and only if there are a registered account with such {@code clientId}
      *          and created room that has the specified {@code roomId}
      *          {@code false} otherwise.
-     * @throws FileNotFoundException // TODO decide what exception will be thrown and describe the cases when it will be occur
+     * @throws FileNotFoundException // TODO decide what exception will be thrown and describe the cases when it will occur
      *
      * */
-    public static boolean isMember(int clientId, int roomId) throws FileNotFoundException, XPathExpressionException {
-        File roomFile = new File(new StringBuilder(Server.getRoomsDir().getAbsolutePath())
-                .append(roomId).append(".xml").toString());
+    public static boolean isMember(Properties serverConfig, int clientId, int roomId) throws FileNotFoundException, XPathExpressionException {
+        File roomFile = new File(new StringBuilder(serverConfig.getProperty("roomsDir"))
+                .append(File.pathSeparator).append(roomId).append(".xml").toString());
         if (!roomFile.exists()){
             return false;
         }
