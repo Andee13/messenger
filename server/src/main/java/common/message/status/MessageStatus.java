@@ -11,5 +11,6 @@ public enum MessageStatus {
     UNINVITE_USER,
     ACCEPTED,
     DENIED,
-    ERROR
+    ERROR,
+    STOP_SERVER
 }

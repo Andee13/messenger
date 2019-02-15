@@ -1,5 +1,7 @@
 package server;
 
+import common.message.Message;
+import common.message.status.MessageStatus;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
@@ -13,8 +15,6 @@ import java.net.Socket;
 import java.net.URISyntaxException;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @XmlRootElement
 public class Server extends Thread {
@@ -23,15 +23,10 @@ public class Server extends Thread {
     public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME;
     private static final Logger LOGGER = Logger.getLogger("Server");
     private Properties config;
-    private static final Set inputKeys;
+    private static Properties defaultProperties;
 
     public Properties getConfig() {
         return config;
-    }
-
-    static {
-        inputKeys = new TreeSet<String>();
-        inputKeys.addAll(Arrays.asList("start", "stop" , "restart"));
     }
 
     public File getRoomsDir() {
@@ -58,47 +53,71 @@ public class Server extends Thread {
         config = serverConfig;
     }
 
-    public static void main(String[] args) {
-        /*
-
-        defaultProperties.setProperty("clientsDir", new StringBuilder(new File(Server.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI().getPath()).getAbsolutePath()).append("clients").toString());
-            defaultProperties.setProperty("roomsDir", new StringBuilder(new File(Server.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI().getPath()).getAbsolutePath()).append("rooms").toString());
-
-        */
-
-
-        if (args.length == 0) {
-            File rootDir = null;
-            try {
-                rootDir = new File(Server.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            } catch (URISyntaxException e) {
-                LOGGER.fatal(new StringBuilder("The root folder definition has failed:\n")
-                        .append(e.getLocalizedMessage()).toString());
-            }
-            if (isRootStructure(rootDir)) {
-                File propertiesFile = new File(rootDir.getAbsolutePath().concat("serverConfig.xml"));
-                Properties serverProperties = new Properties();
-                if (!arePropertiesValid(propertiesFile)) {
-                    LOGGER.error("The property file is not valid. See more in logs");
-                    return;
-                } else {
-                    Server server = new Server(serverProperties);
-                    server.run();
-                }
-            } else {
-
-            }
-        } else {
-            String inputString;
-            StringBuilder stringBuilder = new StringBuilder();
-            for (String arg : args) {
-                stringBuilder.append(arg).append(' ');
-            }
-            inputString = stringBuilder.toString().trim();
-            // TODO
+    /**
+     *   If the server is being launched without parameters, it is thought
+     * that you want to start it from the current folder.
+     * Correct root folder structure is expected
+     *
+     *  In case, if the structure is not kept, the necessary folders and files will be created,
+     * server will stop in order you are able to set the configurations.
+     * */
+    public static void main(String[] args) throws IOException{
+        StartParameter startParameter = null;
+        try {
+            startParameter = parseInput(args);
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return;
         }
+        File serverProperiesFile = null;
+        try {
+                serverProperiesFile = new File(new StringBuilder(new File(Main.class.getProtectionDomain()
+                        .getCodeSource().getLocation().toURI()).getAbsolutePath())
+                        .append(File.separatorChar).append("serverConfig.xml").toString());
+        } catch (URISyntaxException e) {
+                LOGGER.error(e.getLocalizedMessage());
+        }
+        switch (args.length) {
+            case 2:
+                serverProperiesFile = new File(args[1]);
+                if (!arePropertiesValid(serverProperiesFile)) {
+                    System.out.println(new StringBuilder("Invalid server properties file: ").append(args[1]).toString());
+                } else {
+                    startServer(serverProperiesFile);
+                }
+                break;
+                default:
+                    StringBuilder stringBuilder = new StringBuilder();
+                    for(String arg : args){
+                        stringBuilder.append(arg);
+                    }
+                    LOGGER.error(new StringBuilder("Invalid start arguments: ").append(stringBuilder));
+                    return;
+        }
+        switch (startParameter) {
+            case START:
+                try {
+                    startServer(serverProperiesFile);
+                } catch (IOException e) {
+                    LOGGER.fatal(e.getLocalizedMessage());
+                    return;
+                }
+                break;
+            case STOP:
+                try{
+                    stopServer(serverProperiesFile);
+                } catch (IOException e) {
+                    LOGGER.fatal(e.getLocalizedMessage());
+                }
+                break;
+            case RESTART:
+                break;
+                default:
+                    LOGGER.error(new StringBuilder("Unknown invocation mode: ").append(startParameter).toString());
+                    return;
+        }
+
+
     }
 
     /**
@@ -106,78 +125,20 @@ public class Server extends Thread {
      *
      * @param           args is the program input parameters
      * */
-    private static void parseInput(@NotNull String [] args) {
-        /*  If any input parameters have not been passed it is thought
-         * that the serverConfig.xml is in the current folder.
-         * */
+    private static StartParameter parseInput(@NotNull String [] args) throws IOException{
         if(args.length == 0) {
-            File currentFolder = null;
-            try {
-                currentFolder = new File(new File(Server.class.getProtectionDomain()
-                        .getCodeSource().getLocation().toURI()).getAbsolutePath());
-            } catch (URISyntaxException e) {
-                LOGGER.fatal(e.getLocalizedMessage());
-                return;
-            }
-            File propertiesFile = new File(currentFolder.getAbsolutePath()
-                    .concat(File.pathSeparator).concat("serverConfig.xml"));
-            if(arePropertiesValid(propertiesFile)) {
-                Properties serverConfig = new Properties();
-                try {
-                    serverConfig.load(new BufferedInputStream(new FileInputStream(propertiesFile)));
-                    Server server = new Server(serverConfig);
-                    server.run();
-                    if (server.getState() == State.RUNNABLE) {
-                        LOGGER.info("Server has been successfully launched");
-                    } else {
-                        LOGGER.warn(new StringBuilder("Please, check the server. Server thread status is ")
-                                .append(server.getState()));
-                    }
-                } catch (IOException e) {
-                    LOGGER.fatal(e.getLocalizedMessage());
-                }
-            } else {
-                LOGGER.info("The server has not been started. For more info, please, check logs");
-            }
+            return StartParameter.START;
         } else {
-
-        }
-    }
-
-    /**
-     * The method {@code divideInputParametersOnKeys} divides the input parameters into separate parts e.g.
-     * "-login gandalf -password youshallnotpass" will be sorted into
-     * login=ivan
-     * passowrd=youshallnotpass
-     * */
-    private static Properties divideInputParametersOnKeys(@NotNull String input) throws IOException {
-        input = input.trim();
-        Properties executeProperties = new Properties();
-        String keysParametersPatternString = "^(((-\\w+) (\\S+))( )*)+$";
-        Pattern keysParameterPattern = Pattern.compile(keysParametersPatternString);
-        Matcher matcher = keysParameterPattern.matcher(input);
-        if (!matcher.matches()) {
-            throw new IOException(new StringBuilder("Wrong input: ").append(input).toString());
-        }
-        String [] splittedInputParameters = input.split("-");
-        for(int i = 0; i < splittedInputParameters.length; i++) {
-            splittedInputParameters[i] = splittedInputParameters[i].trim();
-            String key = splittedInputParameters[i].split(" ")[0];
-            String value = splittedInputParameters[i].split(" ")[1];
-            /*
-            * Checks if the entered key is valid
-            * */
-            if(!inputKeys.contains(key)) {
-                throw new IllegalArgumentException(new StringBuilder("Unknown key: ").append(key).toString());
+            switch (args[0].toLowerCase()) {
+                case "-start":
+                    return StartParameter.START;
+                case "-stop":
+                    return StartParameter.STOP;
+                case "-restart":
+                    return StartParameter.RESTART;
+                    default: throw new IOException(new StringBuilder("Unknown command: ").append(args[0]).toString());
             }
-            if (executeProperties.setProperty(key, value) != null) {
-                throw new IOException(new StringBuilder("Duplicating the key ").append(key).toString());
-            }
-
         }
-
-        // TODO
-        return null;
     }
 
     /**
@@ -186,8 +147,17 @@ public class Server extends Thread {
      * properties about existing clients and rooms directories, {@code false} otherwise.
      *
      * @param           properties a set of properties are to be validated
+     *
+     * @return          {@code true} if and only if the specified properties set contains all the necessary
+     *                  configurations and they are valid i.e. it is possible to start a server using them,
+     *                  {@code false} otherwise
+     *
+     * @exception       NullPointerException if {@code properties} is {@code null}
      * */
     public static boolean arePropertiesValid(Properties properties) {
+        if (properties == null) {
+            throw new NullPointerException("properties is null");
+        }
         try {
             int port = Integer.parseInt(properties.getProperty("port"));
             if (port < 0 || port > 65536) {
@@ -213,12 +183,25 @@ public class Server extends Thread {
     }
 
     /**
-     *  The method creates an instance of {@code Property} and loads the properties
-     * from the specified file.
-     *
+     *   The method creates an instance of {@code Property} and loads the properties from the specified file.
      *  The result is the same as a result of invocation {@code arePropertiesValid()}
+     *
+     * @param           propertyFile represents an abstract path to the file in which
+     *                  properties of a server are set
+     *
+     * @return          {@code true} if and only if the specified abstract filepath  properties set contains
+     *                  all the necessary configurations and they are valid i.e. it is possible
+     *                  to start a server using them, {@code false} otherwise
+     *
+     * @exception       NullPointerException if {@code properties} is {@code null}
      * */
-    public static boolean arePropertiesValid(@NotNull File propertyFile) {
+    public static boolean arePropertiesValid(File propertyFile) {
+        if (propertyFile == null) {
+            throw new NullPointerException("propertyFile is null");
+        }
+        if (propertyFile == null) {
+            throw new NullPointerException();
+        }
         Properties properties = new Properties();
         try {
             properties.load(new BufferedInputStream(new FileInputStream(propertyFile)));
@@ -235,36 +218,62 @@ public class Server extends Thread {
      * @param rootDir   the root folder of a server
      *
      * @exception       IllegalArgumentException if {@code rootDir} is not a folder
+     * @exception       NullPointerException if the {@code rootDir} is {@code null}
      * */
-    private static boolean isRootStructure(@NotNull File rootDir) {
-        File serverConfig = new File(new StringBuffer(rootDir.getAbsolutePath()).append("serverConfig.xml").toString());
-        File clientsDir = new File(new StringBuffer(rootDir.getAbsolutePath()).append("clients").toString());
-        File roomsDir = new File(new StringBuffer(rootDir.getAbsolutePath()).append("rooms").toString());
+    private static boolean isRootStructure(File rootDir) {
+        if(rootDir == null) {
+            throw new NullPointerException("The specified folder is not expected to be null");
+        }
+        File serverConfig = new File(new StringBuffer(rootDir.getAbsolutePath())
+                .append(File.pathSeparator).append("serverConfig.xml").toString());
+        File clientsDir = new File(new StringBuffer(rootDir.getAbsolutePath())
+                .append(File.pathSeparator).append("clients").toString());
+        File roomsDir = new File(new StringBuffer(rootDir.getAbsolutePath())
+                .append(File.pathSeparator).append("rooms").toString());
         return serverConfig.isFile() && clientsDir.isDirectory() && roomsDir.isDirectory();
     }
 
     /**
      *  Organizes the necessary server root folder structure described above the {@code ServerConfig.class}
-     * The method creates one of more demanded element. If there is not such one, the {@code createRootStructure}
-     * creates it. The method does not delete or re-write already existing ones.
+     * The method creates one of more demanded element. If there is not such one, the {@code createDefaultRootStructure}
+     * creates it.
+     *  The method does not delete or re-write already existing ones.
      *
      * @param           rootDir a server root folder
+     *
+     * @exception       IllegalArgumentException if the specified file is not a folder
      * */
-    private static void createRootStructure(@NotNull File rootDir) {
+    private static void createDefaultRootStructure(File rootDir) {
+        if(rootDir == null) {
+            throw new NullPointerException("The specified folder is not expected to be null");
+        }
         if (!rootDir.isDirectory()) {
             throw new IllegalArgumentException("rootDir is expected to be an existing folder");
         }
-        File serverConfig = new File(new StringBuffer(rootDir.getAbsolutePath()).append("serverConfig.xml").toString());
-        File clientsDir = new File(new StringBuffer(rootDir.getAbsolutePath()).append("clients").toString());
-        File roomsDir = new File(new StringBuffer(rootDir.getAbsolutePath()).append("rooms").toString());
+        File serverConfig = new File(new StringBuffer(rootDir.getAbsolutePath())
+                .append(File.separatorChar).append("serverConfig.xml").toString());
+        File clientsDir = new File(new StringBuffer(rootDir.getAbsolutePath())
+                .append(File.separatorChar).append("clients").toString());
+        File roomsDir = new File(new StringBuffer(rootDir.getAbsolutePath())
+                .append(File.separatorChar).append("rooms").toString());
         if (!serverConfig.isFile()) {
             LOGGER.info(new StringBuilder("Creating the default server configuration file: ")
                     .append(serverConfig.getAbsolutePath()));
             try {
                 if(!serverConfig.createNewFile()){
-                    throw new RuntimeException(new StringBuilder("Unable to create a default server configuration file: ")
+                    throw new RuntimeException(new StringBuilder("Failed default server configuration file creation: ")
                             .append(serverConfig.getAbsolutePath()).toString());
                 }
+                Properties defaultProperties = getDefaultProperties();
+                try(OutputStream os = new BufferedOutputStream(new FileOutputStream(serverConfig))){
+                    defaultProperties.storeToXML(os,"This is a default properties","UTF-8");
+                    LOGGER.info(new StringBuilder("The default properties have been stored in the file ")
+                            .append(serverConfig.getAbsolutePath())
+                            .append(". Please, set your server configuration there."));
+                } catch (Exception e) {
+                    LOGGER.fatal(e.getLocalizedMessage());
+                }
+
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -295,14 +304,83 @@ public class Server extends Thread {
                 throw new RuntimeException(e);
             }
         }
+
+
     }
 
     /**
-     *  Starts the server for which {@code rootDir} is the root folder
+     *  The method {@code getDefaultProperties} returns
+     * the default properties pattern for all servers.
      * */
-    private static void startServer(File rootDir) {
-        // TODO
+    private static Properties getDefaultProperties() {
+        if(defaultProperties == null) {
+            Properties properties = new Properties();
+            properties.setProperty("port", "5940");
+            properties.setProperty("rcon","change_me");
+            properties.setProperty("clientsDir", new StringBuilder("change")
+                    .append(File.separatorChar).append("the")
+                    .append(File.separatorChar).append("clients")
+                    .append(File.separatorChar).append("folder")
+                    .append(File.separatorChar).append("path")
+                    .toString()
+            );
+            properties.setProperty("roomsDir", new StringBuilder("change")
+                    .append(File.separatorChar).append("the")
+                    .append(File.separatorChar).append("rooms")
+                    .append(File.separatorChar).append("folder")
+                    .append(File.separatorChar).append("path")
+                    .toString()
+            );
+            defaultProperties = properties;
+        }
+        return defaultProperties;
     }
+
+    private static Properties copyDefaultProperties() {
+        return new Properties(getDefaultProperties());
+    }
+
+    /**
+     * The method {@code startServer} starts the server denoted by the specified {@code serverPropertiesFile}
+     *
+     * @throws          IOException if an I/O error occures
+     * */
+    private static void startServer(File serverPropertiesFile) throws IOException{
+        if(serverPropertiesFile == null) {
+            throw new NullPointerException("serverPropertiesFile must not be null");
+        }
+        if(!arePropertiesValid(serverPropertiesFile)) {
+            throw new IOException("Invalid server properties file");
+        }
+        Properties serverProperties = new Properties();
+        serverProperties.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
+        startServer(serverProperties);
+    }
+
+    /**
+     * The method {@code startServer} starts the server denoted by the specified {@code serverProperties}
+     *
+     * @throws          IOException if an I/O error occures
+     *
+     * @exception       IllegalStateException if the server denoted by the specified {@code serverProperties}
+     *                  has already been launched or the port set in the {@code serverProperties} is taken
+     * */
+    private static void startServer(Properties serverProperties) throws IOException{
+        if(serverProperties == null) {
+            throw new NullPointerException("The server properties must not be null");
+        }
+        if(!arePropertiesValid(serverProperties)) {
+            throw new IOException("The server properties are not valid");
+        }
+        // TODO checking whether the port is already taken
+        //
+        // TODO creating the server with the properties
+        Server server = new Server(serverProperties);
+        server.start();
+        LOGGER.info(new StringBuilder("Server thread status: ").append(server.getState()).toString());
+    }
+
+    // TODO create a method which checks whether the port is taken
 
     @Override
     public void run() {
@@ -321,18 +399,45 @@ public class Server extends Thread {
         }
     }
 
-    public void stopServer() throws IOException {
-        LOGGER.info("Stopping the serverProcessing");
-        for (Map.Entry<Integer, ClientListener> client : clients.entrySet()) {
-            client.getValue().closeClientSession();
+    /**
+     * The method {@code stopServer} stops the server denoted by the specified {@code serverProperties}
+     *
+     * @throws          IOException if the {@code serverProperties} are invalid
+     *
+     * @throws          IllegalStateException if the server denoted by the specified properties
+     *                                        has not been launched on this {@code localhost} yet
+     * */
+    public static void stopServer(Properties serverProperties) throws IOException, IllegalStateException {
+        if(serverProperties == null) {
+            throw new NullPointerException("The serverProperties must not be null");
         }
-        interrupt();
+        if(!arePropertiesValid(serverProperties)) {
+            throw new IOException("The server properties are not valid");
+        }
+        // TODO checking whether the server is not launched
+        LOGGER.info("Stopping the server in processing");
+        Socket socket = new Socket("localhost", Integer.parseInt(serverProperties.getProperty("port")));
+        Message stopServerMessage = new Message(MessageStatus.STOP_SERVER).setPassword(serverProperties.getProperty("rcon"));
+        // TODO stopping the server
     }
 
+    /**
+     *
+     * */
+    public static void stopServer(File serverPropertiesFile) throws IOException, IllegalStateException {
+        // TODO stopping the server
+    }
+
+    /**
+     *
+     * */
     public void closeClientSession (ClientListener client) throws IOException, JAXBException {
         client.closeClientSession();
     }
 
+    /**
+     *
+     * */
     public void runRoom(int id){
         if (config == null) {
             throw new IllegalStateException("The configurations have not been set yet");
