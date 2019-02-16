@@ -1,5 +1,6 @@
 package server;
 
+import com.sun.org.apache.xml.internal.security.algorithms.MessageDigestAlgorithm;
 import common.message.Message;
 import common.message.status.MessageStatus;
 import javafx.collections.FXCollections;
@@ -7,9 +8,16 @@ import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
+import javax.security.sasl.AuthenticationException;
+import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.crypto.Data;
+import javax.xml.transform.stream.StreamSource;
 import java.io.*;
+import java.net.ConnectException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URISyntaxException;
@@ -151,12 +159,10 @@ public class Server extends Thread {
      * @return          {@code true} if and only if the specified properties set contains all the necessary
      *                  configurations and they are valid i.e. it is possible to start a server using them,
      *                  {@code false} otherwise
-     *
-     * @exception       NullPointerException if {@code properties} is {@code null}
      * */
     public static boolean arePropertiesValid(Properties properties) {
         if (properties == null) {
-            throw new NullPointerException("properties is null");
+            return false;
         }
         try {
             int port = Integer.parseInt(properties.getProperty("port"));
@@ -192,12 +198,10 @@ public class Server extends Thread {
      * @return          {@code true} if and only if the specified abstract filepath  properties set contains
      *                  all the necessary configurations and they are valid i.e. it is possible
      *                  to start a server using them, {@code false} otherwise
-     *
-     * @exception       NullPointerException if {@code properties} is {@code null}
      * */
     public static boolean arePropertiesValid(File propertyFile) {
         if (propertyFile == null) {
-            throw new NullPointerException("propertyFile is null");
+            return false;
         }
         if (propertyFile == null) {
             throw new NullPointerException();
@@ -315,8 +319,12 @@ public class Server extends Thread {
     private static Properties getDefaultProperties() {
         if(defaultProperties == null) {
             Properties properties = new Properties();
+            // a port number on which the server will be started
             properties.setProperty("port", "5940");
-            properties.setProperty("rcon","change_me");
+            // a server
+            properties.setProperty("server_login", "God");
+            properties.setProperty("server_password","change_me");
+            // a path to the folder where clients' data will be stored
             properties.setProperty("clientsDir", new StringBuilder("change")
                     .append(File.separatorChar).append("the")
                     .append(File.separatorChar).append("clients")
@@ -324,6 +332,7 @@ public class Server extends Thread {
                     .append(File.separatorChar).append("path")
                     .toString()
             );
+            // a path to the folder where the rooms' data will be stored
             properties.setProperty("roomsDir", new StringBuilder("change")
                     .append(File.separatorChar).append("the")
                     .append(File.separatorChar).append("rooms")
@@ -343,7 +352,7 @@ public class Server extends Thread {
     /**
      * The method {@code startServer} starts the server denoted by the specified {@code serverPropertiesFile}
      *
-     * @throws          IOException if an I/O error occures
+     * @throws          IOException if an I/O error occurs
      * */
     private static void startServer(File serverPropertiesFile) throws IOException{
         if(serverPropertiesFile == null) {
@@ -360,7 +369,7 @@ public class Server extends Thread {
     /**
      * The method {@code startServer} starts the server denoted by the specified {@code serverProperties}
      *
-     * @throws          IOException if an I/O error occures
+     * @throws          IOException if an I/O error occurs
      *
      * @exception       IllegalStateException if the server denoted by the specified {@code serverProperties}
      *                  has already been launched or the port set in the {@code serverProperties} is taken
@@ -379,8 +388,6 @@ public class Server extends Thread {
         server.start();
         LOGGER.info(new StringBuilder("Server thread status: ").append(server.getState()).toString());
     }
-
-    // TODO create a method which checks whether the port is taken
 
     @Override
     public void run() {
@@ -407,18 +414,139 @@ public class Server extends Thread {
      * @throws          IllegalStateException if the server denoted by the specified properties
      *                                        has not been launched on this {@code localhost} yet
      * */
-    public static void stopServer(Properties serverProperties) throws IOException, IllegalStateException {
-        if(serverProperties == null) {
+    public static void stopServer(Properties serverProperties) throws IOException {
+        if (serverProperties == null) {
             throw new NullPointerException("The serverProperties must not be null");
         }
-        if(!arePropertiesValid(serverProperties)) {
+        if (!arePropertiesValid(serverProperties)) {
             throw new IOException("The server properties are not valid");
         }
-        // TODO checking whether the server is not launched
-        LOGGER.info("Stopping the server in processing");
+        if (!isServerLaunched(serverProperties)) {
+            throw new IllegalStateException("The server is not working now");
+        }
+        Message loginMessage = new Message(MessageStatus.AUTH).setLogin(serverProperties.getProperty("server_login"))
+                .setPassword(serverProperties.getProperty("server_password"));
+        Message stopRequestMessage = new Message(MessageStatus.STOP_SERVER)
+                .setLogin(serverProperties.getProperty("server_login"))
+                .setPassword(serverProperties.getProperty("server_password"));
         Socket socket = new Socket("localhost", Integer.parseInt(serverProperties.getProperty("port")));
-        Message stopServerMessage = new Message(MessageStatus.STOP_SERVER).setPassword(serverProperties.getProperty("rcon"));
-        // TODO stopping the server
+        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+        DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            StringWriter stringWriter = new StringWriter();
+            marshaller.marshal(loginMessage, stringWriter);
+            dataOutputStream.writeUTF(stringWriter.toString());
+            dataOutputStream.flush();
+
+            long sendingRequestTime = System.currentTimeMillis();
+            boolean wasResponse = false;
+            String response = null;
+            while(System.currentTimeMillis() - sendingRequestTime < 30e3 && !wasResponse) {
+                if(dataInputStream.available() == 0) {
+                    continue;
+                } else {
+                    response = dataInputStream.readUTF();
+                    wasResponse = true;
+                }
+            }
+            if (!wasResponse) {
+                throw new ConnectException("Response timeout");
+            }
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            Message responseMessage = (Message) unmarshaller.unmarshal(new StringReader(response));
+            if (!MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
+                throw new ConnectException("Unable to authorize on server");
+            }
+            Message stopServerRequestMessage = new Message(MessageStatus.STOP_SERVER)
+                    .setLogin(serverProperties.getProperty("server_login"))
+                    .setPassword(serverProperties.getProperty("server_login"));
+            sendingRequestTime = System.currentTimeMillis();
+            wasResponse = false;
+            response = null;
+            while(System.currentTimeMillis() - sendingRequestTime < 30e3 && !wasResponse) {
+                if(dataInputStream.available() == 0) {
+                    continue;
+                } else {
+                    response = dataInputStream.readUTF();
+                    wasResponse = true;
+                }
+            }
+            if (!wasResponse) {
+                throw new ConnectException("Response timeout");
+            }
+            responseMessage = (Message) unmarshaller.unmarshal(new StringReader(response));
+            if (!MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
+                throw new ConnectException("Stop server operation denied");
+            }
+        } catch (JAXBException e) {
+            LOGGER.fatal(e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * The method {@code isServerLaunched} checks whether the server denoted by the specified properties
+     * is currently working
+     *
+     * @param           serverProperties the properties of a server to be checked
+     *
+     * @return          {@code true} if and only if the server denoted by the specified properties exists
+     *                  and is currently working i.e. accepts incoming connections, {@code false} otherwise
+     *
+     * @throws          IOException if the specified properties are not valid
+     * */
+    private static boolean isServerLaunched(Properties serverProperties) throws IOException {
+        if (!arePropertiesValid(serverProperties)) {
+            return false;
+        }
+        Socket socket = new Socket();
+        Message message = new Message(MessageStatus.GETSTATE)
+                .setLogin(serverProperties.getProperty("server_login"))
+                .setPassword(serverProperties.getProperty("server_password"));
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            StringWriter stringWriter = new StringWriter();
+            marshaller.marshal(message, stringWriter);
+            DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+            dataOutputStream.writeUTF(stringWriter.toString());
+            dataOutputStream.flush();
+            long sendingRequestTime = System.currentTimeMillis();
+            boolean wasResponse = false;
+            DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+            String response = null;
+            // waiting for response lasts no more than 30 seconds
+            while(System.currentTimeMillis() - sendingRequestTime < 30e3 && !wasResponse) {
+                if(dataInputStream.available() == 0) {
+                    continue;
+                } else {
+                    response = dataInputStream.readUTF();
+                    wasResponse = true;
+                }
+            }
+            if (!wasResponse) {
+                return false;
+            }
+            Message responseMessage = null;
+            try {
+                responseMessage = (Message) jaxbContext.createUnmarshaller().unmarshal(new StringReader(response));
+                if (responseMessage == null) {
+                    return false;
+                } else {
+                    return true;
+                }
+            } catch (Exception e) {
+                LOGGER.error(e.getLocalizedMessage());
+                return false;
+            }
+        } catch (JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
+        }
     }
 
     /**

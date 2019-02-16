@@ -12,5 +12,7 @@ public enum MessageStatus {
     ACCEPTED,
     DENIED,
     ERROR,
-    STOP_SERVER
+    STOP_SERVER,
+    GETSTATE,
+    STATE
 }
