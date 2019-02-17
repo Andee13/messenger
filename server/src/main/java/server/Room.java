@@ -9,9 +9,7 @@ import org.apache.log4j.Logger;
 import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.FIELD)
@@ -21,17 +19,17 @@ public class Room {
     @XmlElement
     private int adminId;
     @XmlJavaTypeAdapter(MessageHistoryObservableListAdapter.class)
-    private ObservableList<Message> messageHistory;
+    private List<Message> messageHistory;
     @XmlJavaTypeAdapter(MembersObservableSetAdapter.class)
-    private ObservableSet<Integer> members;
+    private Set<Integer> members;
     @XmlTransient
     private Server server;
 
     private static Logger LOGGER = Logger.getLogger("Room");
 
     public Room(){
-        messageHistory = FXCollections.observableArrayList(new ArrayList<>());
-        members = FXCollections.observableSet(new HashSet<>());
+        messageHistory = FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
+        members = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new TreeSet<>()));
     }
 
     public void setRoomId(int roomId) {
@@ -50,41 +48,12 @@ public class Room {
         this.adminId = adminId;
     }
 
-    public ObservableList<Message> getMessageHistory() {
+    public List<Message> getMessageHistory() {
         return messageHistory;
     }
 
     private void setMessageHistory(ObservableList<Message> messageHistory) {
         this.messageHistory = messageHistory;
-    }
-
-    @XmlAccessorType(XmlAccessType.FIELD)
-    private static final class MessageHistoryObservableListWrapper {
-        @XmlElement(name="message")
-        private ArrayList<Message> messages = new ArrayList<>();
-
-        public MessageHistoryObservableListWrapper() {
-        }
-
-        public ArrayList<Message> getMessages() {
-            return messages;
-        }
-
-        public void setMessages(ArrayList<Message> messages) {
-            this.messages = messages;
-        }
-    }
-
-    private static final class MessageHistoryObservableListAdapter extends XmlAdapter<MessageHistoryObservableListWrapper, ObservableList<Message>> {
-        public ObservableList<Message> unmarshal(MessageHistoryObservableListWrapper messages) throws Exception {
-            return FXCollections.observableList(messages.getMessages());
-        }
-
-        public MessageHistoryObservableListWrapper marshal(ObservableList<Message> observableMessages) throws Exception {
-            MessageHistoryObservableListWrapper messageHistoryObservableListWrapper = new MessageHistoryObservableListWrapper();
-            messageHistoryObservableListWrapper.getMessages().addAll(observableMessages);
-            return messageHistoryObservableListWrapper;
-        }
     }
 
     @XmlAccessorType(XmlAccessType.FIELD)
@@ -155,4 +124,33 @@ public class Room {
     public int hashCode() {
         return roomId;
     }
+
+    @XmlAccessorType(XmlAccessType.FIELD)
+    private static final class MessageHistoryObservableListWrapper {
+        @XmlElement(name="message")
+        private List<Message> messages;
+
+        public MessageHistoryObservableListWrapper(List<Message> list) {
+            FXCollections.synchronizedObservableList(FXCollections.observableList(list));
+        }
+
+        public List<Message> getMessages() {
+            return messages;
+        }
+
+        public void setMessages(List<Message> messages) {
+            this.messages = FXCollections.synchronizedObservableList(FXCollections.observableList(messages));
+        }
+    }
+
+    private static final class MessageHistoryObservableListAdapter extends XmlAdapter<MessageHistoryObservableListWrapper, List<Message>> {
+        public List<Message> unmarshal(MessageHistoryObservableListWrapper messages) throws Exception {
+            return FXCollections.synchronizedObservableList(FXCollections.observableList(messages.getMessages()));
+        }
+
+        public MessageHistoryObservableListWrapper marshal(List<Message> messages) throws Exception {
+            return new MessageHistoryObservableListWrapper(messages);
+        }
+    }
+
 }

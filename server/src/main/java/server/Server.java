@@ -1,33 +1,25 @@
 package server;
 
-import com.sun.org.apache.xml.internal.security.algorithms.MessageDigestAlgorithm;
-import common.message.Message;
-import common.message.status.MessageStatus;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
-import javax.security.sasl.AuthenticationException;
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlRootElement;
-import javax.xml.crypto.Data;
-import javax.xml.transform.stream.StreamSource;
-import java.io.*;
-import java.net.ConnectException;
+import java.io.File;
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.URISyntaxException;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Properties;
+import java.util.TreeMap;
 
 @XmlRootElement
 public class Server extends Thread {
-    private ObservableMap<Integer, ClientListener> clients;
-    private ObservableMap<Integer, Room> onlineRooms;
+    private volatile Map<Integer, ClientListener> clients;
+    private volatile Map<Integer, Room> onlineRooms;
     public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME;
     private static final Logger LOGGER = Logger.getLogger("Server");
     private Properties config;
@@ -40,7 +32,7 @@ public class Server extends Thread {
         return new File(config.getProperty("roomsDir"));
     }
 
-    public ObservableMap<Integer, ClientListener> getClients() {
+    public Map<Integer, ClientListener> getClients() {
         return clients;
     }
 
@@ -58,6 +50,8 @@ public class Server extends Thread {
 
     protected Server(@NotNull Properties serverConfig) {
         config = serverConfig;
+        clients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+        onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
     }
 
     @Override

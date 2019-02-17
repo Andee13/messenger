@@ -1,5 +1,6 @@
 package server;
 
+import javafx.collections.FXCollections;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
@@ -9,32 +10,28 @@ import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import javax.xml.xpath.*;
 import java.io.*;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 
 
 @XmlRootElement(name="client")
 public class Client {
-
     @XmlElement
     private int clientId;
-
     @XmlJavaTypeAdapter(SetAdapter.class)
     private Set<Integer> rooms;
-
     @XmlJavaTypeAdapter(SetAdapter.class)
     private Set<Integer> friends;
-
     @XmlElement
     private String login;
-
     @XmlElement
     private String password;
-
     @XmlElement
     private boolean isAdmin;
+
+    public Client() {
+        friends = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>()));
+        rooms = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>()));
+    }
 
     public boolean isAdmin() {
         return isAdmin;
@@ -87,7 +84,7 @@ public class Client {
     private static class SetAdapter extends XmlAdapter<HashSet<Integer>, Set<Integer>> {
         @Override
         public Set<Integer> unmarshal(HashSet<Integer> v) throws Exception {
-            return v;
+            return FXCollections.synchronizedObservableSet(FXCollections.observableSet(v));
         }
 
         @Override
@@ -114,7 +111,7 @@ public class Client {
     }
 
     /**
-     * The method that informed if there is a member {@code clientId} in the room {@code roomId}
+     * The method that informs if there is a member {@code clientId} in the room {@code roomId}
      *
      * @param clientId The client's clientId to be searched for
      * @param roomId The room clientId where {@code clientId} will be searched
@@ -125,6 +122,7 @@ public class Client {
      * @throws FileNotFoundException // TODO decide what exception will be thrown and describe the cases when it will occur
      *
      * */
+    // TODO remove the exceptions
     public static boolean isMember(Properties serverConfig, int clientId, int roomId) throws FileNotFoundException, XPathExpressionException {
         File roomFile = new File(new StringBuilder(serverConfig.getProperty("roomsDir"))
                 .append(File.pathSeparator).append(roomId).append(".xml").toString());

@@ -14,5 +14,6 @@ public enum MessageStatus {
     ERROR,
     STOP_SERVER,
     GETSTATE,
-    STATE
+    STATE,
+    KICK
 }

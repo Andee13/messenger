@@ -5,6 +5,7 @@ import common.message.status.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
+import javax.security.auth.login.FailedLoginException;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
@@ -77,10 +78,10 @@ public class ServerProcessing {
                 }
                 break;
             case STOP:
-                try{
+                try {
                     stopServer(serverProperiesFile);
-                } catch (IOException e) {
-                    LOGGER.fatal(e.getLocalizedMessage());
+                } catch (Exception e) {
+                    LOGGER.error(e.getLocalizedMessage());
                 }
                 break;
             case RESTART:
@@ -364,16 +365,16 @@ public class ServerProcessing {
      *                                        has not been launched on this {@code localhost} yet
      *
      * @exception       NullPointerException if the {@code serverProperties} are {@code null}
+     *
+     * @exception       FailedLoginException in case if failed to authorize on the server
+     *                  i.e. the response message status is not {@code MessageStatus.ACCEPTED}
      * */
-    public static void stopServer(@NotNull Properties serverProperties) throws IOException {
+    public static void stopServer(@NotNull Properties serverProperties) throws IOException, FailedLoginException {
         if (serverProperties == null) {
             throw new NullPointerException("The serverProperties must not be null");
         }
         if (!arePropertiesValid(serverProperties)) {
             throw new IOException("The server properties are not valid");
-        }
-        if (!isServerLaunched(serverProperties)) {
-            throw new IllegalStateException("The server is not working now");
         }
         Message loginMessage = new Message(MessageStatus.AUTH).setLogin(serverProperties.getProperty("server_login"))
                 .setPassword(serverProperties.getProperty("server_password"));
@@ -381,59 +382,24 @@ public class ServerProcessing {
                 .setLogin(serverProperties.getProperty("server_login"))
                 .setPassword(serverProperties.getProperty("server_password"));
         Socket socket = new Socket("localhost", Integer.parseInt(serverProperties.getProperty("port")));
-        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
-        DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
-        try {
-            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-            Marshaller marshaller = jaxbContext.createMarshaller();
-            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-            StringWriter stringWriter = new StringWriter();
-            marshaller.marshal(loginMessage, stringWriter);
-            dataOutputStream.writeUTF(stringWriter.toString());
-            dataOutputStream.flush();
-            long sendingRequestTime = System.currentTimeMillis();
-            boolean wasResponse = false;
-            String response = null;
-            while(System.currentTimeMillis() - sendingRequestTime < 30e3 && !wasResponse) {
-                if(dataInputStream.available() == 0) {
-                    continue;
-                } else {
-                    response = dataInputStream.readUTF();
-                    wasResponse = true;
-                }
+        Message responseMessage = sendAndWait(loginMessage, socket, 30);
+        if (!MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
+            StringBuilder failedAuthInfo = new StringBuilder("Unable to authorize on the server ")
+                    .append(socket.getRemoteSocketAddress()).append("\nResponse status:")
+                    .append(responseMessage.getStatus());
+            if (responseMessage.getText() != null && !responseMessage.getText().isEmpty()) {
+                failedAuthInfo.append(responseMessage.getText());
             }
-            if (!wasResponse) {
-                throw new ConnectException("Response timeout");
+            throw new FailedLoginException(failedAuthInfo.toString());
+        }
+        responseMessage = sendAndWait(stopRequestMessage, socket, 30);
+        if (!MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
+            StringBuilder failedStopInfo = new StringBuilder("Unable to stop the server. Response status: ")
+                    .append(responseMessage.getStatus());
+            if (responseMessage.getText() != null && !responseMessage.getText().isEmpty()) {
+                failedStopInfo.append(responseMessage.getText());
             }
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            Message responseMessage = (Message) unmarshaller.unmarshal(new StringReader(response));
-            if (!MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
-                throw new ConnectException("Unable to authorize on server");
-            }
-            Message stopServerRequestMessage = new Message(MessageStatus.STOP_SERVER)
-                    .setLogin(serverProperties.getProperty("server_login"))
-                    .setPassword(serverProperties.getProperty("server_login"));
-            sendingRequestTime = System.currentTimeMillis();
-            wasResponse = false;
-            response = null;
-            while(System.currentTimeMillis() - sendingRequestTime < 30e3 && !wasResponse) {
-                if(dataInputStream.available() == 0) {
-                    continue;
-                } else {
-                    response = dataInputStream.readUTF();
-                    wasResponse = true;
-                }
-            }
-            if (!wasResponse) {
-                throw new ConnectException("Response timeout");
-            }
-            responseMessage = (Message) unmarshaller.unmarshal(new StringReader(response));
-            if (!MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
-                throw new ConnectException("Stop server operation denied");
-            }
-        } catch (JAXBException e) {
-            LOGGER.fatal(e);
-            throw new RuntimeException(e);
+            throw new RuntimeException(failedStopInfo.toString());
         }
     }
 
@@ -528,7 +494,7 @@ public class ServerProcessing {
      *
      * @param           serverPropertiesFile the file which stores server properties
      * */
-    public static void stopServer(@NotNull File serverPropertiesFile) throws IOException {
+    public static void stopServer(@NotNull File serverPropertiesFile) throws IOException, FailedLoginException {
         if (!arePropertiesValid(serverPropertiesFile)) {
             throw new IOException("The properties file are not valid");
         }
@@ -537,5 +503,59 @@ public class ServerProcessing {
         stopServer(properties);
     }
 
-
+    /**
+     *  The method {@code sendAndWait} sends the specified {@code message} and waits for response
+     * for {@code timeout} seconds. If no reply was received for all the time, then {@code ConnectException}
+     * will be thrown
+     *
+     * @param           message the message to be sent
+     * @param           socket the socket that will be used to send the message via {@code socket.getOutputStream()}
+     * @param           timeout the time period (in seconds) during which a response will be being waited
+     *
+     * @exception       ConnectException in case if no response has been got
+     * @exception       NullPointerException if {@code message} or {@code socket} is {@code null}
+     * @exception       IllegalArgumentException if {@code timeout} is less than 0
+     *
+     * @throws          IOException if an I/O error occurs
+     * */
+    private static Message sendAndWait(Message message, Socket socket, int timeout) throws IOException {
+        if (message == null) {
+            throw new NullPointerException("Message must not be null");
+        }
+        if (socket == null) {
+            throw new NullPointerException("Socket must not be null");
+        }
+        if (timeout < 0) {
+            throw new IllegalArgumentException(new StringBuilder("Timeout must not be a negative number:")
+                    .append(timeout).toString());
+        }
+        DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            StringWriter stringWriter = new StringWriter();
+            marshaller.marshal(message, stringWriter);
+            dataOutputStream.writeUTF(stringWriter.toString());
+            dataOutputStream.flush();
+            long sendingRequestTime = System.currentTimeMillis();
+            boolean wasResponse = false;
+            String response = null;
+            while(System.currentTimeMillis() - sendingRequestTime < timeout * 1000 && !wasResponse) {
+                if(dataInputStream.available() != 0) {
+                    response = dataInputStream.readUTF();
+                    wasResponse = true;
+                }
+            }
+            if (!wasResponse) {
+                throw new ConnectException("Response timeout");
+            }
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            return (Message) unmarshaller.unmarshal(new StringReader(response));
+        } catch (JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
+        }
+    }
 }

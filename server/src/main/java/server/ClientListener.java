@@ -78,7 +78,6 @@ public class ClientListener extends Thread{
             e.printStackTrace();
             throw new RuntimeException(e);
         }
-
         while (true) {
             try {
                 // TODO handle the input
@@ -88,7 +87,7 @@ public class ClientListener extends Thread{
                 e.printStackTrace();
                 try {
                     sendResponseMessage(new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage()));
-                }catch (JAXBException | IOException e1){
+                }catch (IOException e1){
                     LOGGER.error(e1.getLocalizedMessage());
                 }
             }
@@ -248,14 +247,18 @@ public class ClientListener extends Thread{
     }
 
     // TODO resolve the JAXBException
-    public void sendResponseMessage(Message message) throws IOException, JAXBException{
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-        Marshaller marshaller = jaxbContext.createMarshaller();
-        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-        StringWriter stringWriter = new StringWriter();
-        marshaller.marshal(message, stringWriter);
-        out.writeUTF(stringWriter.toString());
-        out.flush();
+    public void sendResponseMessage(Message message) throws IOException {
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            StringWriter stringWriter = new StringWriter();
+            marshaller.marshal(message, stringWriter);
+            out.writeUTF(stringWriter.toString());
+            out.flush();
+        } catch (JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+        }
     }
 
     public void saveClient() {
@@ -276,7 +279,7 @@ public class ClientListener extends Thread{
     }
 
     public void closeClientSession() throws IOException {
-        if(isAlive() && ! isInterrupted()){
+        if(isAlive() && !isInterrupted()){
             in.close();
             out.close();
             socket.close();
