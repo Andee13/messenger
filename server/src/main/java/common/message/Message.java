@@ -1,6 +1,5 @@
 package common.message;
 
-import common.message.status.MessageStatus;
 import server.Server;
 
 import javax.xml.bind.annotation.XmlAccessType;

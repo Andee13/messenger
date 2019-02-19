@@ -1,7 +1,7 @@
 package server;
 
 import common.message.Message;
-import common.message.status.MessageStatus;
+import common.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
@@ -34,6 +34,8 @@ public class ServerProcessing {
      *
      *  In case, if the structure is not kept, the necessary folders and files will be created,
      * server will stop in order you are able to set the configurations.
+     *
+     * @param           args server start directives
      * */
     public static void main(String[] args) throws IOException {
         StartParameter startParameter = null;

@@ -27,6 +27,7 @@ public class Client {
     private String password;
     @XmlElement
     private boolean isAdmin;
+    private Properties privacy;
 
     public Client() {
         friends = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>()));

@@ -1,30 +1,14 @@
 package server;
 
-import common.message.Message;
-import common.message.status.MessageStatus;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import lombok.extern.java.Log;
 import lombok.extern.log4j.Log4j;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.LoggerFactory;
-import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 import javax.xml.bind.*;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
 import javax.xml.xpath.*;
 import java.io.*;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.Scanner;
 
 @Log4j
 public class Main {

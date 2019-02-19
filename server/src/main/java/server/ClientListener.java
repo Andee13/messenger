@@ -1,7 +1,9 @@
 package server;
 
+import common.Room;
+import common.RoomProcessing;
 import common.message.Message;
-import common.message.status.MessageStatus;
+import common.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.xml.sax.InputSource;
@@ -17,6 +19,8 @@ import javax.xml.stream.XMLStreamReader;
 import java.io.*;
 import java.net.Socket;
 import java.time.LocalDateTime;
+import server.exceptions.IllegalPasswordException;
+import server.exceptions.NoSuchClientException;
 
 public class ClientListener extends Thread{
     private Socket socket;
@@ -27,6 +31,7 @@ public class ClientListener extends Thread{
     private boolean logged;
     private LocalDateTime connected;
     private Client client;
+    private int connectAttempts;
 
     public Client getClient() {
         return client;
@@ -51,27 +56,31 @@ public class ClientListener extends Thread{
 
     @Override
     public void run() {
-        JAXBContext jaxbContext = null;
+        JAXBContext jaxbContext;
         try{
+
             jaxbContext = JAXBContext.newInstance(Message.class);
             Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
             while (!logged) {
+                ++connectAttempts;
                 Message firstMessage = (Message) unmarshaller.unmarshal(new InputSource(new StringReader(in.readUTF())));
-                if(!MessageStatus.AUTH.equals(firstMessage.getStatus()) && !MessageStatus.REGISTRATION.equals(firstMessage.getStatus())){
+                if(!MessageStatus.AUTH.equals(firstMessage.getStatus())
+                        && !MessageStatus.REGISTRATION.equals(firstMessage.getStatus())) {
+                    if(connectAttempts == 3) {
+                        closeClientSession();
+                    }
                     Message wrongFirstMessage = new Message(MessageStatus.ERROR)
                             .setText(new StringBuilder("The first message must be either ")
                                     .append(MessageStatus.AUTH).append(" or ").append(MessageStatus.REGISTRATION)
                                     .append(" status. But found ").append(firstMessage.getStatus()).toString());
-                    Marshaller marshaller = jaxbContext.createMarshaller();
-                    StringWriter stringWriter = new StringWriter();
-                    marshaller.marshal(wrongFirstMessage, stringWriter);
-                    out.writeUTF(stringWriter.toString());
+                    sendResponseMessage(wrongFirstMessage);
                 }
                 try {
                     auth(firstMessage);
-                } catch (XMLStreamException e) {
-                    LOGGER.error(e);
-                    sendResponseMessage(new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage()));
+                } catch (IllegalPasswordException | NoSuchClientException e) {
+                    LOGGER.warn(e.getLocalizedMessage());
+                    sendResponseMessage(new Message(MessageStatus.DENIED)
+                            .setText("Login or password is incorrect. Please, check your data"));
                 }
             }
         } catch(JAXBException | IOException e) {
@@ -146,26 +155,54 @@ public class ClientListener extends Thread{
         }
     }
 
-    private void auth(Message message) throws IOException, XMLStreamException, JAXBException {
-        String login = message.getLogin();
-        String password = message.getPassword();
-        File clientFile = new File(new StringBuilder(server.getConfig().getProperty("clientsDir"))
-                .append(File.pathSeparator).append(login.hashCode()).append(".xml").toString());
-        if(clientFile.exists()){
-            XMLInputFactory xmlInputFactory = XMLInputFactory.newInstance();
-            XMLStreamReader xmlStreamReader = xmlInputFactory.createXMLStreamReader(
-                    new BufferedReader(new FileReader(clientFile)));
-            while (xmlStreamReader.hasNext()){
-                int event = xmlStreamReader.next();
-                if(event == XMLStreamConstants.START_ELEMENT &&
-                        xmlStreamReader.getLocalName().equals("password")){
-                    xmlStreamReader.next();
-                    break;
-                }
-                xmlStreamReader.next();
-                logged = xmlStreamReader.getText().equals(password);
-                return;
-            }
+    /**
+     * The method that turns an incoming connection to a client's session
+     * Verifies the {@code message} of status {@code MessageStatus.AUTH} comparing the incoming user data
+     * such as a login and a password.
+     *
+     * @param           message a message of {@code MessageStatus.AUTH} containing a login and a password
+     *
+     * @throws          IOException if one or more of the fields {@code fromId}, {@code login} or {@code password}
+     *                              are not specified. Also it is thrown in cases when {@code message} is not of
+     *                              status {@code MessageStatus.AUTH}
+     *
+     * @exception       IllegalPasswordException in case if the password from the {@code message}
+     *                              does not match the one from the userfile
+     *
+     * @exception       NoSuchClientException if the specified client's file has not been found
+     *                              in the {@code clientsDir} folder or there is not user data file
+     *
+     * @exception       NullPointerException in case when message equals {@code null}
+     *
+     * */
+    private void auth(Message message) throws IOException {
+        if (message == null) {
+            throw new NullPointerException("Message must not be null");
+        }
+        if (!MessageStatus.AUTH.equals(message.getStatus())) {
+            throw new IOException(new StringBuilder("The message must be of status ")
+                    .append(MessageStatus.AUTH).append(" but found ").append(message.getStatus()).toString());
+        }
+        if (message.getLogin() == null) {
+            throw new IOException("Login has not been set");
+        }
+        if (message.getPassword() == null) {
+            throw new IOException("Password has not been set");
+        }
+        File clientFolder = new File(server.getClientsDir(), String.valueOf(message.getLogin().hashCode()));
+        File clientXml = new File(clientFolder, String.valueOf(message.getLogin().hashCode()).concat(".xml"));
+        if (!clientFolder.isDirectory() || !clientXml.isFile()) {
+            throw new NoSuchClientException(new StringBuilder("Unable to find client ")
+                    .append(message.getLogin()).toString());
+        }
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            Client client = (Client) unmarshaller.unmarshal(clientXml);
+            logged = client.getPassword().equals(message.getPassword());
+        } catch (JAXBException e) {
+            LOGGER.fatal(e.getLocalizedMessage());
+            throw new RuntimeException(e);
         }
     }
 
@@ -283,6 +320,9 @@ public class ClientListener extends Thread{
             in.close();
             out.close();
             socket.close();
+            if (logged) {
+
+            }
             saveClient();
             server.getClients().remove(this);
             interrupt();

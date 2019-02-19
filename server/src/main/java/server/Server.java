@@ -1,5 +1,7 @@
 package server;
 
+import common.Room;
+import common.RoomProcessing;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
@@ -23,13 +25,79 @@ public class Server extends Thread {
     public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME;
     private static final Logger LOGGER = Logger.getLogger("Server");
     private Properties config;
+    private File clientsDir;
+    private File roomsDir;
 
     public Properties getConfig() {
         return config;
     }
 
+    /**
+     *  This method returns an instance of {@code File} that represents
+     * an abstract path to the folder where clients data is stored.
+     *  Every time once is invoked it checks whether the folder still exists,
+     * thus if it has returned an instance of {@code File} it is guaranteed
+     * that the result is an existing folder
+     *
+     * @return          users data storage folder
+     *
+     * @exception       RuntimeException in case if the folder was removed while
+     *                  the server was working
+     * */
+    public File getClientsDir() {
+        if (clientsDir == null) {
+            String clientsDirPath = config.getProperty("clientsDir");
+            if (clientsDirPath == null) {
+                throw new RuntimeException(new StringBuilder("Unable to get property \"clientsDir\" from the configuration")
+                        .append(config.toString()).toString());
+            }
+            File clientsDir = new File(clientsDirPath);
+            if (!clientsDir.isDirectory()) {
+                throw new RuntimeException(new StringBuilder("Unable to find a folder: ")
+                        .append(clientsDir.getAbsolutePath()).toString());
+            }
+            this.clientsDir = clientsDir;
+        }
+        if (clientsDir.isDirectory()) {
+            return clientsDir;
+        } else {
+            throw new RuntimeException(new StringBuilder("Unable to find a clients folder ")
+                    .append(clientsDir.getAbsolutePath()).toString());
+        }
+    }
+
+    /**
+     *  This method returns an instance of {@code File} that represents an abstract path
+     * to the folder where data of the server chat rooms is stored.
+     *  Every time it is invoked it checks whether the folder still exists,
+     * thus once it has returned an instance of {@code File} it is guaranteed
+     * that the result is an existing folder
+     *
+     * @return          rooms data storage folder
+     *
+     * @exception       RuntimeException in case if the folder was removed while
+     *                  the server was working
+     * */
     public File getRoomsDir() {
-        return new File(config.getProperty("roomsDir"));
+        if (roomsDir == null) {
+            String roomsDirPath = config.getProperty("roomsDir");
+            if (roomsDir == null) {
+                throw new RuntimeException(new StringBuilder("Unable to get property \"roomsDir\" from the configuration")
+                        .append(config.toString()).toString());
+            }
+            File roomsDir = new File(roomsDirPath);
+            if (!roomsDir.isDirectory()) {
+                throw new RuntimeException(new StringBuilder("Unable to find a folder: ")
+                        .append(roomsDir.getAbsolutePath()).toString());
+            }
+            this.roomsDir = roomsDir;
+        }
+        if (roomsDir.isDirectory()) {
+            return roomsDir;
+        } else {
+            throw new RuntimeException(new StringBuilder("Unable to find a rooms folder ")
+                    .append(roomsDir.getAbsolutePath()).toString());
+        }
     }
 
     public Map<Integer, ClientListener> getClients() {

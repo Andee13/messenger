@@ -1,10 +1,11 @@
-package server;
+package common;
 
 import common.message.Message;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.ObservableSet;
 import org.apache.log4j.Logger;
+import server.Server;
 
 import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;

@@ -1,6 +1,8 @@
-package server;
+package common;
 
 import org.apache.log4j.Logger;
+import server.Server;
+import server.ServerProcessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -32,9 +34,9 @@ public class RoomProcessing {
      *                  or the specified in the {@code serverConfig} filepath does not points an existing file
      * */
     public static Room getRoom(Properties serverConfig, int roomId) throws IOException {
-        if (!Server.arePropertiesValid(serverConfig)) {
-            throw new IOException("Properties are not valid");        }
-
+        if (!ServerProcessing.arePropertiesValid(serverConfig)) {
+            throw new IOException("Properties are not valid");
+        }
         File roomFile = new File(new StringBuilder(serverConfig.getProperty("roomsFile"))
                 .append(File.pathSeparator).append(roomId).append(".xml").toString());
         if(roomFile.exists()) {
@@ -70,7 +72,7 @@ public class RoomProcessing {
         /*
          * Checking whether the clients with specified ids have been registered
          * */
-        if(!Server.arePropertiesValid(serverConfig)) {
+        if(!ServerProcessing.arePropertiesValid(serverConfig)) {
             throw new IOException("Passed serverConfig is not valid");
         }
 
