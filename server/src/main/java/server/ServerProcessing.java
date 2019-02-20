@@ -11,9 +11,8 @@ import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 import java.io.*;
-import java.net.ConnectException;
-import java.net.Socket;
-import java.net.URISyntaxException;
+import java.net.*;
+import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
 
 /**
@@ -318,14 +317,14 @@ public class ServerProcessing {
     /**
      * The method {@code startServer} starts the server denoted by the specified {@code serverPropertiesFile}
      *
-     * @throws          IOException if an I/O error occurs
+     * @throws          IOException if specified file either is {@code null} either it does not fit the data
+     *                              that it stores does not fits the server configuration pattern demands or
+     *                              it does not exist e.g. it may be {@code FileNotFoundException},
+     *                              {@code InvalidPropertiesFormatException} or {@code IOException}
      * */
-    private static void startServer(@NotNull File serverPropertiesFile) throws IOException{
-        if(serverPropertiesFile == null) {
-            throw new NullPointerException("serverPropertiesFile must not be null");
-        }
+    private static void startServer(@NotNull File serverPropertiesFile) throws IOException {
         if(!arePropertiesValid(serverPropertiesFile)) {
-            throw new IOException("Invalid server properties file");
+            throw new InvalidPropertiesFormatException("Invalid server properties file");
         }
         Properties serverProperties = new Properties();
         serverProperties.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
@@ -341,20 +340,55 @@ public class ServerProcessing {
      *                  has already been launched or the port set in the {@code serverProperties} is taken
      * */
     private static void startServer(@NotNull Properties serverProperties) throws IOException{
-        if(serverProperties == null) {
-            throw new NullPointerException("The server properties must not be null");
-        }
         if(!arePropertiesValid(serverProperties)) {
             throw new IOException("The server properties are not valid");
         }
-        // TODO checking whether the port is already taken
-        //
-        // TODO creating the server with the properties
+
         Server server = new Server(serverProperties);
         server.start();
         LOGGER.info(new StringBuilder("Server thread status: ").append(server.getState()).toString());
     }
 
+    /**
+     *  The method {@code isServerLaunched} provides with information whether the server, specified by the
+     * {@code serverProperties} is currently being launchd on localhost
+     *
+     * @param           serverProperties the configuration of a server
+     *
+     * @return          {@code true} if and only if the server, specified by the {@code serverProperties} exists and
+     *                  is currently working i.e. the port the server is launched is not free for listening
+     *                  {@code false} otherwise
+     * */
+    private static boolean isServerLaunched(Properties serverProperties) {
+        int port = Integer.parseInt(serverProperties.getProperty("port"));
+        try(ServerSocket serverSocket = new ServerSocket(port)) {
+            return false;
+        } catch (BindException e) {
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     *  The method {@code isServerLaunched} is no more than unpacker that returns the result of invoking the
+     * {@code isServerLaunched(Properties serverProperties)} method
+     *
+     * @param           serverPropertiesFile the file containing server configuration
+     *
+     * @return          {@code true} if and only if the server, specified by the {@code serverProperties} exists and
+     *                  is currently working i.e. the port the server is launched is not free for listening
+     *                  {@code false} otherwise
+     * */
+    private static boolean isServerLaunched(File serverPropertiesFile) {
+        Properties serverProperties = new Properties();
+        try {
+            serverProperties.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
+            return isServerLaunched(serverProperties);
+        } catch (IOException e) {
+            return false;
+        }
+    }
 
     /**
      *  The method {@code stopServer} stops the server denoted by the specified {@code serverProperties}
@@ -406,99 +440,20 @@ public class ServerProcessing {
     }
 
     /**
-     *  The method {@code isServerLaunched} checks whether the server denoted by properties stored in the
-     * {@code serverPropertiesFile} has been launched and still works. This method is just an interagent
-     * who unpacks properties from a file.
-     *
-     * @param           serverPropertiesFile an abstract path of the file with server properties
-     *
-     * @return          {@code true} if and only if the specified exists and is currently working
-     *                  i.e. accepts incoming connections, {@code false} otherwise
-     * */
-    public static boolean isServerLaunched(@NotNull File serverPropertiesFile) {
-        if (arePropertiesValid(serverPropertiesFile)) {
-            try {
-                Properties properties = new Properties();
-                properties.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
-                return isServerLaunched(properties);
-            } catch (IOException e) {
-                LOGGER.error(e.getLocalizedMessage());
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     *  The method {@code isServerLaunched} checks whether the server denoted by the specified properties
-     * is currently working
-     *
-     * @param           serverProperties the properties of a server to be checked
-     *
-     * @return          {@code true} if and only if the server denoted by the specified properties exists
-     *                  and is currently working i.e. accepts incoming connections, {@code false} otherwise
-     * */
-    private static boolean isServerLaunched(@NotNull Properties serverProperties) {
-        if (!arePropertiesValid(serverProperties)) {
-            return false;
-        }
-        Socket socket = new Socket();
-        Message message = new Message(MessageStatus.GETSTATE)
-                .setLogin(serverProperties.getProperty("server_login"))
-                .setPassword(serverProperties.getProperty("server_password"));
-        try {
-            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-            Marshaller marshaller = jaxbContext.createMarshaller();
-            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-            StringWriter stringWriter = new StringWriter();
-            marshaller.marshal(message, stringWriter);
-            DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
-            dataOutputStream.writeUTF(stringWriter.toString());
-            dataOutputStream.flush();
-            long sendingRequestTime = System.currentTimeMillis();
-            boolean wasResponse = false;
-            DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
-            String response = null;
-            // waiting for response lasts no more than 30 seconds
-            while(System.currentTimeMillis() - sendingRequestTime < 30e3 && !wasResponse) {
-                if(dataInputStream.available() == 0) {
-                    continue;
-                } else {
-                    response = dataInputStream.readUTF();
-                    wasResponse = true;
-                }
-            }
-            if (!wasResponse) {
-                return false;
-            }
-            Message responseMessage = null;
-            try {
-                responseMessage = (Message) jaxbContext.createUnmarshaller().unmarshal(new StringReader(response));
-                if (responseMessage == null) {
-                    return false;
-                } else {
-                    return true;
-                }
-            } catch (Exception e) {
-                LOGGER.error(e.getLocalizedMessage());
-                return false;
-            }
-        } catch (IOException | JAXBException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
      *  The method {@code stopServer} is just an interagent who unpacks server properties from the specified file
      * and invokes {@code stopServer(Properties serverProperties)}
      *
      * @param           serverPropertiesFile the file which stores server properties
+     *
+     * @throws          IOException in case if {@code serverPropertiesFile} does not contains valid server configuration,
+     *                  if an I/O error occurs while reading the specified file
+     *
+     * @throws          FailedLoginException in case if the authorization on the server has been failed
+     *                  e.g. a wrong server login/password has/have been entered
      * */
     public static void stopServer(@NotNull File serverPropertiesFile) throws IOException, FailedLoginException {
         if (!arePropertiesValid(serverPropertiesFile)) {
-            throw new IOException("The properties file are not valid");
+            throw new InvalidPropertiesFormatException("The properties file are not valid");
         }
         Properties properties = new Properties();
         properties.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
@@ -508,7 +463,9 @@ public class ServerProcessing {
     /**
      *  The method {@code sendAndWait} sends the specified {@code message} and waits for response
      * for {@code timeout} seconds. If no reply was received for all the time, then {@code ConnectException}
-     * will be thrown
+     * will be thrown.
+     *  This method was created to check the connection to server lcunched on the {@code socket}. It is supposed
+     * that there is an opened socket on the another end and it is listening to connections.
      *
      * @param           message the message to be sent
      * @param           socket the socket that will be used to send the message via {@code socket.getOutputStream()}
@@ -519,6 +476,8 @@ public class ServerProcessing {
      * @exception       IllegalArgumentException if {@code timeout} is less than 0
      *
      * @throws          IOException if an I/O error occurs
+     *
+     * @return          an instance of {@code Message} that has been received from the server
      * */
     private static Message sendAndWait(Message message, Socket socket, int timeout) throws IOException {
         if (message == null) {
@@ -528,7 +487,7 @@ public class ServerProcessing {
             throw new NullPointerException("Socket must not be null");
         }
         if (timeout < 0) {
-            throw new IllegalArgumentException(new StringBuilder("Timeout must not be a negative number:")
+            throw new IllegalArgumentException(new StringBuilder("Timeout must be a positive number:")
                     .append(timeout).toString());
         }
         DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
@@ -559,5 +518,22 @@ public class ServerProcessing {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     *  The method {@code hasAccountBeenRegistered} informs whether there is an account on the server
+     * specified by the {@code serverProperties} with this {@code id}
+     *
+     * @return          {@code true} if and only if the properties being passed are valid and there is a registered
+     *                  account having such login name on the server
+     * */
+    public static boolean hasAccountBeenRegistered(Properties serverProperties, int id) throws InvalidPropertiesFormatException {
+        if (!arePropertiesValid(serverProperties)) {
+            throw new InvalidPropertiesFormatException("Properties are not valid");
+        }
+        File clientsDir = new File(serverProperties.getProperty("clientsDir"));
+        File clientDir = new File(clientsDir, String.valueOf(id));
+        File clientXml = new File(clientDir, String.valueOf(id).concat(".xml"));
+        return clientDir.isDirectory() && clientXml.isFile();
     }
 }

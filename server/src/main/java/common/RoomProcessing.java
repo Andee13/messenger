@@ -10,10 +10,11 @@ import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.time.LocalDateTime;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Properties;
+import java.util.*;
+
+import server.exceptions.NoSuchClientException;
 
 public class RoomProcessing {
 
@@ -55,7 +56,8 @@ public class RoomProcessing {
     }
 
     /**
-     * The method {@code createRoom} registers a new room and adds the specified clients to it
+     *  The method {@code createRoom} registers a new room and adds the specified clients to it.
+     * After it finishes work the new subfolder and room info file will be created in {@code roomsDir} of the server
      *
      * @param           adminId is an id of the room creator
      * @param           clientsIds is an array of the clients' ids that must be added to the room initially
@@ -63,57 +65,45 @@ public class RoomProcessing {
      * @return          an instance of the {@code Room} that has been created
      *                  or {@code null} if the room has not been created
      *
-     * @exception       NoSuchElementException if of one of the passed ids does not match any registered client's id
+     * @exception       NoSuchClientException if of one of the passed ids does not match any registered ones
      *
-     * @throws          java.io.IOException if {@code serverConfig} or the data it stores is not valid
+     * @throws          InvalidPropertiesFormatException if {@code serverConfig} or the data it stores is not valid
      * */
 
-    public static Room createRoom(Properties serverConfig, int adminId, int... clientsIds) throws IOException {
-        /*
-         * Checking whether the clients with specified ids have been registered
-         * */
-        if(!ServerProcessing.arePropertiesValid(serverConfig)) {
-            throw new IOException("Passed serverConfig is not valid");
+    public static Room createRoom(Properties serverConfig, int adminId, int... clientsIds)
+            throws InvalidPropertiesFormatException {
+        if (!ServerProcessing.arePropertiesValid(serverConfig)) {
+            throw new InvalidPropertiesFormatException("The specified server configurations are not valid");
         }
-
-        File clientsDir = new File(new StringBuilder(serverConfig.getProperty("clientsDir")).toString());
-
-        if (!new File(clientsDir.getAbsolutePath()
-                .concat(File.pathSeparator).concat(String.valueOf(adminId)).concat(".xml")).isFile()) {
-            throw new NoSuchElementException("Unable to find client id ".concat(String.valueOf(adminId)));
+        if (!ServerProcessing.hasAccountBeenRegistered(serverConfig, adminId)) {
+            throw new NoSuchClientException(new StringBuilder("Unable to find client id ").append(adminId).toString());
         }
-
-        for (int clientId : clientsIds) {
-            if (!new File(clientsDir.getAbsolutePath()
-                    .concat(File.pathSeparator).concat(String.valueOf(adminId)).concat(".xml")).isFile()) {
-                throw new NoSuchElementException("Unable to find client id ".concat(String.valueOf(clientId)));
+        for (int id : clientsIds) {
+            if (!ServerProcessing.hasAccountBeenRegistered(serverConfig, id)) {
+                throw new NoSuchClientException(new StringBuilder("Unable to find client id ").append(id).toString());
             }
         }
+        File clientsDir = new File(serverConfig.getProperty("clientsDir"));
         Room newRoom = new Room();
+        int newRoomId;
+        Random random = new Random(System.currentTimeMillis());
+        do {
+            newRoomId = random.nextInt();
+        } while (newRoomId <= 0 || new File(clientsDir, new StringBuilder(String.valueOf(newRoomId)).append(".xml").toString()).isFile());
         newRoom.setAdminId(adminId);
-        for(int id : clientsIds) {
-            newRoom.getMembers().add(id); // adding members of the new room
+        newRoom.setRoomId(newRoomId);
+        for (int clientId : clientsIds) {
+            newRoom.getMembers().add(clientId);
         }
-        File roomsDir = new File(serverConfig.getProperty("roomsDir"));
-        File newRoomFile;
-        /*
-         * Trying to generate an id for the room
-         * The loop prevents an id collision in case if it occurs
-         * */
-        do  {
-            int newRoomId = Objects.hash(adminId, LocalDateTime.now());
-            newRoom.setRoomId(newRoomId);
-            newRoomFile = new File(
-                    new StringBuilder(roomsDir.getAbsolutePath()).append(newRoomId).append(".xml").toString());
-        } while (newRoomFile.exists());
+        saveRoom();
         try {
-            JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
-            Marshaller marshaller = jaxbContext.createMarshaller();
-            marshaller.marshal(newRoom, newRoomFile);
-        } catch(JAXBException e) {
-            LOGGER.error(e.getLocalizedMessage());
+            return getRoom(serverConfig, newRoomId);
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        return getRoom(serverConfig, newRoom.getRoomId());
+    }
+
+    public static void saveRoom(){
+        // TODO saving the room to the "roomsDir" folder
     }
 }
