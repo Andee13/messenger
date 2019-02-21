@@ -1,9 +1,14 @@
 package server;
 
 import javafx.collections.FXCollections;
+import org.apache.log4j.Logger;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
@@ -14,7 +19,7 @@ import java.util.*;
 
 
 @XmlRootElement(name="client")
-public class Client {
+public class Client implements Saveable{
     @XmlElement
     private int clientId;
     @XmlJavaTypeAdapter(SetAdapter.class)
@@ -27,7 +32,17 @@ public class Client {
     private String password;
     @XmlElement
     private boolean isAdmin;
-    private Properties privacy;
+    private Server server;
+
+    private static final Logger LOGGER = Logger.getLogger("Client");
+
+    public Server getServer() {
+        return server;
+    }
+
+    public void setServer(Server server) {
+        this.server = server;
+    }
 
     public Client() {
         friends = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>()));
@@ -94,57 +109,101 @@ public class Client {
         }
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Client client = (Client) o;
-        return clientId == client.clientId &&
-                Objects.equals(rooms, client.rooms) &&
-                Objects.equals(friends, client.friends) &&
-                Objects.equals(login, client.login) &&
-                Objects.equals(password, client.password);
-    }
-
+    /**
+     *  The {@code clientId} of a client is considered as it's {@code hashCode} value
+     * because there must not be two clients with equal {@code clientId}
+     * */
     @Override
     public int hashCode() {
         return clientId;
     }
 
     /**
-     * The method that informs if there is a member {@code clientId} in the room {@code roomId}
-     *
-     * @param clientId The client's clientId to be searched for
-     * @param roomId The room clientId where {@code clientId} will be searched
-     *
-     * @return {@code true} if and only if there are a registered account with such {@code clientId}
-     *          and created room that has the specified {@code roomId}
-     *          {@code false} otherwise.
-     * @throws FileNotFoundException // TODO decide what exception will be thrown and describe the cases when it will occur
-     *
+     * // TODO description
      * */
-    // TODO remove the exceptions
-    public static boolean isMember(Properties serverConfig, int clientId, int roomId) throws FileNotFoundException, XPathExpressionException {
-        File roomFile = new File(new StringBuilder(serverConfig.getProperty("roomsDir"))
-                .append(File.pathSeparator).append(roomId).append(".xml").toString());
-        if (!roomFile.exists()){
+    @Override
+    public boolean equals(Object object){
+        if (!(object instanceof Client)) {
             return false;
         }
-        XPath xPath = XPathFactory.newInstance().newXPath();
-        XPathExpression xPathExpression = null;
-        try {
-            xPathExpression = xPath.compile("room/members/clientId");
-        } catch (XPathExpressionException e) {
-
-            throw new RuntimeException(e);
+        Client that = (Client) object;
+        if (clientId != that.clientId) {
+            return false;
         }
-        NodeList resultNodeList = (NodeList) xPathExpression.evaluate(
-                new InputSource(new BufferedReader(new FileReader(roomFile))), XPathConstants.NODESET);
-        for(int i = 0; i < resultNodeList.getLength(); i++) {
-            if(clientId == Integer.parseInt(resultNodeList.item(i).getTextContent())) {
-                return true;
+        Properties thisProperties = new Properties();
+        Properties thatProperties = new Properties();
+
+        thisProperties.setProperty("login", login);
+        thatProperties.setProperty("login", that.getLogin());
+
+        thisProperties.setProperty("password", password);
+        thatProperties.setProperty("password", that.getPassword());
+
+        thisProperties.setProperty("isAdmin", String.valueOf(this.isAdmin));
+        thatProperties.setProperty("isAdmin", String.valueOf(that.isAdmin));
+
+        return thisProperties.equals(thatProperties)
+                && rooms.equals(that.getRooms())
+                && friends.equals(that.getFriends());
+
+    }
+
+    @Override
+    public boolean save() {
+        if (server == null) {
+            LOGGER.warn("The client saving has been failed: a server has not been set");
+            return false;
+        }
+        if (login == null) {
+            LOGGER.warn("The client saving has been failed: a login has not been set");
+            return false;
+        }
+        if (password == null) {
+            LOGGER.warn("The client saving has been failed: a password has not been set");
+            return false;
+        }
+        if (clientId == 0) {
+            LOGGER.warn("The client saving has been failed: an id has not been set");
+            return false;
+        }
+        File clientsDir = server.getClientsDir();
+        if (!clientsDir.isDirectory()) {
+            if (!clientsDir.mkdir()) {
+                LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
+                        .append(clientsDir.getAbsolutePath()));
+                return false;
             }
         }
-        return false;
+        File clientDir = new File(clientsDir, String.valueOf(login.hashCode()));
+        if (!clientDir.isDirectory()) {
+            if (!clientDir.mkdir()) {
+                LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
+                        .append(clientDir.getAbsolutePath()));
+                return false;
+            }
+        }
+        File clientFile = new File(clientDir, String.valueOf(login.hashCode()).concat(".xml"));
+        if (!clientDir.isFile()) {
+            try {
+                if (!clientDir.createNewFile()) {
+                    LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
+                            .append(clientDir.getAbsolutePath()));
+                }
+            } catch (Exception e) {
+                LOGGER.warn(e.getLocalizedMessage());
+                return false;
+            }
+        }
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.marshal(this, clientFile);
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            Client clientToCheck = (Client) unmarshaller.unmarshal(clientFile);
+            return equals(clientToCheck);
+        } catch (JAXBException e) {
+            LOGGER.warn(e.getLocalizedMessage());
+            return false;
+        }
     }
 }

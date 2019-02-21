@@ -8,18 +8,14 @@ import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import javax.xml.bind.annotation.XmlRootElement;
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.time.format.DateTimeFormatter;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Properties;
-import java.util.TreeMap;
+import java.util.*;
 
 @XmlRootElement
-public class Server extends Thread {
+public class Server extends Thread implements Saveable {
     private volatile Map<Integer, ClientListener> clients;
     private volatile Map<Integer, Room> onlineRooms;
     public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME;
@@ -27,6 +23,8 @@ public class Server extends Thread {
     private Properties config;
     private File clientsDir;
     private File roomsDir;
+    private File serverConfigFile;
+
 
     public Properties getConfig() {
         return config;
@@ -116,10 +114,26 @@ public class Server extends Thread {
         this.onlineRooms = FXCollections.observableMap(onlineRooms);
     }
 
-    protected Server(@NotNull Properties serverConfig) {
-        config = serverConfig;
-        clients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
-        onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+    /**
+     * @param           serverPropertiesFile a file storing server configurations
+     *
+     * @throws          InvalidPropertiesFormatException if the passed {@code serverPropertiesFile} is not valid
+     *                  e.g. is {@code null}, does not contain a property or it is not valid
+     * */
+    protected Server(@NotNull File serverPropertiesFile) throws InvalidPropertiesFormatException {
+        if (!ServerProcessing.arePropertiesValid(serverPropertiesFile)) {
+            throw new InvalidPropertiesFormatException("Either the specified properties or file are/is invalid");
+        }
+        config = new Properties();
+        try {
+            config.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
+            serverConfigFile = serverPropertiesFile;
+            clients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+            onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -174,5 +188,59 @@ public class Server extends Thread {
                         .getAbsolutePath()).append(clientId).append(".xml").toString()
         );
         return file.isFile();
+    }
+
+    /**
+     *  The method {@code save} stores the XML representation of the {@code config} to the {@code serverConfigFile}
+     *
+     * @return          {@code true} if and only if the {@code config} has been stored to the corresponding file
+     *                  and the data in that file has been stored correctly i.e. {@code config} contains the same
+     *                  data as {@code serverConfigFile}
+     * */
+    @Override
+    public boolean save() {
+        if (config == null) {
+            LOGGER.warn("Saving the server has been failed: undefined server configurations.");
+            return false;
+        }
+        if (ServerProcessing.arePropertiesValid(config)) {
+            LOGGER.warn("Saving the server has been failed: invalid server properties.");
+            return false;
+        }
+        if (serverConfigFile == null) {
+            LOGGER.warn("Saving the server has been failed: server configuration file must not be null");
+            return false;
+        }
+        try (FileInputStream fileInputStream = new FileInputStream(serverConfigFile);
+             BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
+            Properties propertiesToCheck = new Properties();
+            propertiesToCheck.load(bufferedInputStream);
+            if(propertiesToCheck.equals(config)){
+                return true;
+            }
+        } catch (Exception e) {
+            LOGGER.warn(e.getLocalizedMessage());
+        }
+        try (FileOutputStream fileOutputStream = new FileOutputStream(serverConfigFile);
+             BufferedOutputStream streamToClose = new BufferedOutputStream(fileOutputStream)) {
+            config.storeToXML(new BufferedOutputStream(fileOutputStream), null);
+            streamToClose.flush();
+        } catch (IOException e) {
+            LOGGER.warn(new StringBuilder("Saving the server has been failed: ")
+                    .append(e.getLocalizedMessage()).toString());
+            return false;
+        }
+        try (FileInputStream fileInputStream = new FileInputStream(serverConfigFile);
+        BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
+            Properties propertiesToCheck = new Properties();
+            propertiesToCheck.load(bufferedInputStream);
+            return propertiesToCheck.equals(config);
+        } catch (IOException e) {
+            LOGGER.error(new StringBuilder("Saving the server has been failed: ").append(e.getLocalizedMessage()));
+            LOGGER.warn(new StringBuilder("Please, check the server configuration file ")
+                    .append(serverConfigFile == null ? "null" : serverConfigFile.getAbsolutePath()));
+            return false;
+
+        }
     }
 }

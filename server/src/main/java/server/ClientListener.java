@@ -6,6 +6,7 @@ import common.message.Message;
 import common.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
 import javax.xml.bind.JAXBContext;
@@ -16,9 +17,12 @@ import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
+import javax.xml.xpath.*;
 import java.io.*;
 import java.net.Socket;
 import java.time.LocalDateTime;
+import java.util.Properties;
+
 import server.exceptions.IllegalPasswordException;
 import server.exceptions.NoSuchClientException;
 
@@ -298,34 +302,53 @@ public class ClientListener extends Thread{
         }
     }
 
-    public void saveClient() {
-        if(client == null) {
-            // TODO decide what to do with a case when the client hasn't been set
-            return;
-        }
-        try {
-            JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
-            Marshaller marshaller = jaxbContext.createMarshaller();
-            File clientFile = new File(new StringBuilder(server.getConfig().getProperty("clientsDir"))
-                    .append(File.pathSeparator).append(client.getClientId()).append(".xml").toString());
-            marshaller.marshal(client, clientFile);
-        } catch (JAXBException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            throw new RuntimeException(e);
-        }
-    }
-
     public void closeClientSession() throws IOException {
         if(isAlive() && !isInterrupted()){
             in.close();
             out.close();
             socket.close();
             if (logged) {
-
+                client.save();
+                server.getClients().remove(client.getClientId());
             }
-            saveClient();
-            server.getClients().remove(this);
             interrupt();
         }
+    }
+
+    /**
+     * The method that informs if there is a member {@code clientId} in the room {@code roomId}
+     *
+     * @param clientId The client's clientId to be searched for
+     * @param roomId The room clientId where {@code clientId} will be searched
+     *
+     * @return {@code true} if and only if there are a registered account with such {@code clientId}
+     *          and created room that has the specified {@code roomId}
+     *          {@code false} otherwise.
+     * @throws FileNotFoundException // TODO decide what exception will be thrown and describe the cases when it will occur
+     *
+     * */
+    // TODO remove the exceptions
+    public static boolean isMember(Properties serverConfig, int clientId, int roomId) throws FileNotFoundException, XPathExpressionException {
+        File roomFile = new File(new StringBuilder(serverConfig.getProperty("roomsDir"))
+                .append(File.pathSeparator).append(roomId).append(".xml").toString());
+        if (!roomFile.exists()){
+            return false;
+        }
+        XPath xPath = XPathFactory.newInstance().newXPath();
+        XPathExpression xPathExpression = null;
+        try {
+            xPathExpression = xPath.compile("room/members/clientId");
+        } catch (XPathExpressionException e) {
+
+            throw new RuntimeException(e);
+        }
+        NodeList resultNodeList = (NodeList) xPathExpression.evaluate(
+                new InputSource(new BufferedReader(new FileReader(roomFile))), XPathConstants.NODESET);
+        for(int i = 0; i < resultNodeList.getLength(); i++) {
+            if(clientId == Integer.parseInt(resultNodeList.item(i).getTextContent())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

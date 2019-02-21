@@ -46,6 +46,7 @@ public class ServerProcessing {
         }
         File serverProperiesFile = null;
         try {
+            // TODO simplify the path
             serverProperiesFile = new File(new StringBuilder(new File(Main.class.getProtectionDomain()
                     .getCodeSource().getLocation().toURI()).getAbsolutePath())
                     .append(File.separatorChar).append("serverConfig.xml").toString());
@@ -152,6 +153,9 @@ public class ServerProcessing {
                     .append(properties.getProperty("clientsDir")));
             return false;
         }
+        if(properties.getProperty("messageStorageDimension") == null){
+            return false;
+        }
         return true;
     }
 
@@ -170,8 +174,8 @@ public class ServerProcessing {
         if (propertyFile == null) {
             return false;
         }
-        if (propertyFile == null) {
-            throw new NullPointerException();
+        if(!propertyFile.isFile()){
+            return false;
         }
         Properties properties = new Properties();
         try {
@@ -305,6 +309,8 @@ public class ServerProcessing {
                     .append(File.separatorChar).append("path")
                     .toString()
             );
+            // default max stored messages
+            properties.setProperty("messageStorageDimension","50");
             defaultProperties = properties;
         }
         return defaultProperties;
@@ -317,34 +323,16 @@ public class ServerProcessing {
     /**
      * The method {@code startServer} starts the server denoted by the specified {@code serverPropertiesFile}
      *
-     * @throws          IOException if specified file either is {@code null} either it does not fit the data
-     *                              that it stores does not fits the server configuration pattern demands or
-     *                              it does not exist e.g. it may be {@code FileNotFoundException},
-     *                              {@code InvalidPropertiesFormatException} or {@code IOException}
-     * */
-    private static void startServer(@NotNull File serverPropertiesFile) throws IOException {
-        if(!arePropertiesValid(serverPropertiesFile)) {
-            throw new InvalidPropertiesFormatException("Invalid server properties file");
-        }
-        Properties serverProperties = new Properties();
-        serverProperties.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
-        startServer(serverProperties);
-    }
-
-    /**
-     * The method {@code startServer} starts the server denoted by the specified {@code serverProperties}
-     *
      * @throws          IOException if an I/O error occurs
      *
-     * @exception       IllegalStateException if the server denoted by the specified {@code serverProperties}
-     *                  has already been launched or the port set in the {@code serverProperties} is taken
+     * @exception       IllegalStateException if the server denoted by the specified {@code serverPropertiesFile}
+     *                  has already been launched or the port set in the {@code serverPropertiesFile} is taken
      * */
-    private static void startServer(@NotNull Properties serverProperties) throws IOException{
-        if(!arePropertiesValid(serverProperties)) {
+    private static void startServer(@NotNull File serverPropertiesFile) throws IOException{
+        if(!arePropertiesValid(serverPropertiesFile)) {
             throw new IOException("The server properties are not valid");
         }
-
-        Server server = new Server(serverProperties);
+        Server server = new Server(serverPropertiesFile);
         server.start();
         LOGGER.info(new StringBuilder("Server thread status: ").append(server.getState()).toString());
     }

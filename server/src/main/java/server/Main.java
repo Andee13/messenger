@@ -1,5 +1,6 @@
 package server;
 
+import common.Room;
 import lombok.extern.log4j.Log4j;
 import org.xml.sax.SAXException;
 
@@ -9,6 +10,7 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.xpath.*;
 import java.io.*;
 import java.net.URISyntaxException;
+import java.util.Properties;
 
 @Log4j
 public class Main {
@@ -173,6 +175,19 @@ public class Main {
 
         File file = new File(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
         System.out.println(file.getAbsolutePath());
+
+        /*Properties properties = new Properties();
+        properties.setProperty("first", "первая пропертя");
+        properties.setProperty("second", "вторая пропертя");
+        properties.setProperty("third", "третья пропертя");
+
+        Properties properties1 = new Properties();
+        properties1.setProperty("second", "вторая пропертя");
+        properties1.setProperty("first", "первая пропертя");
+
+
+        System.err.println(properties.equals(properties1));*/
+
 
     }
 }

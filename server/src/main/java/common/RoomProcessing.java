@@ -16,6 +16,9 @@ import java.util.*;
 
 import server.exceptions.NoSuchClientException;
 
+/**
+ * The class {@code RoomProcessing} is just a container of methods related with instances of the {@code Room} class
+ * */
 public class RoomProcessing {
 
     private static final Logger LOGGER = Logger.getLogger("Room");
@@ -38,8 +41,7 @@ public class RoomProcessing {
         if (!ServerProcessing.arePropertiesValid(serverConfig)) {
             throw new IOException("Properties are not valid");
         }
-        File roomFile = new File(new StringBuilder(serverConfig.getProperty("roomsFile"))
-                .append(File.pathSeparator).append(roomId).append(".xml").toString());
+        File roomFile = new File(new File(serverConfig.getProperty("roomsFile")), String.valueOf(roomId).concat(".xml"));
         if(roomFile.exists()) {
             try {
                 JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
@@ -67,43 +69,75 @@ public class RoomProcessing {
      *
      * @exception       NoSuchClientException if of one of the passed ids does not match any registered ones
      *
-     * @throws          InvalidPropertiesFormatException if {@code serverConfig} or the data it stores is not valid
+     * @throws          InvalidPropertiesFormatException if {@code serverProperties} or the data it stores is not valid
      * */
-
-    public static Room createRoom(Properties serverConfig, int adminId, int... clientsIds)
+    public static Room createRoom(Properties serverProperties, int adminId, int... clientsIds)
             throws InvalidPropertiesFormatException {
-        if (!ServerProcessing.arePropertiesValid(serverConfig)) {
+        if (!ServerProcessing.arePropertiesValid(serverProperties)) {
             throw new InvalidPropertiesFormatException("The specified server configurations are not valid");
         }
-        if (!ServerProcessing.hasAccountBeenRegistered(serverConfig, adminId)) {
-            throw new NoSuchClientException(new StringBuilder("Unable to find client id ").append(adminId).toString());
+        if (!ServerProcessing.hasAccountBeenRegistered(serverProperties, adminId)) {
+            throw new NoSuchClientException("Unable to find client id ".concat(String.valueOf(adminId)));
         }
         for (int id : clientsIds) {
-            if (!ServerProcessing.hasAccountBeenRegistered(serverConfig, id)) {
-                throw new NoSuchClientException(new StringBuilder("Unable to find client id ").append(id).toString());
+            if (!ServerProcessing.hasAccountBeenRegistered(serverProperties, id)) {
+                throw new NoSuchClientException("Unable to find client id ".concat(String.valueOf(id)));
             }
         }
-        File clientsDir = new File(serverConfig.getProperty("clientsDir"));
+        File clientsDir = new File(serverProperties.getProperty("clientsDir"));
         Room newRoom = new Room();
         int newRoomId;
         Random random = new Random(System.currentTimeMillis());
         do {
             newRoomId = random.nextInt();
-        } while (newRoomId <= 0 || new File(clientsDir, new StringBuilder(String.valueOf(newRoomId)).append(".xml").toString()).isFile());
+        } while (newRoomId <= 0 || new File(clientsDir, String.valueOf(newRoomId).concat(".xml")).isFile());
         newRoom.setAdminId(adminId);
         newRoom.setRoomId(newRoomId);
         for (int clientId : clientsIds) {
             newRoom.getMembers().add(clientId);
         }
-        saveRoom();
+        saveRoom(serverProperties, newRoom);
         try {
-            return getRoom(serverConfig, newRoomId);
+            return getRoom(serverProperties, newRoomId);
         } catch (Exception e) {
+            LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
     }
 
-    public static void saveRoom(){
-        // TODO saving the room to the "roomsDir" folder
+    /**
+     *  The method {@code saveRoom} saves the specified representation of a chat-room into folder specified by
+     * {@code serverProperties}. The {@code room} will be saved in XML representation.
+     *  If it is invoked for a new room the room folder and file will be created.
+     *
+     * @param           serverProperties a set of server configuration
+     * @param           room a room to be saved
+     *
+     * @throws          InvalidPropertiesFormatException if {@code serverProperties} are not valid
+     *
+     * @exception       NullPointerException if {@code room} is {@code null}
+     * */
+    public static void saveRoom(Properties serverProperties, Room room) throws InvalidPropertiesFormatException {
+        if (!ServerProcessing.arePropertiesValid(serverProperties)) {
+            throw new InvalidPropertiesFormatException("Server configurations are not valid: "
+                    .concat(serverProperties.toString()));
+        }
+         if (room == null) {
+             throw new NullPointerException("room must not be null");
+         }
+         File roomFolder = new File(new File(serverProperties.getProperty("roomsDir")),
+                 String.valueOf(room.getRoomId()));
+         if (!roomFolder.isDirectory()) {
+             if (!roomFolder.mkdir()) {
+                 LOGGER.error(new StringBuilder("Creating room folder ")
+                         .append(roomFolder.getAbsolutePath()).append(" failed").toString());
+                 throw new RuntimeException(new StringBuilder("Creating room folder ")
+                         .append(roomFolder.getAbsolutePath()).append(" failed").toString());
+             } else {
+                 LOGGER.info(new StringBuilder("Creating room folder ")
+                         .append(roomFolder.getAbsolutePath()).append(" succeed").toString());
+             }
+         }
+
     }
 }

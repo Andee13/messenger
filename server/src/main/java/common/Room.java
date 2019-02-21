@@ -5,6 +5,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.ObservableSet;
 import org.apache.log4j.Logger;
+import server.Saveable;
 import server.Server;
 
 import javax.xml.bind.annotation.*;
@@ -14,7 +15,7 @@ import java.util.*;
 
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.FIELD)
-public class Room {
+public class Room implements Saveable {
     @XmlElement
     private int roomId;
     @XmlElement
@@ -152,6 +153,11 @@ public class Room {
         public MessageHistoryObservableListWrapper marshal(List<Message> messages) throws Exception {
             return new MessageHistoryObservableListWrapper(messages);
         }
+    }
+
+    @Override
+    public boolean save() {
+        return false;
     }
 
 }
