@@ -1,6 +1,5 @@
 package server;
 
-import common.Room;
 import lombok.extern.log4j.Log4j;
 import org.xml.sax.SAXException;
 
@@ -10,7 +9,6 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.xpath.*;
 import java.io.*;
 import java.net.URISyntaxException;
-import java.util.Properties;
 
 @Log4j
 public class Main {

@@ -1,4 +1,4 @@
-package common;
+package server.room;
 
 import org.apache.log4j.Logger;
 import server.Server;
@@ -6,12 +6,9 @@ import server.ServerProcessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Array;
-import java.time.LocalDateTime;
 import java.util.*;
 
 import server.exceptions.NoSuchClientException;
@@ -139,5 +136,49 @@ public class RoomProcessing {
              }
          }
 
+    }
+
+    /**
+     *  The methods informs whether the file you are going to read is a representation of a {@code Room}
+     *
+     *  NOTE: if you pass invalid properties, the method will not throw any exception. It just will return {@code 0L}
+     * in case if something went wrong whenever it had happened.
+     *
+     * It is supposed that method will be used for checking if the recent saved {@code Room} has been saved correctly.
+     *
+     *  Use this method must not be very frequently. Because it takes much resources
+     * such as time and common system resources
+     *
+     * @param           serverProperties a set of a server configurations
+     * @param           roomId an id of the room to be checked
+     *
+     * @return          an amount of milliseconds that have been lasted since the begin of the Unix epoch
+     *                  or 0L if some kind of exception has occurred.
+     * */
+    public static long isRoomFileValid(Properties serverProperties, int roomId) {
+        try{
+            if (!ServerProcessing.arePropertiesValid(serverProperties)) {
+                LOGGER.warn("The passed properties are not valid");
+                throw new InvalidPropertiesFormatException("Properties are not valid");
+            }
+            File roomsDir = new File(serverProperties.getProperty("roomsDir"));
+            if (!roomsDir.isDirectory()) {
+                return 0L;
+            }
+            File roomDir = new File(roomsDir, String.valueOf(roomId));
+            if (!roomDir.isDirectory()) {
+                return 0L;
+            }
+            File roomFile = new File(roomDir, String.valueOf(roomId).concat(".xml"));
+            if (!roomFile.isFile()) {
+                return 0L;
+            }
+            JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            Room room = (Room) unmarshaller.unmarshal(roomFile);
+            return roomFile.lastModified();
+        } catch (Throwable e) {
+            return 0L;
+        }
     }
 }

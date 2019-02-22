@@ -1,16 +1,23 @@
-package common;
+package server.room;
 
 import common.message.Message;
+import javafx.beans.property.adapter.JavaBeanStringPropertyBuilder;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.ObservableSet;
 import org.apache.log4j.Logger;
 import server.Saveable;
 import server.Server;
+import server.ServerProcessing;
 
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+import java.io.File;
 import java.util.*;
 
 @XmlRootElement
@@ -157,7 +164,34 @@ public class Room implements Saveable {
 
     @Override
     public boolean save() {
-        return false;
+        Properties serverProperties = server.getConfig();
+        if (!ServerProcessing.arePropertiesValid(serverProperties)) {
+            throw new RuntimeException("Properties are not valid for a room to be saved into its file");
+        }
+        File roomsDir = new File(serverProperties.getProperty("roomsDir"));
+        if (!roomsDir.isDirectory()) {
+            return false;
+        }
+        File roomDir = new File(roomsDir, String.valueOf(roomId));
+        if (!roomDir.isDirectory()) {
+            return false;
+        }
+        File roomFile = new File(roomDir, String.valueOf(roomId).concat(".xml"));
+        if (!roomFile.isFile()) {
+            return false;
+        }
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.marshal(this, roomFile);
+            // TODO distinguish the logic of saving checking to another (new) method
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            Room unmarshalledRoom = (Room) unmarshaller.unmarshal(roomFile);
+            return this.equals(unmarshalledRoom) && System.currentTimeMillis() - roomFile.lastModified() < 15000;
+        } catch (JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false;
+        }
     }
 
 }

@@ -1,14 +1,14 @@
 package server;
 
-import common.Room;
+import server.room.Room;
 import common.message.Message;
 import common.message.MessageStatus;
 import org.apache.log4j.Logger;
+import server.room.RoomProcessing;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * The {@code Observer} class handles with the users who are AFK too long and rooms which do not have online users
@@ -32,10 +32,10 @@ public class Observer extends Thread {
     }
     @Override
     public void run() {
-        Map<Integer, ClientListener> onlineClients = server.getClients();
+        Map<Integer, ClientListener> onlineClients = server.getOnlineClients();
         Map<Integer, Room> onlineRooms = server.getOnlineRooms();
-
         while (true) {
+            // TODO sort the sets depending on their onlineability ?
             for (Map.Entry<Integer, ClientListener> entry : onlineClients.entrySet()) {
                 ClientListener clientListener = entry.getValue();
                 if (clientListener.getLastInputMessage().plusHours(1).isAfter(LocalDateTime.now())) {
@@ -48,12 +48,29 @@ public class Observer extends Thread {
                     }
                 }
             }
-            for (Map.Entry<Integer, Room> entry : onlineRooms.entrySet()) {
-                Room room = entry.getValue();
-                Set<Integer> roomClients = room.getMembers();
-                // TODO room saving + cleaning from the server set
+            /*
+            *   This loop saves the room in case if there is no longer online member of it on sever
+            * */
+            for (Map.Entry<Integer, Room> roomWrapper : server.getOnlineRooms().entrySet()) {
+                boolean everyMemberIsoffline = true;
+                for (int clientId : roomWrapper.getValue().getMembers()) {
+                    if (server.getOnlineClients().containsKey(clientId)) {
+                        everyMemberIsoffline = false;
+                        break;
+                    }
+                }
+                if (everyMemberIsoffline) {
+                    roomWrapper.getValue().save();
+                    server.getOnlineRooms().remove(roomWrapper.getKey());
+                    if (!server.getOnlineRooms().containsKey(roomWrapper.getKey())
+                            && System.currentTimeMillis() - RoomProcessing.isRoomFileValid(server.getConfig(),
+                                                                roomWrapper.getKey()) < 15000)
+                    {
+                        LOGGER.info(new StringBuilder("The room id ")
+                                .append(roomWrapper.getKey()).append(" has been successfully saved"));
+                    }
+                }
             }
-
             try {
                 sleep(60000);
             } catch (InterruptedException e) {

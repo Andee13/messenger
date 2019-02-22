@@ -1,7 +1,7 @@
 package server;
 
-import common.Room;
-import common.RoomProcessing;
+import server.room.Room;
+import server.room.RoomProcessing;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
@@ -16,7 +16,7 @@ import java.util.*;
 
 @XmlRootElement
 public class Server extends Thread implements Saveable {
-    private volatile Map<Integer, ClientListener> clients;
+    private volatile Map<Integer, ClientListener> onlineClients;
     private volatile Map<Integer, Room> onlineRooms;
     public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME;
     private static final Logger LOGGER = Logger.getLogger("Server");
@@ -32,7 +32,7 @@ public class Server extends Thread implements Saveable {
 
     /**
      *  This method returns an instance of {@code File} that represents
-     * an abstract path to the folder where clients data is stored.
+     * an abstract path to the folder where onlineClients data is stored.
      *  Every time once is invoked it checks whether the folder still exists,
      * thus if it has returned an instance of {@code File} it is guaranteed
      * that the result is an existing folder
@@ -59,7 +59,7 @@ public class Server extends Thread implements Saveable {
         if (clientsDir.isDirectory()) {
             return clientsDir;
         } else {
-            throw new RuntimeException(new StringBuilder("Unable to find a clients folder ")
+            throw new RuntimeException(new StringBuilder("Unable to find a onlineClients folder ")
                     .append(clientsDir.getAbsolutePath()).toString());
         }
     }
@@ -98,12 +98,12 @@ public class Server extends Thread implements Saveable {
         }
     }
 
-    public Map<Integer, ClientListener> getClients() {
-        return clients;
+    public Map<Integer, ClientListener> getOnlineClients() {
+        return onlineClients;
     }
 
-    public void setClients(ObservableMap<Integer, ClientListener> clients) {
-        this.clients = clients;
+    public void setOnlineClients(ObservableMap<Integer, ClientListener> onlineClients) {
+        this.onlineClients = onlineClients;
     }
 
     public Map<Integer, Room> getOnlineRooms() {
@@ -120,7 +120,7 @@ public class Server extends Thread implements Saveable {
      * @throws          InvalidPropertiesFormatException if the passed {@code serverPropertiesFile} is not valid
      *                  e.g. is {@code null}, does not contain a property or it is not valid
      * */
-    protected Server(@NotNull File serverPropertiesFile) throws InvalidPropertiesFormatException {
+    public Server(@NotNull File serverPropertiesFile) throws InvalidPropertiesFormatException {
         if (!ServerProcessing.arePropertiesValid(serverPropertiesFile)) {
             throw new InvalidPropertiesFormatException("Either the specified properties or file are/is invalid");
         }
@@ -128,7 +128,7 @@ public class Server extends Thread implements Saveable {
         try {
             config.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
             serverConfigFile = serverPropertiesFile;
-            clients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+            onlineClients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
             onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());

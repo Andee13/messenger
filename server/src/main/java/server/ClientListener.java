@@ -1,7 +1,7 @@
 package server;
 
-import common.Room;
-import common.RoomProcessing;
+import server.room.Room;
+import server.room.RoomProcessing;
 import common.message.Message;
 import common.message.MessageStatus;
 import org.apache.log4j.Logger;
@@ -13,10 +13,6 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
 import javax.xml.xpath.*;
 import java.io.*;
 import java.net.Socket;
@@ -309,7 +305,7 @@ public class ClientListener extends Thread{
             socket.close();
             if (logged) {
                 client.save();
-                server.getClients().remove(client.getClientId());
+                server.getOnlineClients().remove(client.getClientId());
             }
             interrupt();
         }
