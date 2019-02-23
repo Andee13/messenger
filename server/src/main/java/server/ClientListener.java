@@ -20,7 +20,8 @@ import java.time.LocalDateTime;
 import java.util.Properties;
 
 import server.exceptions.IllegalPasswordException;
-import server.exceptions.NoSuchClientException;
+import server.exceptions.ClientNotFoundException;
+import sun.util.locale.provider.LocaleServiceProviderPool;
 
 public class ClientListener extends Thread{
     private Socket socket;
@@ -44,7 +45,7 @@ public class ClientListener extends Thread{
     public ClientListener(){
     }
 
-    private final Logger LOGGER = Logger.getLogger("ClientListener");
+    private static final Logger LOGGER = Logger.getLogger("ClientListener");
 
     public ClientListener(Server server, Socket socket) throws IOException {
         this.server = server;
@@ -77,7 +78,7 @@ public class ClientListener extends Thread{
                 }
                 try {
                     auth(firstMessage);
-                } catch (IllegalPasswordException | NoSuchClientException e) {
+                } catch (IllegalPasswordException | ClientNotFoundException e) {
                     LOGGER.warn(e.getLocalizedMessage());
                     sendResponseMessage(new Message(MessageStatus.DENIED)
                             .setText("Login or password is incorrect. Please, check your data"));
@@ -169,7 +170,7 @@ public class ClientListener extends Thread{
      * @exception       IllegalPasswordException in case if the password from the {@code message}
      *                              does not match the one from the userfile
      *
-     * @exception       NoSuchClientException if the specified client's file has not been found
+     * @exception ClientNotFoundException if the specified client's file has not been found
      *                              in the {@code clientsDir} folder or there is not user data file
      *
      * @exception       NullPointerException in case when message equals {@code null}
@@ -192,7 +193,7 @@ public class ClientListener extends Thread{
         File clientFolder = new File(server.getClientsDir(), String.valueOf(message.getLogin().hashCode()));
         File clientXml = new File(clientFolder, String.valueOf(message.getLogin().hashCode()).concat(".xml"));
         if (!clientFolder.isDirectory() || !clientXml.isFile()) {
-            throw new NoSuchClientException(new StringBuilder("Unable to find client ")
+            throw new ClientNotFoundException(new StringBuilder("Unable to find client ")
                     .append(message.getLogin()).toString());
         }
         try {
@@ -346,5 +347,33 @@ public class ClientListener extends Thread{
             }
         }
         return false;
+    }
+
+    /**
+     * The method {@code clientExists} informs whether there is such client registered on the server
+     *
+     *  NOTE! This method will not inform you in case if you enter invalid properties, {@code null} or
+     * some kind of exception has occurred. It will just return {@code false} if it failed to
+     * get the client's parameters.
+     *
+     * @param           serverProperties a set of server configurations
+     * @param           clientId client's id to be searched
+     *
+     * @return          {@code true} if and only if the server denoted by {@code serverProperties} exists
+     *                  a client with such {@code clientId} has been registered on the server
+     * */
+    public static boolean clientExists(Properties serverProperties, int clientId) {
+        try {
+            if (!ServerProcessing.arePropertiesValid(serverProperties)) {
+                return false;
+            }
+            File clientsFolder = new File(serverProperties.getProperty("clientsDir"));
+            File clientFolder = new File(clientsFolder, String.valueOf(clientId));
+            File clientFile = new File(clientFolder, clientFolder.getName().concat(".xml"));
+            return clientFile.isFile();
+        } catch (Throwable e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false;
+        }
     }
 }

@@ -102,7 +102,6 @@ public class Client implements Saveable{
         public Set<Integer> unmarshal(HashSet<Integer> v) throws Exception {
             return FXCollections.synchronizedObservableSet(FXCollections.observableSet(v));
         }
-
         @Override
         public HashSet<Integer> marshal(Set<Integer> v) throws Exception {
             return new HashSet<>(v);

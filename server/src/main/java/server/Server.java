@@ -13,6 +13,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import server.exceptions.RoomNotFoundException;
 
 @XmlRootElement
 public class Server extends Thread implements Saveable {
@@ -163,15 +164,33 @@ public class Server extends Thread implements Saveable {
     /**
      *  The method {@code loadRoomToOnlineRooms} loads the specified room's data representing it by an instance of {@code Room}
      *
-     * @param           id the id of the room to be load
+     * @param           roomId the id of the room to be load
      *
      * @exception       IllegalStateException if server configuration have not been set
      *
-     * @exception       NoSuchElementException if there is not such file in the rooms folder
-     *
+     * @exception       RoomNotFoundException there is not such room registered on the server     *
      * */
-    public void loadRoomToOnlineRooms(int id) throws IOException{
-        onlineRooms.put(id, RoomProcessing.getRoom(config, id));
+    public void loadRoomToOnlineRooms(int roomId) {
+        if (config == null) {
+            throw new IllegalStateException("Server configurations have not been set");
+        }
+        if (RoomProcessing.hasRoomBeenCreated(config, roomId) == 0L) {
+            throw new RoomNotFoundException("Unable to find the room id ".concat(String.valueOf(roomId)));
+        }
+        Room room = null;
+        try {
+            room = RoomProcessing.getRoom(config, roomId);
+            onlineRooms.put(roomId, room);
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
+        }
+        try {
+            onlineRooms.put(roomId, RoomProcessing.getRoom(config, roomId));
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new IllegalArgumentException(e);
+        }
     }
 
     /**

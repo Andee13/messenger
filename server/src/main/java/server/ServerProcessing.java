@@ -515,9 +515,10 @@ public class ServerProcessing {
      * @return          {@code true} if and only if the properties being passed are valid and there is a registered
      *                  account having such login name on the server
      * */
-    public static boolean hasAccountBeenRegistered(Properties serverProperties, int id) throws InvalidPropertiesFormatException {
+    public static boolean hasAccountBeenRegistered(Properties serverProperties, int id) {
         if (!arePropertiesValid(serverProperties)) {
-            throw new InvalidPropertiesFormatException("Properties are not valid");
+            LOGGER.error("Properties are not valid");
+            return false;
         }
         File clientsDir = new File(serverProperties.getProperty("clientsDir"));
         File clientDir = new File(clientsDir, String.valueOf(id));

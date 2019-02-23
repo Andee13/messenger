@@ -63,7 +63,7 @@ public class Observer extends Thread {
                     roomWrapper.getValue().save();
                     server.getOnlineRooms().remove(roomWrapper.getKey());
                     if (!server.getOnlineRooms().containsKey(roomWrapper.getKey())
-                            && System.currentTimeMillis() - RoomProcessing.isRoomFileValid(server.getConfig(),
+                            && System.currentTimeMillis() - RoomProcessing.hasRoomBeenCreated(server.getConfig(),
                                                                 roomWrapper.getKey()) < 15000)
                     {
                         LOGGER.info(new StringBuilder("The room id ")

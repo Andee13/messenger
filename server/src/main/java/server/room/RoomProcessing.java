@@ -1,6 +1,8 @@
 package server.room;
 
+import common.message.Message;
 import org.apache.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 import server.Server;
 import server.ServerProcessing;
 
@@ -11,7 +13,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
-import server.exceptions.NoSuchClientException;
+import server.exceptions.ClientNotFoundException;
+import server.exceptions.RoomNotFoundException;
 
 /**
  * The class {@code RoomProcessing} is just a container of methods related with instances of the {@code Room} class
@@ -27,12 +30,12 @@ public class RoomProcessing {
      * @param           roomId is an id of the room to be searched
      * @param           serverConfig a server configuration file
      *
+     * @throws          IOException if {@code serverConfig} is not valid e.g. is {@code null}
+     *                  or the specified in the {@code serverConfig} filepath does not points an existing file
+     *
      * @return          an instance of Room that has {@code roomId} equal to the specified parameter
      *                  if there is not such room in the rooms directory of the server
      *                  than the method will return {@code null}
-     *
-     * @throws          IOException if {@code serverConfig} is not valid e.g. is {@code null}
-     *                  or the specified in the {@code serverConfig} filepath does not points an existing file
      * */
     public static Room getRoom(Properties serverConfig, int roomId) throws IOException {
         if (!ServerProcessing.arePropertiesValid(serverConfig)) {
@@ -64,7 +67,7 @@ public class RoomProcessing {
      * @return          an instance of the {@code Room} that has been created
      *                  or {@code null} if the room has not been created
      *
-     * @exception       NoSuchClientException if of one of the passed ids does not match any registered ones
+     * @exception ClientNotFoundException if of one of the passed ids does not match any registered ones
      *
      * @throws          InvalidPropertiesFormatException if {@code serverProperties} or the data it stores is not valid
      * */
@@ -74,11 +77,11 @@ public class RoomProcessing {
             throw new InvalidPropertiesFormatException("The specified server configurations are not valid");
         }
         if (!ServerProcessing.hasAccountBeenRegistered(serverProperties, adminId)) {
-            throw new NoSuchClientException("Unable to find client id ".concat(String.valueOf(adminId)));
+            throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(adminId)));
         }
         for (int id : clientsIds) {
             if (!ServerProcessing.hasAccountBeenRegistered(serverProperties, id)) {
-                throw new NoSuchClientException("Unable to find client id ".concat(String.valueOf(id)));
+                throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(id)));
             }
         }
         File clientsDir = new File(serverProperties.getProperty("clientsDir"));
@@ -155,7 +158,7 @@ public class RoomProcessing {
      * @return          an amount of milliseconds that have been lasted since the begin of the Unix epoch
      *                  or 0L if some kind of exception has occurred.
      * */
-    public static long isRoomFileValid(Properties serverProperties, int roomId) {
+    public static long hasRoomBeenCreated(Properties serverProperties, int roomId) {
         try{
             if (!ServerProcessing.arePropertiesValid(serverProperties)) {
                 LOGGER.warn("The passed properties are not valid");
@@ -180,5 +183,48 @@ public class RoomProcessing {
         } catch (Throwable e) {
             return 0L;
         }
+    }
+
+    /**
+     *  The method {@code sendMessage} sends an instance of {@code Message} having status {@code MessageStatus.MESSAGE}
+     * to the specified room of the server
+     *
+     * @param           server the server where where the room is located
+     * @param           message the text message to be sent
+     *
+     * @throws          IOException in case if some kind of I/O exception has occured
+     *                  e.g. {@code sever.getConfig()} does not return a valid configuration set,
+     *
+     * @exception       ClientNotFoundException in case if the client specified by the {@code message.getFromId()}
+     *                  has not been registered on server or his/her data is unreachable
+     * @exception       RoomNotFoundException in case if the room specified by the {@code message.getRoomId()}
+     *      *                  has not been created on server or it's data is unreachable
+     * */
+    public static void sendMessage(@NotNull Server server, @NotNull Message message) throws IOException {
+        if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
+            throw new InvalidPropertiesFormatException("The specified server has invalid configurations");
+        }
+        int fromId = message.getFromId();
+        int roomId = message.getRoomId();
+        String text = message.getText();
+        if (text == null) {
+            throw new IOException("Text has not been set");
+        }
+        // Checking whether the specified user exists
+        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
+            throw new ClientNotFoundException(new StringBuilder("There is not such client id: ")
+                    .append(fromId).append(" registered on the server").toString());
+        }
+        // Checking whether the specified room exists
+        long currentTime = System.currentTimeMillis();
+        if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), roomId) == 0) {
+            throw new RoomNotFoundException("Unable to find room id: ".concat(String.valueOf(roomId)));
+        }
+        // Checking whether the specified room is in the server "online" rooms set
+        if (!server.getOnlineRooms().containsKey(roomId)) {
+            server.loadRoomToOnlineRooms(roomId);
+        }
+        Room room = server.getOnlineRooms().get(roomId);
+        room.getMessageHistory().add(message);
     }
 }
