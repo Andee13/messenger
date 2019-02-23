@@ -15,5 +15,9 @@ public enum MessageStatus {
     STOP_SERVER,
     GETSTATE,
     STATE,
-    KICK
+    KICK,
+    NEW_MESSAGE,
+    REMOVED_MESSAGE,
+    NEW_ROOM_MEMBER,
+    MEMBER_LEFT_ROOM
 }

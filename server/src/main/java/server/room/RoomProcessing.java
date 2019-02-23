@@ -1,6 +1,7 @@
 package server.room;
 
 import common.message.Message;
+import common.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.Server;
@@ -201,6 +202,10 @@ public class RoomProcessing {
      *      *                  has not been created on server or it's data is unreachable
      * */
     public static void sendMessage(@NotNull Server server, @NotNull Message message) throws IOException {
+        if (message.getStatus() != MessageStatus.MESSAGE) {
+            throw new IllegalArgumentException(new StringBuilder("Message status is expected to be ")
+                    .append(MessageStatus.MESSAGE).append(" but found ").append(message.getStatus()).toString());
+        }
         if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("The specified server has invalid configurations");
         }

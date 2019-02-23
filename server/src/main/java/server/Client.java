@@ -1,5 +1,6 @@
 package server;
 
+import common.message.Message;
 import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
 import org.w3c.dom.NodeList;
@@ -15,6 +16,7 @@ import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import javax.xml.xpath.*;
 import java.io.*;
+import java.time.LocalDateTime;
 import java.util.*;
 
 
@@ -32,7 +34,29 @@ public class Client implements Saveable{
     private String password;
     @XmlElement
     private boolean isAdmin;
+    @XmlElement
+    private boolean baned;
     private Server server;
+    @XmlJavaTypeAdapter(value = Message.LocalDateTimeAdapter.class)
+    private LocalDateTime isBannedUntill;
+
+    public LocalDateTime getIsBannedUntill() {
+        return isBannedUntill;
+    }
+
+    public Client setIsBannedUntill(LocalDateTime isBannedUntill) {
+        this.isBannedUntill = isBannedUntill;
+        return this;
+    }
+
+    public boolean isBaned() {
+        return baned;
+    }
+
+    public Client setBaned(boolean baned) {
+        this.baned = baned;
+        return this;
+    }
 
     private static final Logger LOGGER = Logger.getLogger("Client");
 

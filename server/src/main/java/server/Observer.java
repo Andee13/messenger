@@ -71,6 +71,7 @@ public class Observer extends Thread {
                     }
                 }
             }
+            // TODO unban
             try {
                 sleep(60000);
             } catch (InterruptedException e) {

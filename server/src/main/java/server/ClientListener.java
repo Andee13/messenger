@@ -1,5 +1,7 @@
 package server;
 
+import server.exceptions.IllegalOperationException;
+import server.exceptions.RoomNotFoundException;
 import server.room.Room;
 import server.room.RoomProcessing;
 import common.message.Message;
@@ -21,7 +23,6 @@ import java.util.Properties;
 
 import server.exceptions.IllegalPasswordException;
 import server.exceptions.ClientNotFoundException;
-import sun.util.locale.provider.LocaleServiceProviderPool;
 
 public class ClientListener extends Thread{
     private Socket socket;
@@ -124,7 +125,7 @@ public class ClientListener extends Thread{
         /*if(message == null){
             throw new NullPointerException("Message must not be null");
         }*/
-        switch ((MessageStatus)(message.getStatus())){
+        switch (message.getStatus()) {
             case AUTH:
                 auth(message);
                 if(logged){
@@ -138,7 +139,7 @@ public class ClientListener extends Thread{
                 sendResponseMessage(response);
                 break;
             case MESSAGE:
-                sendTextMessage(message);
+                RoomProcessing.sendMessage(server, message);
                 break;
             case USERBAN:
                 break;
@@ -266,20 +267,6 @@ public class ClientListener extends Thread{
 
     }
 
-    // TODO sending a message to the specific room
-    private void sendTextMessage(Message message) {
-        /*if(!message.getStatus().equals(MessageStatus.MESSAGE)){
-            throw new IllegalArgumentException(new StringBuilder("Status ")
-                    .append(MessageStatus.MESSAGE)
-                    .append(" is expected, but found: ")
-                    .append(message.getStatus()).toString());
-        }
-        if(message.getFromId() != userId){
-            throw new IllegalAccessException("Clients id mismatch");
-        }
-        if(message.getToId() != )*/
-    }
-
     public LocalDateTime getConnected() {
         return LocalDateTime.from(connected);
     }
@@ -325,7 +312,7 @@ public class ClientListener extends Thread{
      *
      * */
     // TODO remove the exceptions
-    public static boolean isMember(Properties serverConfig, int clientId, int roomId) throws FileNotFoundException, XPathExpressionException {
+    public static boolean isMember(@NotNull Properties serverConfig, int clientId, int roomId) throws FileNotFoundException, XPathExpressionException {
         File roomFile = new File(new StringBuilder(serverConfig.getProperty("roomsDir"))
                 .append(File.pathSeparator).append(roomId).append(".xml").toString());
         if (!roomFile.exists()){
@@ -374,6 +361,88 @@ public class ClientListener extends Thread{
         } catch (Throwable e) {
             LOGGER.error(e.getLocalizedMessage());
             return false;
+        }
+    }
+
+    private void userBan(@NotNull Message message) {
+        if (ServerProcessing.hasAccountBeenRegistered(server.getConfig(), message.getToId())) {
+            throw new ClientNotFoundException(new StringBuilder("Unable to find a client id ")
+                    .append(message.getToId()).toString());
+        }
+        Client target = loadClient(server.getConfig(), message.getToId());
+        if (!target.isBaned()) {
+            LOGGER.info(new StringBuilder("The client id ").append(message.getToId())
+                    .append(" is not banned").toString());
+            throw new IllegalStateException(new StringBuilder("The client id ").append(message.getToId())
+                    .append(" is not baned").toString());
+        }
+        if (!client.isAdmin()) {
+            LOGGER.info("Not enough rights to perform ban operation");
+            throw new IllegalOperationException("Not enough rights to perform ban operation");
+        }
+        target.setIsBannedUntill(null);
+        target.setBaned(false);
+    }
+
+    private void userUnBan(@NotNull Message message) {
+        Client target = loadClient(server.getConfig(), message.getToId());
+        if (target.isBaned()) {
+            LOGGER.info(new StringBuilder("The client id ").append(message.getToId())
+                    .append(" is already baned").toString());
+            throw new IllegalStateException(new StringBuilder("The client id ").append(message.getToId())
+                    .append(" is already baned").toString());
+        }
+        if (!client.isAdmin()) {
+            LOGGER.info("Not enough rights to perform ban operation");
+            throw new IllegalOperationException("Not enough rights to perform ban operation");
+        }
+        if (target.isAdmin()) {
+            throw new IllegalOperationException("Not enough rights to ban the admin");
+        }
+        LocalDateTime willBebannedUntill = LocalDateTime.parse(message.getText(), Server.dateTimeFormatter);
+        if (willBebannedUntill.isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("The future date is required, but found "
+                    .concat(willBebannedUntill.toString()));
+        }
+        target.setIsBannedUntill(willBebannedUntill);
+        target.setBaned(true);
+    }
+
+    private void leaveRoom(@NotNull Message message) {
+        int roomId = message.getRoomId();
+        int fromId = message.getFromId();
+        if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), roomId) == 0L) {
+            throw new RoomNotFoundException("Unable to find the room id ".concat(String.valueOf(roomId)));
+        }
+        if (!ClientListener.clientExists(server.getConfig(), fromId)) {
+            throw new ClientNotFoundException("Unable to find the client id ".concat(String.valueOf(fromId)));
+        }
+        Room room;
+        if (!server.getOnlineRooms().containsKey(roomId)) {
+            server.loadRoomToOnlineRooms(roomId);
+        }
+        room = server.getOnlineRooms().get(roomId);
+        if (room.getMembers().contains(fromId)) {
+            room.getMembers().remove(fromId);
+        } else {
+            throw new ClientNotFoundException(new StringBuilder("The client id ").append(fromId)
+                    .append(" is not a member of a room id ").append(roomId).toString());
+        }
+    }
+
+    private static Client loadClient(Properties serverProperties, int clientId) {
+        if (!clientExists(serverProperties, clientId)) {
+            throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(clientId)));
+        }
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            File clientsFolder = new File(serverProperties.getProperty("clientsDir"));
+            File clientFolder = new File(clientsFolder, String.valueOf(clientId));
+            File clientFile = new File(clientFolder, clientFolder.getName().concat(".xml"));
+            return (Client) unmarshaller.unmarshal(clientFile);
+        } catch (JAXBException e) {
+            throw new RuntimeException(e);
         }
     }
 }

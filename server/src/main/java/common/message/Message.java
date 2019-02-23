@@ -39,6 +39,26 @@ public class Message {
         this.status = status;
     }
 
+    public Message setStatus(MessageStatus status) {
+        this.status = status;
+        return this;
+    }
+
+    public Message setFromId(Integer fromId) {
+        this.fromId = fromId;
+        return this;
+    }
+
+    public Message setToId(Integer toId) {
+        this.toId = toId;
+        return this;
+    }
+
+    public Message setRoomId(Integer roomId) {
+        this.roomId = roomId;
+        return this;
+    }
+
     public int getRoomId() {
         return roomId;
     }

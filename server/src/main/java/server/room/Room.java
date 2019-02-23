@@ -1,11 +1,10 @@
 package server.room;
 
 import common.message.Message;
-import javafx.beans.property.adapter.JavaBeanStringPropertyBuilder;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import javafx.collections.ObservableSet;
+import common.message.MessageStatus;
+import javafx.collections.*;
 import org.apache.log4j.Logger;
+import server.ClientListener;
 import server.Saveable;
 import server.Server;
 import server.ServerProcessing;
@@ -18,6 +17,7 @@ import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 @XmlRootElement
@@ -39,6 +39,62 @@ public class Room implements Saveable {
     public Room(){
         messageHistory = FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
         members = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new TreeSet<>()));
+        initMembersListener();
+        initMessageHistoryListener();
+    }
+
+    private void initMessageHistoryListener() {
+        if (messageHistory == null) {
+            messageHistory = FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
+        }
+        ((ObservableList<Message>)messageHistory).addListener((ListChangeListener<Message>) c -> {
+            c.next();
+            for (Message message : c.getAddedSubList()) {
+                for (int clientId : members) {
+                    if (server.getOnlineClients().containsKey(clientId)) {
+                        ClientListener clientListener = server.getOnlineClients().get(clientId);
+                        try {
+                            Message messageToInformClient = message;
+                            if (c.wasRemoved()) {
+                                messageToInformClient = new Message(MessageStatus.REMOVED_MESSAGE)
+                                        .setToId(message.getToId()).setFromId(message.getFromId())
+                                        .setCreationDateTime(message.getCreationDateTime())
+                                        .setRoomId(message.getRoomId()).setText(message.getText());
+                            }
+                            clientListener.sendResponseMessage(messageToInformClient);
+                        } catch (IOException e) {
+                            LOGGER.error(e.getLocalizedMessage());
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    private void initMembersListener() {
+        if (members == null) {
+            members = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new TreeSet<>()));
+        }
+        ((ObservableSet<Integer>)members).addListener((SetChangeListener<Integer>) change -> {
+            for (int clientId : members) {
+                if (clientId != change.getElementAdded() && server.getOnlineClients().containsKey(clientId)) {
+                    ClientListener clientListener = server.getOnlineClients().get(clientId);
+                    Message roomClientsChangeNotification;
+                    if (change.wasRemoved()) {
+                        roomClientsChangeNotification = new Message(MessageStatus.MEMBER_LEFT_ROOM).setRoomId(roomId)
+                                .setFromId(change.getElementRemoved());
+                    } else {
+                        roomClientsChangeNotification = new Message(MessageStatus.NEW_ROOM_MEMBER).setRoomId(roomId)
+                                .setFromId(change.getElementAdded());
+                    }
+                    try {
+                        clientListener.sendResponseMessage(roomClientsChangeNotification);
+                    } catch (IOException e) {
+                        LOGGER.error(e.getLocalizedMessage());
+                    }
+                }
+            }
+        });
     }
 
     public void setRoomId(int roomId) {
