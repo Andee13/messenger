@@ -35,7 +35,6 @@ public class Observer extends Thread {
         Map<Integer, ClientListener> onlineClients = server.getOnlineClients();
         Map<Integer, Room> onlineRooms = server.getOnlineRooms();
         while (true) {
-            // TODO sort the sets depending on their onlineability ?
             for (Map.Entry<Integer, ClientListener> entry : onlineClients.entrySet()) {
                 ClientListener clientListener = entry.getValue();
                 if (clientListener.getLastInputMessage().plusHours(1).isAfter(LocalDateTime.now())) {
@@ -71,7 +70,6 @@ public class Observer extends Thread {
                     }
                 }
             }
-            // TODO unban
             try {
                 sleep(60000);
             } catch (InterruptedException e) {

@@ -1,14 +1,21 @@
 package common.message;
 
+import org.apache.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 import server.Server;
 
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+import java.io.StringReader;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlRootElement(name = "message")
@@ -29,6 +36,8 @@ public class Message {
     private Integer toId;
     @XmlElement
     private Integer roomId;
+
+    private static final Logger LOGGER = Logger.getLogger("Message");
 
     public Message() {
         setCreationDateTime(LocalDateTime.now());
@@ -161,6 +170,39 @@ public class Message {
 
         public String marshal(LocalDateTime v) throws Exception {
             return Server.dateTimeFormatter.format(v);
+        }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Message message = (Message) o;
+        return creationDateTime.equals(message.creationDateTime) &&
+                status == message.status &&
+                Objects.equals(text, message.text) &&
+                Objects.equals(login, message.login) &&
+                Objects.equals(password, message.password) &&
+                Objects.equals(fromId, message.fromId) &&
+                Objects.equals(toId, message.toId) &&
+                Objects.equals(roomId, message.roomId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(creationDateTime, status, text, login, password, fromId, toId, roomId);
+    }
+
+    public static Message from (@NotNull String xml) {
+        if (xml == null) {
+            throw new NullPointerException("xml must not be null");
+        }
+        try {
+            return (Message) JAXBContext.newInstance(Message.class).createUnmarshaller()
+                    .unmarshal(new StringReader(xml));
+        } catch (JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
         }
     }
 }

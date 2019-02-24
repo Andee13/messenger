@@ -141,9 +141,6 @@ public class Client implements Saveable{
         return clientId;
     }
 
-    /**
-     * // TODO description
-     * */
     @Override
     public boolean equals(Object object){
         if (!(object instanceof Client)) {

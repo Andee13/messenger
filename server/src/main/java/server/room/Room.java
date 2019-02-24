@@ -182,7 +182,20 @@ public class Room implements Saveable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Room room = (Room) o;
-        return roomId == room.roomId;
+        if (!room.getMembers().containsAll(members)
+                || !members.containsAll(room.getMembers())
+                || (members.toArray().length != room.getMembers().toArray().length)) {
+            return false;
+        }
+        if (!room.getMessageHistory().containsAll(messageHistory)
+                || !messageHistory.containsAll(room.getMessageHistory())
+                || (messageHistory.toArray().length != room.getMessageHistory().toArray().length)) {
+            return false;
+        }
+        if (room.roomId != roomId) {
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -225,15 +238,20 @@ public class Room implements Saveable {
             throw new RuntimeException("Properties are not valid for a room to be saved into its file");
         }
         File roomsDir = new File(serverProperties.getProperty("roomsDir"));
-        if (!roomsDir.isDirectory()) {
+        if (!roomsDir.isDirectory() || !roomsDir.mkdir()) {
             return false;
         }
         File roomDir = new File(roomsDir, String.valueOf(roomId));
-        if (!roomDir.isDirectory()) {
+        if (!roomDir.isDirectory() || !roomDir.mkdir()) {
             return false;
         }
-        File roomFile = new File(roomDir, String.valueOf(roomId).concat(".xml"));
-        if (!roomFile.isFile()) {
+        File roomFile = new File(roomDir, roomDir.getName().concat(".xml"));
+        try {
+            if (!roomFile.isFile() || !roomFile.createNewFile()) {
+                return false;
+            }
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
             return false;
         }
         try {

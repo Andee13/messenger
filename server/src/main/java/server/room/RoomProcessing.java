@@ -66,9 +66,9 @@ public class RoomProcessing {
      * @param           clientsIds is an array of the clients' ids that must be added to the room initially
      *
      * @return          an instance of the {@code Room} that has been created
-     *                  or {@code null} if the room has not been created
+     *                  or {@code null} if not
      *
-     * @exception ClientNotFoundException if of one of the passed ids does not match any registered ones
+     * @exception       ClientNotFoundException if of one of the passed ids does not match any registered ones
      *
      * @throws          InvalidPropertiesFormatException if {@code serverProperties} or the data it stores is not valid
      * */
@@ -85,61 +85,36 @@ public class RoomProcessing {
                 throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(id)));
             }
         }
-        File clientsDir = new File(serverProperties.getProperty("clientsDir"));
-        Room newRoom = new Room();
+        File roomsDir = new File(serverProperties.getProperty("roomsDir"));
+        if (!roomsDir.isDirectory()) {
+            throw new RuntimeException("Unable to find the folder with rooms info ".concat(roomsDir.getAbsolutePath()));
+        }
         int newRoomId;
         Random random = new Random(System.currentTimeMillis());
         do {
             newRoomId = random.nextInt();
-        } while (newRoomId <= 0 || new File(clientsDir, String.valueOf(newRoomId).concat(".xml")).isFile());
+        } while (newRoomId <= 0 || new File(roomsDir, String.valueOf(newRoomId)).isDirectory());
+        File roomDir = new File(roomsDir, String.valueOf(newRoomId));
+        if (!roomDir.mkdir()) {
+            throw new RuntimeException("Unable to create room folder ".concat(roomDir.getAbsolutePath()));
+        }
+        Room newRoom = new Room();
         newRoom.setAdminId(adminId);
         newRoom.setRoomId(newRoomId);
         for (int clientId : clientsIds) {
             newRoom.getMembers().add(clientId);
         }
-        saveRoom(serverProperties, newRoom);
+        if (!newRoom.save()) {
+            String errorMessage = "Unable to create new room id: ".concat(String.valueOf(newRoomId));
+            LOGGER.error(errorMessage);
+            throw new RuntimeException(errorMessage);
+        }
         try {
             return getRoom(serverProperties, newRoomId);
         } catch (Exception e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
-    }
-
-    /**
-     *  The method {@code saveRoom} saves the specified representation of a chat-room into folder specified by
-     * {@code serverProperties}. The {@code room} will be saved in XML representation.
-     *  If it is invoked for a new room the room folder and file will be created.
-     *
-     * @param           serverProperties a set of server configuration
-     * @param           room a room to be saved
-     *
-     * @throws          InvalidPropertiesFormatException if {@code serverProperties} are not valid
-     *
-     * @exception       NullPointerException if {@code room} is {@code null}
-     * */
-    public static void saveRoom(Properties serverProperties, Room room) throws InvalidPropertiesFormatException {
-        if (!ServerProcessing.arePropertiesValid(serverProperties)) {
-            throw new InvalidPropertiesFormatException("Server configurations are not valid: "
-                    .concat(serverProperties.toString()));
-        }
-         if (room == null) {
-             throw new NullPointerException("room must not be null");
-         }
-         File roomFolder = new File(new File(serverProperties.getProperty("roomsDir")),
-                 String.valueOf(room.getRoomId()));
-         if (!roomFolder.isDirectory()) {
-             if (!roomFolder.mkdir()) {
-                 LOGGER.error(new StringBuilder("Creating room folder ")
-                         .append(roomFolder.getAbsolutePath()).append(" failed").toString());
-                 throw new RuntimeException(new StringBuilder("Creating room folder ")
-                         .append(roomFolder.getAbsolutePath()).append(" failed").toString());
-             } else {
-                 LOGGER.info(new StringBuilder("Creating room folder ")
-                         .append(roomFolder.getAbsolutePath()).append(" succeed").toString());
-             }
-         }
-
     }
 
     /**

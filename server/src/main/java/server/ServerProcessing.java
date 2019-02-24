@@ -35,6 +35,8 @@ public class ServerProcessing {
      * server will stop in order you are able to set the configurations.
      *
      * @param           args server start directives
+     *
+     * @throws          IOException in case if user entered wrong parameters
      * */
     public static void main(String[] args) throws IOException {
         StartParameter startParameter = null;
@@ -47,17 +49,20 @@ public class ServerProcessing {
         File serverProperiesFile = null;
         try {
             // TODO simplify the path
-            serverProperiesFile = new File(new StringBuilder(new File(Main.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI()).getAbsolutePath())
-                    .append(File.separatorChar).append("serverConfig.xml").toString());
+            File currentFolder = new File(ServerProcessing.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI());
+            serverProperiesFile = new File(currentFolder, "serverConfig.xml");
         } catch (URISyntaxException e) {
             LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
         }
         switch (args.length) {
             case 2:
                 serverProperiesFile = new File(args[1]);
                 if (!arePropertiesValid(serverProperiesFile)) {
-                    System.out.println(new StringBuilder("Invalid server properties file: ").append(args[1]).toString());
+                    String errorMessage = "Invalid server properties file: ".concat(args[1]);
+                    LOGGER.info(errorMessage);
+                    throw new IOException(errorMessage);
                 } else {
                     startServer(serverProperiesFile);
                 }
@@ -67,8 +72,9 @@ public class ServerProcessing {
                 for(String arg : args){
                     stringBuilder.append(arg);
                 }
-                LOGGER.error(new StringBuilder("Invalid start arguments: ").append(stringBuilder));
-                return;
+                String errorMessage = new StringBuilder("Invalid start arguments: ").append(stringBuilder).toString();
+                LOGGER.error(errorMessage);
+                throw new IOException(errorMessage);
         }
         switch (startParameter) {
             case START:
@@ -89,11 +95,10 @@ public class ServerProcessing {
             case RESTART:
                 break;
             default:
-                LOGGER.error(new StringBuilder("Unknown invocation mode: ").append(startParameter).toString());
-                return;
+                String errorMessage = "Unknown invocation mode: ".concat(String.valueOf(startParameter));
+                LOGGER.error(errorMessage);
+                throw new IOException(errorMessage);
         }
-
-
     }
 
     /**

@@ -19,6 +19,7 @@ import javax.xml.xpath.*;
 import java.io.*;
 import java.net.Socket;
 import java.time.LocalDateTime;
+import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
 
 import server.exceptions.IllegalPasswordException;
@@ -59,8 +60,7 @@ public class ClientListener extends Thread{
     @Override
     public void run() {
         JAXBContext jaxbContext;
-        try{
-
+        try {
             jaxbContext = JAXBContext.newInstance(Message.class);
             Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
             while (!logged) {
@@ -91,8 +91,7 @@ public class ClientListener extends Thread{
         }
         while (true) {
             try {
-                // TODO handle the input
-                in.read();
+                handle(Message.from(in.readUTF()));
                 lastInputMessage = LocalDateTime.now();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -245,8 +244,15 @@ public class ClientListener extends Thread{
         return new Message(MessageStatus.DENIED).setText("Registration has not been finished successfully");
     }
 
-    // TODO remove the JAXBException
-    private Message createRoom(@NotNull Message message) throws IOException, JAXBException {
+    /**
+     *  The method {@code createRoom} handles with an input request representing by {@code Message}
+     * having {@code MessageStatus.CREATE_ROOM} status
+     *
+     * @param           message a command that contains the {@code clientId} of a creator
+     *
+     * @return          an instance of {@code Message} that informs whether new room was created or not
+     * */
+    private Message createRoom(@NotNull Message message) {
         if (!message.getStatus().equals(MessageStatus.CREATE_ROOM)) {
             return new Message(MessageStatus.ERROR)
                     .setText(new StringBuilder("The message status must be ").append(MessageStatus.CREATE_ROOM)
@@ -256,22 +262,25 @@ public class ClientListener extends Thread{
         * The field toId is considered as an id of the initial room member, thus it must be valid
         * i.e. the client with such id must exists
         * */
-        Room room = RoomProcessing.createRoom(server.getConfig(), message.getFromId() , message.getToId());
-        if (room == null){
-            return new Message(MessageStatus.ERROR).setText("Some error has occurred during the room creation");
-        } else {
-            return new Message(MessageStatus.ACCEPTED).setRoomId(room.getRoomId())
-                    .setText(new StringBuilder("The room id: ").append(room.getRoomId())
-                            .append(" has been successfully created").toString());
+        try {
+            Room room = RoomProcessing.createRoom(server.getConfig(), message.getFromId() , message.getToId());
+            if (room == null) {
+                return new Message(MessageStatus.ERROR).setText("Some error has occurred during the room creation");
+            } else {
+                return new Message(MessageStatus.ACCEPTED).setRoomId(room.getRoomId())
+                        .setText(new StringBuilder("The room id: ").append(room.getRoomId())
+                                .append(" has been successfully created").toString());
+            }
+        } catch (InvalidPropertiesFormatException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return new Message(MessageStatus.ERROR).setText("Internal has error occurred");
         }
-
     }
 
     public LocalDateTime getConnected() {
         return LocalDateTime.from(connected);
     }
 
-    // TODO resolve the JAXBException
     public void sendResponseMessage(Message message) throws IOException {
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
@@ -300,22 +309,20 @@ public class ClientListener extends Thread{
     }
 
     /**
-     * The method that informs if there is a member {@code clientId} in the room {@code roomId}
+     *  The method that informs if there is a member {@code clientId} in the room {@code roomId}
+     * on server denoted by {@code serverProperties}
      *
-     * @param clientId The client's clientId to be searched for
-     * @param roomId The room clientId where {@code clientId} will be searched
+     * @param           serverProperties a set of the server configurations
+     * @param           clientId The client's clientId to be searched for
+     * @param           roomId The room clientId where {@code clientId} will be searched
      *
-     * @return {@code true} if and only if there are a registered account with such {@code clientId}
-     *          and created room that has the specified {@code roomId}
-     *          {@code false} otherwise.
-     * @throws FileNotFoundException // TODO decide what exception will be thrown and describe the cases when it will occur
-     *
+     * @return          {@code true} if and only if the server denoted by this {@code serverProperties} exists
+     *                  and there is a room id {@code roomId} with specified client id {@code clientId}
      * */
-    // TODO remove the exceptions
-    public static boolean isMember(@NotNull Properties serverConfig, int clientId, int roomId) throws FileNotFoundException, XPathExpressionException {
-        File roomFile = new File(new StringBuilder(serverConfig.getProperty("roomsDir"))
-                .append(File.pathSeparator).append(roomId).append(".xml").toString());
-        if (!roomFile.exists()){
+    public static boolean isMember(@NotNull Properties serverProperties, int clientId, int roomId) {
+        if (!ServerProcessing.arePropertiesValid(serverProperties)
+                || RoomProcessing.hasRoomBeenCreated(serverProperties, roomId) == 0L
+                || ServerProcessing.hasAccountBeenRegistered(serverProperties,clientId)) {
             return false;
         }
         XPath xPath = XPathFactory.newInstance().newXPath();
@@ -323,15 +330,23 @@ public class ClientListener extends Thread{
         try {
             xPathExpression = xPath.compile("room/members/clientId");
         } catch (XPathExpressionException e) {
-
+            LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
-        NodeList resultNodeList = (NodeList) xPathExpression.evaluate(
-                new InputSource(new BufferedReader(new FileReader(roomFile))), XPathConstants.NODESET);
-        for(int i = 0; i < resultNodeList.getLength(); i++) {
-            if(clientId == Integer.parseInt(resultNodeList.item(i).getTextContent())) {
-                return true;
+        File roomsDir = new File(serverProperties.getProperty("roomsDir"));
+        File roomDir = new File(roomsDir, String.valueOf(roomId));
+        File roomFile = new File(roomDir, String.valueOf(roomId).concat(".xml"));
+        try {
+            NodeList resultNodeList = (NodeList) xPathExpression.evaluate(
+                    new InputSource(new BufferedReader(new FileReader(roomFile))), XPathConstants.NODESET);
+            for(int i = 0; i < resultNodeList.getLength(); i++) {
+                if(clientId == Integer.parseInt(resultNodeList.item(i).getTextContent())) {
+                    return true;
+                }
             }
+        } catch (FileNotFoundException | XPathExpressionException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false; // return false OR throw new RuntimeException(e); ?
         }
         return false;
     }
