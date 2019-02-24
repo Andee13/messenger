@@ -39,48 +39,34 @@ public class ServerProcessing {
      * @throws          IOException in case if user entered wrong parameters
      * */
     public static void main(String[] args) throws IOException {
-        StartParameter startParameter = null;
+        InvocationMode invocationMode;
         try {
-            startParameter = parseInput(args);
+            invocationMode = getInvocationMode(args);
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             return;
         }
-        File serverProperiesFile = null;
+        File currentFolder;
+        File serverProperiesFile;
+        // setting the default server root folder
         try {
-            File currentFolder = new File(ServerProcessing.class.getProtectionDomain()
+            currentFolder = new File(ServerProcessing.class.getProtectionDomain()
                     .getCodeSource().getLocation().toURI());
-            serverProperiesFile = new File(currentFolder, "serverConfig.xml");
         } catch (URISyntaxException e) {
             LOGGER.error(e.getLocalizedMessage());
-            throw new RuntimeException(e);
+            return;
         }
-        switch (args.length) {
-            case 2:
-                serverProperiesFile = new File(args[1]);
-                if (!arePropertiesValid(serverProperiesFile)) {
-                    String errorMessage = "Invalid server properties file: ".concat(args[1]);
-                    LOGGER.info(errorMessage);
-                    throw new IOException(errorMessage);
-                } else {
-                    startServer(serverProperiesFile);
-                }
-                break;
-            default:
-                StringBuilder stringBuilder = new StringBuilder();
-                for(String arg : args){
-                    stringBuilder.append(arg);
-                }
-                String errorMessage = new StringBuilder("Invalid start arguments: ").append(stringBuilder).toString();
-                LOGGER.error(errorMessage);
-                throw new IOException(errorMessage);
+        try {
+            serverProperiesFile = new File(args[1]);
+        } catch (ArrayIndexOutOfBoundsException e) {
+            serverProperiesFile = new File(currentFolder, "serverConfig.xml");
         }
-        switch (startParameter) {
+        switch (invocationMode) {
             case START:
                 try {
                     startServer(serverProperiesFile);
                 } catch (IOException e) {
-                    LOGGER.fatal(e.getLocalizedMessage());
+                    LOGGER.error(e.getLocalizedMessage());
                     return;
                 }
                 break;
@@ -93,29 +79,39 @@ public class ServerProcessing {
                 break;
             case RESTART:
                 break;
+            case CREATE_DEFAULT_SERVER:
+                try {
+                    createDefaultRootStructure(new File(args[1]));
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    LOGGER.error("Unspecified root folder path");
+                    return;
+                }
+                break;
             default:
-                String errorMessage = "Unknown invocation mode: ".concat(String.valueOf(startParameter));
+                String errorMessage = "Unknown invocation mode: ".concat(String.valueOf(invocationMode));
                 LOGGER.error(errorMessage);
                 throw new IOException(errorMessage);
         }
     }
 
     /**
-     *  The method {@code parseInput} decides what the server has to do depending on passed parameters
+     *  The method {@code getInvocationMode} decides what the server has to do depending on passed parameters
      *
      * @param           args is the program input parameters
      * */
-    private static StartParameter parseInput(@NotNull String [] args) throws IOException{
+    private static InvocationMode getInvocationMode(@NotNull String [] args) throws IOException{
         if(args.length == 0) {
-            return StartParameter.START;
+            return InvocationMode.START;
         } else {
             switch (args[0].toLowerCase()) {
                 case "-start":
-                    return StartParameter.START;
+                    return InvocationMode.START;
                 case "-stop":
-                    return StartParameter.STOP;
+                    return InvocationMode.STOP;
                 case "-restart":
-                    return StartParameter.RESTART;
+                    return InvocationMode.RESTART;
+                case "-cds" :
+                    return InvocationMode.CREATE_DEFAULT_SERVER;
                 default: throw new IOException(new StringBuilder("Unknown command: ").append(args[0]).toString());
             }
         }
@@ -137,23 +133,24 @@ public class ServerProcessing {
             return false;
         }
         try {
+            System.err.println(properties.containsKey("port"));
             int port = Integer.parseInt(properties.getProperty("port"));
             if (port < 0 || port > 65536) {
-                throw new IllegalArgumentException(
-                        new StringBuilder("The port value was expected to be between 0 and 65536, but found ")
-                                .append(port).toString());
+                LOGGER.error(new StringBuilder("The port value was expected to be between 0 and 65536, but found ")
+                        .append(port).toString());
             }
-        } catch (Exception e) {
-            LOGGER.error(e.getLocalizedMessage());
+        } catch (NumberFormatException e) {
+            LOGGER.warn(new StringBuilder("Unable to extract a port number from server configuration ")
+                    .append(properties.getProperty("port")));
             return false;
         }
         if (!new File(properties.getProperty("roomsDir")).isDirectory()) {
-            LOGGER.error(new StringBuilder("Invalid roomsDir value was set: ")
+            LOGGER.warn(new StringBuilder("Invalid roomsDir value was set: ")
                     .append(properties.getProperty("roomsDir")));
             return false;
         }
         if (!new File(properties.getProperty("clientsDir")).isDirectory()) {
-            LOGGER.error(new StringBuilder("Invalid clientsDir value was set: ")
+            LOGGER.warn(new StringBuilder("Invalid clientsDir value was set: ")
                     .append(properties.getProperty("clientsDir")));
             return false;
         }
@@ -178,12 +175,12 @@ public class ServerProcessing {
         if (propertyFile == null) {
             return false;
         }
-        if(!propertyFile.isFile()){
+        if(!propertyFile.isFile()) {
             return false;
         }
         Properties properties = new Properties();
         try {
-            properties.load(new BufferedInputStream(new FileInputStream(propertyFile)));
+            properties.loadFromXML(new BufferedInputStream(new FileInputStream(propertyFile)));
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             return false;
@@ -229,12 +226,10 @@ public class ServerProcessing {
         if (!rootDir.isDirectory()) {
             throw new IllegalArgumentException("rootDir is expected to be an existing folder");
         }
-        File serverConfig = new File(new StringBuffer(rootDir.getAbsolutePath())
-                .append(File.separatorChar).append("serverConfig.xml").toString());
-        File clientsDir = new File(new StringBuffer(rootDir.getAbsolutePath())
-                .append(File.separatorChar).append("clients").toString());
-        File roomsDir = new File(new StringBuffer(rootDir.getAbsolutePath())
-                .append(File.separatorChar).append("rooms").toString());
+        File logsDir = new File(rootDir, "logs");
+        File roomsDir = new File(rootDir, "rooms");
+        File clientsDir = new File(rootDir, "clients");
+        File serverConfig = new File(rootDir, "serverConfig.xml");
         if (!serverConfig.isFile()) {
             LOGGER.info(new StringBuilder("Creating the default server configuration file: ")
                     .append(serverConfig.getAbsolutePath()));
@@ -244,15 +239,17 @@ public class ServerProcessing {
                             .append(serverConfig.getAbsolutePath()).toString());
                 }
                 Properties defaultProperties = getDefaultProperties();
-                try(OutputStream os = new BufferedOutputStream(new FileOutputStream(serverConfig))){
-                    defaultProperties.storeToXML(os,"This is a default properties","UTF-8");
+                defaultProperties.setProperty("roomsDir", roomsDir.getAbsolutePath());
+                defaultProperties.setProperty("clientsDir", clientsDir.getAbsolutePath());
+                defaultProperties.setProperty("logsDir", clientsDir.getAbsolutePath());
+                try(FileOutputStream fos = new FileOutputStream(serverConfig)) {
+                    defaultProperties.storeToXML(fos,null);
                     LOGGER.info(new StringBuilder("The default properties have been stored in the file ")
                             .append(serverConfig.getAbsolutePath())
                             .append(". Please, set your server configuration there."));
                 } catch (Exception e) {
                     LOGGER.fatal(e.getLocalizedMessage());
                 }
-
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -261,26 +258,24 @@ public class ServerProcessing {
         if (!clientsDir.isDirectory()) {
             LOGGER.info(new StringBuilder("Creating the clients folder: ")
                     .append(clientsDir.getAbsolutePath()));
-            try {
-                if(!serverConfig.createNewFile()){
-                    throw new RuntimeException(new StringBuilder("Unable to create a clients folder: ")
-                            .append(clientsDir.getAbsolutePath()).toString());
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            if(!clientsDir.mkdir()){
+                throw new RuntimeException("Unable to create a clients folder: ".concat(clientsDir.getAbsolutePath()));
             }
         }
 
         if (!roomsDir.isDirectory()) {
             LOGGER.info(new StringBuilder("Creating the rooms folder: ")
                     .append(roomsDir.getAbsolutePath()));
-            try {
-                if(!serverConfig.createNewFile()){
-                    throw new RuntimeException(new StringBuilder("Unable to create a clients folder: ")
-                            .append(roomsDir.getAbsolutePath()).toString());
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            if(!roomsDir.mkdir()){
+                throw new RuntimeException("Unable to create a clients folder: ".concat(roomsDir.getAbsolutePath()));
+            }
+        }
+
+        if (!logsDir.isDirectory()) {
+            LOGGER.info(new StringBuilder("Creating the logs folder: ")
+                    .append(logsDir.getAbsolutePath()));
+            if(!logsDir.mkdir()){
+                throw new RuntimeException("Unable to create a logs folder: ".concat(logsDir.getAbsolutePath()));
             }
         }
     }
@@ -315,6 +310,14 @@ public class ServerProcessing {
             );
             // default max stored messages
             properties.setProperty("messageStorageDimension","50");
+            // folder for logs
+            properties.setProperty("logsDir",new StringBuilder("change")
+                    .append(File.separatorChar).append("the")
+                    .append(File.separatorChar).append("logs")
+                    .append(File.separatorChar).append("folder")
+                    .append(File.separatorChar).append("path")
+                    .toString()
+            );
             defaultProperties = properties;
         }
         return defaultProperties;
@@ -332,7 +335,7 @@ public class ServerProcessing {
      * @exception       IllegalStateException if the server denoted by the specified {@code serverPropertiesFile}
      *                  has already been launched or the port set in the {@code serverPropertiesFile} is taken
      * */
-    private static void startServer(@NotNull File serverPropertiesFile) throws IOException{
+    private static void startServer(@NotNull File serverPropertiesFile) throws IOException {
         if(!arePropertiesValid(serverPropertiesFile)) {
             throw new IOException("The server properties are not valid");
         }
@@ -374,8 +377,8 @@ public class ServerProcessing {
      * */
     private static boolean isServerLaunched(File serverPropertiesFile) {
         Properties serverProperties = new Properties();
-        try {
-            serverProperties.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
+        try(FileInputStream fileInputStream = new FileInputStream(serverPropertiesFile)) {
+            serverProperties.loadFromXML(fileInputStream);
             return isServerLaunched(serverProperties);
         } catch (IOException e) {
             return false;
@@ -448,7 +451,7 @@ public class ServerProcessing {
             throw new InvalidPropertiesFormatException("The properties file are not valid");
         }
         Properties properties = new Properties();
-        properties.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
+        properties.loadFromXML(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
         stopServer(properties);
     }
 

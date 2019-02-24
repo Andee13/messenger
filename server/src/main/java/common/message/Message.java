@@ -37,7 +37,7 @@ public class Message {
     @XmlElement
     private Integer roomId;
 
-    private static final Logger LOGGER = Logger.getLogger("Message");
+    //private static final Logger LOGGER = Logger.getLogger("Message");
 
     public Message() {
         setCreationDateTime(LocalDateTime.now());
@@ -201,7 +201,7 @@ public class Message {
             return (Message) JAXBContext.newInstance(Message.class).createUnmarshaller()
                     .unmarshal(new StringReader(xml));
         } catch (JAXBException e) {
-            LOGGER.error(e.getLocalizedMessage());
+            //LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
     }

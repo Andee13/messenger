@@ -126,8 +126,8 @@ public class Server extends Thread implements Saveable {
             throw new InvalidPropertiesFormatException("Either the specified properties or file are/is invalid");
         }
         config = new Properties();
-        try {
-            config.load(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
+        try(FileInputStream fileInputStream = new FileInputStream(serverPropertiesFile)) {
+            config.loadFromXML(fileInputStream);
             serverConfigFile = serverPropertiesFile;
             onlineClients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
             onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
@@ -139,8 +139,21 @@ public class Server extends Thread implements Saveable {
 
     @Override
     public void run() {
-        ServerSocket serverSocket = null;
+        /*if (!ServerProcessing.arePropertiesValid(config)) {
+            LOGGER.fatal("Unable to start the server. Server configurations are not valid.");
+            interrupt();
+            return;
+        }*/
+        ServerSocket serverSocket;
         Socket socket;
+        try {
+            System.out.println(config);
+            serverSocket = new ServerSocket(Integer.parseInt(config.getProperty("port")));
+        } catch (IOException e) {
+            LOGGER.fatal("Error occurred while starting the server: ".concat(e.getLocalizedMessage()));
+            interrupt();
+            return;
+        }
         while (true) {
             try {
                 socket = serverSocket.accept();
@@ -177,7 +190,7 @@ public class Server extends Thread implements Saveable {
         if (RoomProcessing.hasRoomBeenCreated(config, roomId) == 0L) {
             throw new RoomNotFoundException("Unable to find the room id ".concat(String.valueOf(roomId)));
         }
-        Room room = null;
+        Room room;
         try {
             room = RoomProcessing.getRoom(config, roomId);
             onlineRooms.put(roomId, room);
