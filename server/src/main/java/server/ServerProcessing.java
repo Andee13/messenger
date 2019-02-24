@@ -48,7 +48,6 @@ public class ServerProcessing {
         }
         File serverProperiesFile = null;
         try {
-            // TODO simplify the path
             File currentFolder = new File(ServerProcessing.class.getProtectionDomain()
                     .getCodeSource().getLocation().toURI());
             serverProperiesFile = new File(currentFolder, "serverConfig.xml");
