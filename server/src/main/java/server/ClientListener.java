@@ -1,5 +1,6 @@
 package server;
 
+import org.jetbrains.annotations.Contract;
 import server.exceptions.IllegalOperationException;
 import server.exceptions.RoomNotFoundException;
 import server.room.Room;
@@ -121,9 +122,9 @@ public class ClientListener extends Thread{
     }
 
     private void handle(Message message) throws Exception{
-        /*if(message == null){
+        if(message == null){
             throw new NullPointerException("Message must not be null");
-        }*/
+        }
         switch (message.getStatus()) {
             case AUTH:
                 auth(message);

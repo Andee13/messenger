@@ -147,7 +147,6 @@ public class Server extends Thread implements Saveable {
         ServerSocket serverSocket;
         Socket socket;
         try {
-            System.out.println(config);
             serverSocket = new ServerSocket(Integer.parseInt(config.getProperty("port")));
         } catch (IOException e) {
             LOGGER.fatal("Error occurred while starting the server: ".concat(e.getLocalizedMessage()));

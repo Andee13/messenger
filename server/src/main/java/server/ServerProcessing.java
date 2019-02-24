@@ -133,7 +133,6 @@ public class ServerProcessing {
             return false;
         }
         try {
-            System.err.println(properties.containsKey("port"));
             int port = Integer.parseInt(properties.getProperty("port"));
             if (port < 0 || port > 65536) {
                 LOGGER.error(new StringBuilder("The port value was expected to be between 0 and 65536, but found ")
