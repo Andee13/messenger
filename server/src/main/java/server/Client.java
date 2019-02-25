@@ -3,25 +3,25 @@ package server;
 import common.message.Message;
 import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
-import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
-import javax.xml.xpath.*;
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.HashSet;
+import java.util.Properties;
+import java.util.Set;
 
-
+@XmlAccessorType(XmlAccessType.FIELD)
 @XmlRootElement(name="client")
-public class Client implements Saveable{
+public class Client implements Saveable {
     @XmlElement
     private int clientId;
     @XmlJavaTypeAdapter(SetAdapter.class)
@@ -36,9 +36,10 @@ public class Client implements Saveable{
     private boolean isAdmin;
     @XmlElement
     private boolean baned;
-    private Server server;
     @XmlJavaTypeAdapter(value = Message.LocalDateTimeAdapter.class)
     private LocalDateTime isBannedUntill;
+    @XmlTransient
+    private Server server;
 
     public LocalDateTime getIsBannedUntill() {
         return isBannedUntill;
@@ -188,11 +189,9 @@ public class Client implements Saveable{
         }
         File clientsDir = server.getClientsDir();
         if (!clientsDir.isDirectory()) {
-            if (!clientsDir.mkdir()) {
-                LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
-                        .append(clientsDir.getAbsolutePath()));
-                return false;
-            }
+            LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
+                    .append(clientsDir.getAbsolutePath()));
+            return false;
         }
         File clientDir = new File(clientsDir, String.valueOf(login.hashCode()));
         if (!clientDir.isDirectory()) {
@@ -203,13 +202,13 @@ public class Client implements Saveable{
             }
         }
         File clientFile = new File(clientDir, String.valueOf(login.hashCode()).concat(".xml"));
-        if (!clientDir.isFile()) {
+        if (!clientDir.isDirectory()) {
             try {
                 if (!clientDir.createNewFile()) {
                     LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
                             .append(clientDir.getAbsolutePath()));
                 }
-            } catch (Exception e) {
+            } catch (IOException e) {
                 LOGGER.warn(e.getLocalizedMessage());
                 return false;
             }
@@ -224,6 +223,15 @@ public class Client implements Saveable{
         } catch (JAXBException e) {
             LOGGER.warn(e.getLocalizedMessage());
             return false;
+        }
+    }
+
+    public static Client from(File clientFile) throws FileNotFoundException {
+        try {
+            return (Client) JAXBContext.newInstance(Client.class).createUnmarshaller().unmarshal(clientFile);
+        } catch (JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
         }
     }
 }

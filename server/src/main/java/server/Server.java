@@ -245,7 +245,7 @@ public class Server extends Thread implements Saveable {
         try (FileInputStream fileInputStream = new FileInputStream(serverConfigFile);
              BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
             Properties propertiesToCheck = new Properties();
-            propertiesToCheck.load(bufferedInputStream);
+            propertiesToCheck.loadFromXML(bufferedInputStream);
             if(propertiesToCheck.equals(config)){
                 return true;
             }
@@ -264,7 +264,7 @@ public class Server extends Thread implements Saveable {
         try (FileInputStream fileInputStream = new FileInputStream(serverConfigFile);
         BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
             Properties propertiesToCheck = new Properties();
-            propertiesToCheck.load(bufferedInputStream);
+            propertiesToCheck.loadFromXML(bufferedInputStream);
             return propertiesToCheck.equals(config);
         } catch (IOException e) {
             LOGGER.error(new StringBuilder("Saving the server has been failed: ").append(e.getLocalizedMessage()));

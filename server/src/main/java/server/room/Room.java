@@ -208,6 +208,9 @@ public class Room implements Saveable {
         @XmlElement(name="message")
         private List<Message> messages;
 
+        public MessageHistoryObservableListWrapper() {
+        }
+
         public MessageHistoryObservableListWrapper(List<Message> list) {
             FXCollections.synchronizedObservableList(FXCollections.observableList(list));
         }
@@ -221,7 +224,11 @@ public class Room implements Saveable {
         }
     }
 
-    private static final class MessageHistoryObservableListAdapter extends XmlAdapter<MessageHistoryObservableListWrapper, List<Message>> {
+    private static final class MessageHistoryObservableListAdapter
+            extends XmlAdapter<MessageHistoryObservableListWrapper, List<Message>> {
+        public MessageHistoryObservableListAdapter() {
+        }
+
         public List<Message> unmarshal(MessageHistoryObservableListWrapper messages) throws Exception {
             return FXCollections.synchronizedObservableList(FXCollections.observableList(messages.getMessages()));
         }
@@ -238,16 +245,16 @@ public class Room implements Saveable {
             throw new RuntimeException("Properties are not valid for a room to be saved into its file");
         }
         File roomsDir = new File(serverProperties.getProperty("roomsDir"));
-        if (!roomsDir.isDirectory() || !roomsDir.mkdir()) {
+        if (!roomsDir.isDirectory() && !roomsDir.mkdir()) {
             return false;
         }
         File roomDir = new File(roomsDir, String.valueOf(roomId));
-        if (!roomDir.isDirectory() || !roomDir.mkdir()) {
+        if (!roomDir.isDirectory() && !roomDir.mkdir()) {
             return false;
         }
         File roomFile = new File(roomDir, roomDir.getName().concat(".xml"));
         try {
-            if (!roomFile.isFile() || !roomFile.createNewFile()) {
+            if (!roomFile.isFile() && !roomFile.createNewFile()) {
                 return false;
             }
         } catch (IOException e) {
@@ -257,11 +264,12 @@ public class Room implements Saveable {
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(this, roomFile);
             // TODO distinguish the logic of saving checking to another (new) method
             Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
             Room unmarshalledRoom = (Room) unmarshaller.unmarshal(roomFile);
-            return this.equals(unmarshalledRoom) && System.currentTimeMillis() - roomFile.lastModified() < 15000;
+            return this.equals(unmarshalledRoom);
         } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
             return false;

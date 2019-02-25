@@ -42,8 +42,10 @@ public class RoomProcessing {
         if (!ServerProcessing.arePropertiesValid(serverConfig)) {
             throw new IOException("Properties are not valid");
         }
-        File roomFile = new File(new File(serverConfig.getProperty("roomsFile")), String.valueOf(roomId).concat(".xml"));
-        if(roomFile.exists()) {
+        File roomsDir = new File(serverConfig.getProperty("roomsDir"));
+        File roomDir = new File(roomsDir, String.valueOf(roomId));
+        File roomFile = new File(roomDir, roomDir.getName().concat(".xml"));
+        if(roomFile.isFile()) {
             try {
                 JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
                 Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
@@ -72,20 +74,20 @@ public class RoomProcessing {
      *
      * @throws          InvalidPropertiesFormatException if {@code serverProperties} or the data it stores is not valid
      * */
-    public static Room createRoom(Properties serverProperties, int adminId, int... clientsIds)
+    public static Room createRoom(Server server, int adminId, int... clientsIds)
             throws InvalidPropertiesFormatException {
-        if (!ServerProcessing.arePropertiesValid(serverProperties)) {
+        if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("The specified server configurations are not valid");
         }
-        if (!ServerProcessing.hasAccountBeenRegistered(serverProperties, adminId)) {
+        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), adminId)) {
             throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(adminId)));
         }
         for (int id : clientsIds) {
-            if (!ServerProcessing.hasAccountBeenRegistered(serverProperties, id)) {
+            if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), id)) {
                 throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(id)));
             }
         }
-        File roomsDir = new File(serverProperties.getProperty("roomsDir"));
+        File roomsDir = new File(server.getConfig().getProperty("roomsDir"));
         if (!roomsDir.isDirectory()) {
             throw new RuntimeException("Unable to find the folder with rooms info ".concat(roomsDir.getAbsolutePath()));
         }
@@ -99,6 +101,7 @@ public class RoomProcessing {
             throw new RuntimeException("Unable to create room folder ".concat(roomDir.getAbsolutePath()));
         }
         Room newRoom = new Room();
+        newRoom.setServer(server);
         newRoom.setAdminId(adminId);
         newRoom.setRoomId(newRoomId);
         for (int clientId : clientsIds) {
@@ -110,7 +113,7 @@ public class RoomProcessing {
             throw new RuntimeException(errorMessage);
         }
         try {
-            return getRoom(serverProperties, newRoomId);
+            return getRoom(server.getConfig(), newRoomId);
         } catch (Exception e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);

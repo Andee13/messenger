@@ -191,25 +191,33 @@ public class Main {
 
         JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
-        String xml = new String();
         StringWriter stringWriter = new StringWriter();
 
-
-        Message message = new Message(MessageStatus.REGISTRATION).setLogin("user").setPassword("password");
+        Message message = new Message(MessageStatus.AUTH).setLogin("Puser").setPassword("password");
         Socket socket = new Socket("localhost", 5940);
 
         DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
         marshaller.marshal(message, stringWriter);
-        stringWriter.write(xml);
-        stringWriter.flush();
 
-        System.out.println(xml);
-
-        dataOutputStream.writeUTF(xml);
+        dataOutputStream.writeUTF(stringWriter.toString());
+        dataOutputStream.flush();
         DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
 
         System.out.println(dataInputStream.readUTF());
 
+        message = new Message(MessageStatus.CREATE_ROOM).setFromId("Puser".hashCode());
+        stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream.writeUTF(stringWriter.toString());
 
+        System.out.println(dataInputStream.readUTF());
+
+        /*Client client = new Client();
+        client.setLogin("login");
+        client.setPassword("password");
+        client.setClientId("login".hashCode());
+        JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        marshaller.marshal(client,System.out);*/
     }
 }

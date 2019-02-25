@@ -20,6 +20,7 @@ import javax.xml.bind.Unmarshaller;
 import javax.xml.xpath.*;
 import java.io.*;
 import java.net.Socket;
+import java.net.SocketException;
 import java.time.LocalDateTime;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
@@ -46,7 +47,7 @@ public class ClientListener extends Thread{
         this.client = client;
     }
 
-    private static final Logger LOGGER = Logger.getLogger("ClientListener");
+    private static final Logger LOGGER = Logger.getLogger("Client");
 
     public ClientListener(Server server, Socket socket) throws IOException {
         this.server = server;
@@ -58,16 +59,15 @@ public class ClientListener extends Thread{
 
     @Override
     public void run() {
-        JAXBContext jaxbContext;
         try {
-            jaxbContext = JAXBContext.newInstance(Message.class);
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
             while (!logged) {
                 ++connectAttempts;
-                Message firstMessage = (Message) unmarshaller.unmarshal(new InputSource(new StringReader(in.readUTF())));
+                Message firstMessage = Message.from(in.readUTF());
                 if(!MessageStatus.AUTH.equals(firstMessage.getStatus())
                         && !MessageStatus.REGISTRATION.equals(firstMessage.getStatus())) {
                     if(connectAttempts == 3) {
+                        sendResponseMessage(new Message(MessageStatus.ERROR)
+                                .setText("Too much wrong input, please, try again later"));
                         closeClientSession();
                     }
                     Message wrongFirstMessage = new Message(MessageStatus.ERROR)
@@ -77,29 +77,42 @@ public class ClientListener extends Thread{
                     sendResponseMessage(wrongFirstMessage);
                 }
                 try {
-                    auth(firstMessage);
+                    Message responseMessage;
+                    if (MessageStatus.AUTH.equals(firstMessage.getStatus())) {
+                        responseMessage = auth(firstMessage);
+                    } else {
+                        responseMessage = registration(firstMessage);
+                    }
+                    sendResponseMessage(responseMessage);
                 } catch (IllegalPasswordException | ClientNotFoundException e) {
                     LOGGER.warn(e.getLocalizedMessage());
                     sendResponseMessage(new Message(MessageStatus.DENIED)
                             .setText("Login or password is incorrect. Please, check your data"));
                 }
             }
-        } catch(JAXBException | IOException e) {
-            e.printStackTrace();
+        } catch (SocketException e) {
+            if (logged) {
+                client.save();
+            }
+            interrupt();
+            return;
+        } catch(IOException e) {
+            LOGGER.fatal(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
         while (true) {
             try {
                 handle(Message.from(in.readUTF()));
                 lastInputMessage = LocalDateTime.now();
-            } catch (IOException e) {
+            } catch (SocketException e) {
                 if (logged) {
                     client.save();
                 }
                 break;
             } catch (Exception e) {
                 try {
-                    sendResponseMessage(new Message(MessageStatus.ERROR).setText("Internal error"));
+                    sendResponseMessage(new Message(MessageStatus.ERROR)
+                            .setText(e.getClass().getName().concat(" occurred while handling the message")));
                 } catch (IOException e1) {
                     LOGGER.fatal(e1.getLocalizedMessage());
                     break;
@@ -150,7 +163,7 @@ public class ClientListener extends Thread{
             case USERBAN:
                 break;
             case CREATE_ROOM:
-                createRoom(message);
+                responseMessage = createRoom(message);
                 break;
             case DELETE_ROOM:
                 break;
@@ -165,6 +178,9 @@ public class ClientListener extends Thread{
             sendResponseMessage(responseMessage);
         } catch (IOException e) {
             LOGGER.fatal(e.getLocalizedMessage());
+            if (logged) {
+                client.save();
+            }
         }
     }
 
@@ -212,6 +228,8 @@ public class ClientListener extends Thread{
             Client client = (Client) unmarshaller.unmarshal(clientFile);
             logged = client.getPassword().equals(message.getPassword());
             if (logged) {
+                this.client = Client.from(clientFile);
+                this.client.setServer(server);
                 return new Message(MessageStatus.ACCEPTED);
             } else {
                 return new Message(MessageStatus.DENIED).setText("Please, check your password and login");
@@ -219,12 +237,20 @@ public class ClientListener extends Thread{
         } catch (JAXBException e) {
             LOGGER.fatal(e.getLocalizedMessage());
             return new Message(MessageStatus.ERROR).setText("Internal error");
+        } catch (FileNotFoundException e) {
+            LOGGER.error("Unable to find client's file ".concat(clientFile.getAbsolutePath()));
+            return new Message(MessageStatus.ERROR).setText("Internal error. Unable to find client's file");
         }
     }
 
     private Message registration(Message message) {
         if(message == null){
             return new Message(MessageStatus.ERROR).setText("Message came as null");
+        }
+        if (!MessageStatus.REGISTRATION.equals(message.getStatus())) {
+            return new Message(MessageStatus.ERROR).setText(new StringBuilder("Message of the ")
+                    .append(MessageStatus.REGISTRATION).append(" was expected but found ")
+                    .append(message.getStatus()).toString());
         }
         File clientsDir = new File(server.getConfig().getProperty("clientsDir"));
         String login = message.getLogin();
@@ -234,37 +260,31 @@ public class ClientListener extends Thread{
                     .concat(" has not been set"));
         }
         File clientDir = new File(clientsDir, String.valueOf(login.hashCode()));
-        if (!clientDir.isDirectory() && !clientDir.mkdir()) {
-            return new Message(MessageStatus.ERROR).setText("Internal problem");
-        }
         File clientFile = new File(clientDir, clientDir.getName().concat(".xml"));
-        try {
-            if (!clientFile.isFile() && !clientFile.createNewFile()) {
-                return new Message(MessageStatus.ERROR).setText("Internal problem");
-            }
-        } catch (IOException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            return new Message(MessageStatus.ERROR).setText("Internal problem");
-        }
-        if(clientFile.exists()) {
+        if (clientDir.isDirectory()) {
             return new Message(MessageStatus.DENIED).setText(new StringBuilder("The login ")
                     .append(login).append(" is already taken").toString());
         }
         try {
-            if(clientFile.createNewFile()) {
-                Client client = new Client();
-                client.setLogin(login);
-                client.setPassword(password);
-                client.setClientId(login.hashCode());
-                JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
-                Marshaller marshaller = jaxbContext.createMarshaller();
-                marshaller.marshal(client,clientFile);
-                return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
-                        .append(login).append(" has been successfully created").toString());
-            } else {
-                return new Message(MessageStatus.ERROR).setText("Internal error");
+            if (!clientDir.mkdir() || !clientFile.createNewFile()) {
+                throw new IOException();
             }
-        } catch (JAXBException | IOException e) {
+        } catch (IOException e) {
+            return new Message(MessageStatus.ERROR).setText("Internal error");
+        }
+        try {
+            Client client = new Client();
+            client.setLogin(login);
+            client.setServer(server);
+            client.setPassword(password);
+            client.setClientId(login.hashCode());
+            JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            marshaller.marshal(client,clientFile);
+            return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
+                    .append(login).append(" has been successfully created").toString());
+        } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
             return new Message(MessageStatus.ERROR).setText("Internal problem");
         }
@@ -289,7 +309,8 @@ public class ClientListener extends Thread{
         * i.e. the client with such id must exists
         * */
         try {
-            Room room = RoomProcessing.createRoom(server.getConfig(), message.getFromId() , message.getToId());
+            // TODO npe here
+            Room room = RoomProcessing.createRoom(server, message.getFromId());
             if (room == null) {
                 return new Message(MessageStatus.ERROR).setText("Some error has occurred during the room creation");
             } else {
