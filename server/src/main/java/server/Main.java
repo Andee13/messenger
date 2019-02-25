@@ -1,5 +1,7 @@
 package server;
 
+import common.message.Message;
+import common.message.MessageStatus;
 import lombok.extern.log4j.Log4j;
 import org.xml.sax.SAXException;
 
@@ -8,6 +10,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.xpath.*;
 import java.io.*;
+import java.net.Socket;
 import java.net.URISyntaxException;
 
 @Log4j
@@ -185,6 +188,27 @@ public class Main {
 
 
         System.err.println(properties.equals(properties1));*/
+
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        String xml = new String();
+        StringWriter stringWriter = new StringWriter();
+
+
+        Message message = new Message(MessageStatus.REGISTRATION).setLogin("user").setPassword("password");
+        Socket socket = new Socket("localhost", 5940);
+
+        DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+        marshaller.marshal(message, stringWriter);
+        stringWriter.write(xml);
+        stringWriter.flush();
+
+        System.out.println(xml);
+
+        dataOutputStream.writeUTF(xml);
+        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+
+        System.out.println(dataInputStream.readUTF());
 
 
     }

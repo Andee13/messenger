@@ -1,5 +1,6 @@
 package server;
 
+import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils;
 import org.jetbrains.annotations.Contract;
 import server.exceptions.IllegalOperationException;
 import server.exceptions.RoomNotFoundException;
@@ -43,9 +44,6 @@ public class ClientListener extends Thread{
 
     public void setClient(Client client) {
         this.client = client;
-    }
-
-    public ClientListener(){
     }
 
     private static final Logger LOGGER = Logger.getLogger("ClientListener");
@@ -94,15 +92,21 @@ public class ClientListener extends Thread{
             try {
                 handle(Message.from(in.readUTF()));
                 lastInputMessage = LocalDateTime.now();
+            } catch (IOException e) {
+                if (logged) {
+                    client.save();
+                }
+                break;
             } catch (Exception e) {
-                e.printStackTrace();
                 try {
-                    sendResponseMessage(new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage()));
-                }catch (IOException e1){
-                    LOGGER.error(e1.getLocalizedMessage());
+                    sendResponseMessage(new Message(MessageStatus.ERROR).setText("Internal error"));
+                } catch (IOException e1) {
+                    LOGGER.fatal(e1.getLocalizedMessage());
+                    break;
                 }
             }
         }
+        interrupt();
     }
 
     public Socket getSocket() {
@@ -121,25 +125,27 @@ public class ClientListener extends Thread{
         return LocalDateTime.from(lastInputMessage);
     }
 
-    private void handle(Message message) throws Exception{
+    private void handle(Message message) {
         if(message == null){
             throw new NullPointerException("Message must not be null");
         }
+        Message responseMessage = null;
         switch (message.getStatus()) {
             case AUTH:
-                auth(message);
-                if(logged){
-                    sendResponseMessage(new Message(MessageStatus.ACCEPTED));
-                } else {
-                    sendResponseMessage(new Message(MessageStatus.DENIED));
-                }
+                responseMessage = auth(message);
                 break;
             case REGISTRATION:
-                Message response = registration(message);
-                sendResponseMessage(response);
+                responseMessage = registration(message);
                 break;
             case MESSAGE:
-                RoomProcessing.sendMessage(server, message);
+                try {
+                    RoomProcessing.sendMessage(server, message);
+                    responseMessage = new Message(MessageStatus.ACCEPTED);
+                } catch (IOException e) {
+                    LOGGER.error(e.getLocalizedMessage());
+                    responseMessage = new Message(MessageStatus.ERROR)
+                            .setText("Internal error. Message has not been sent");
+                }
                 break;
             case USERBAN:
                 break;
@@ -154,6 +160,11 @@ public class ClientListener extends Thread{
                 break;
                 default: throw new RuntimeException(new StringBuilder("Unknown message status")
                         .append(message.getStatus().toString()).toString());
+        }
+        try {
+            sendResponseMessage(responseMessage);
+        } catch (IOException e) {
+            LOGGER.fatal(e.getLocalizedMessage());
         }
     }
 
@@ -177,56 +188,69 @@ public class ClientListener extends Thread{
      * @exception       NullPointerException in case when message equals {@code null}
      *
      * */
-    private void auth(Message message) throws IOException {
+    private Message auth(Message message) {
         if (message == null) {
-            throw new NullPointerException("Message must not be null");
+            return new Message(MessageStatus.ERROR).setText("Internal error");
         }
         if (!MessageStatus.AUTH.equals(message.getStatus())) {
-            throw new IOException(new StringBuilder("The message must be of status ")
-                    .append(MessageStatus.AUTH).append(" but found ").append(message.getStatus()).toString());
+            LOGGER.error(new StringBuilder("Message of the ").append(MessageStatus.AUTH)
+                    .append(" was expected but found ").append(message.getStatus().toString()));
+            return new Message(MessageStatus.ERROR).setText("Internal error");
         }
-        if (message.getLogin() == null) {
-            throw new IOException("Login has not been set");
-        }
-        if (message.getPassword() == null) {
-            throw new IOException("Password has not been set");
+        if (message.getLogin() == null || message.getPassword() == null) {
+            return new Message(MessageStatus.ERROR)
+                    .setText((message.getLogin() == null ? "Login" : "Password").concat(" must be set"));
         }
         File clientFolder = new File(server.getClientsDir(), String.valueOf(message.getLogin().hashCode()));
-        File clientXml = new File(clientFolder, String.valueOf(message.getLogin().hashCode()).concat(".xml"));
-        if (!clientFolder.isDirectory() || !clientXml.isFile()) {
-            throw new ClientNotFoundException(new StringBuilder("Unable to find client ")
-                    .append(message.getLogin()).toString());
+        File clientFile = new File(clientFolder, String.valueOf(message.getLogin().hashCode()).concat(".xml"));
+        if (!clientFile.isFile()) {
+            return new Message(MessageStatus.DENIED).setText("Please, check your password and login");
         }
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
             Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            Client client = (Client) unmarshaller.unmarshal(clientXml);
+            Client client = (Client) unmarshaller.unmarshal(clientFile);
             logged = client.getPassword().equals(message.getPassword());
+            if (logged) {
+                return new Message(MessageStatus.ACCEPTED);
+            } else {
+                return new Message(MessageStatus.DENIED).setText("Please, check your password and login");
+            }
         } catch (JAXBException e) {
             LOGGER.fatal(e.getLocalizedMessage());
-            throw new RuntimeException(e);
+            return new Message(MessageStatus.ERROR).setText("Internal error");
         }
     }
 
     private Message registration(Message message) {
         if(message == null){
-            try{
-                throw new NullPointerException("Message must not be null");
-            } catch (NullPointerException e){
-                e.printStackTrace();
-                throw e;
-            }
+            return new Message(MessageStatus.ERROR).setText("Message came as null");
         }
         File clientsDir = new File(server.getConfig().getProperty("clientsDir"));
         String login = message.getLogin();
         String password = message.getPassword();
-        File clientFile = new File(new StringBuilder(clientsDir.getAbsolutePath()).append(login.hashCode())
-                .append(".xml").toString());
+        if (login == null || password == null) {
+            return new Message(MessageStatus.ERROR).setText((login == null ? "login" : "password")
+                    .concat(" has not been set"));
+        }
+        File clientDir = new File(clientsDir, String.valueOf(login.hashCode()));
+        if (!clientDir.isDirectory() && !clientDir.mkdir()) {
+            return new Message(MessageStatus.ERROR).setText("Internal problem");
+        }
+        File clientFile = new File(clientDir, clientDir.getName().concat(".xml"));
+        try {
+            if (!clientFile.isFile() && !clientFile.createNewFile()) {
+                return new Message(MessageStatus.ERROR).setText("Internal problem");
+            }
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return new Message(MessageStatus.ERROR).setText("Internal problem");
+        }
         if(clientFile.exists()) {
             return new Message(MessageStatus.DENIED).setText(new StringBuilder("The login ")
                     .append(login).append(" is already taken").toString());
         }
-        try{
+        try {
             if(clientFile.createNewFile()) {
                 Client client = new Client();
                 client.setLogin(login);
@@ -237,12 +261,13 @@ public class ClientListener extends Thread{
                 marshaller.marshal(client,clientFile);
                 return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
                         .append(login).append(" has been successfully created").toString());
+            } else {
+                return new Message(MessageStatus.ERROR).setText("Internal error");
             }
         } catch (JAXBException | IOException e) {
             LOGGER.error(e.getLocalizedMessage());
-            return new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage());
+            return new Message(MessageStatus.ERROR).setText("Internal problem");
         }
-        return new Message(MessageStatus.DENIED).setText("Registration has not been finished successfully");
     }
 
     /**
