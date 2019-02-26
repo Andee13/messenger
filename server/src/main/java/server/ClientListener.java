@@ -1,17 +1,17 @@
 package server;
 
-import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils;
-import org.jetbrains.annotations.Contract;
-import server.exceptions.IllegalOperationException;
-import server.exceptions.RoomNotFoundException;
-import server.room.Room;
-import server.room.RoomProcessing;
 import common.message.Message;
 import common.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
+import server.exceptions.ClientNotFoundException;
+import server.exceptions.IllegalOperationException;
+import server.exceptions.IllegalPasswordException;
+import server.exceptions.RoomNotFoundException;
+import server.room.Room;
+import server.room.RoomProcessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -24,9 +24,6 @@ import java.net.SocketException;
 import java.time.LocalDateTime;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
-
-import server.exceptions.IllegalPasswordException;
-import server.exceptions.ClientNotFoundException;
 
 /**
  *  The class {@code ClientListener} handles operating incoming connections i.e. it's methods
