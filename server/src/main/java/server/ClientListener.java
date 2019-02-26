@@ -28,6 +28,16 @@ import java.util.Properties;
 import server.exceptions.IllegalPasswordException;
 import server.exceptions.ClientNotFoundException;
 
+/**
+ *  The class {@code ClientListener} handles operating incoming connections i.e. it's methods
+ * interact with requests from client side
+ *
+ *  NOTE! The methods are called in the method {@code handle(Message message)} do not throw any exceptions.
+ * The point that their purpose is to execute an operation to be requested from client's side and return
+ * a pieces of information about an executed (or not) operation. Thus in case if requested actions have not
+ * been performed properly the methods return instances of {@code Message} of statuses {@code MessageStatus.ERROR}
+ * or {@code MessageStatus.DENIED}. Some additional information may be provided in the field {@code Message.text}
+ * */
 public class ClientListener extends Thread{
     private Socket socket;
     private Server server;
@@ -186,6 +196,52 @@ public class ClientListener extends Thread{
                 client.save();
             }
         }
+    }
+
+    /**
+     *  The method {@code sendMessage} sends an instance of {@code Message} of the {@code MessageStatus.MESSAGE}
+     * to the certain {@code Room}
+     *  It is expected, that {@code message} contains (at least) set following parameters :
+     *      {@code fromId}
+     *      {@code roomId}
+     *      {@code text}
+     *
+     * @param           message a {@code Message} to be sent
+     *
+     * @return          an instance of {@code Message} containing information about the operation execution
+     *                  it may be of {@code MessageStatus.ERROR} either {@code MessageStatus.ACCEPTED}
+     *                  or {@code MessageStatus.DENIED} status
+     * */
+    private Message sendMessage(Message message) {
+        if (message == null) {
+            LOGGER.error("Message is null");
+            return new Message(MessageStatus.ERROR).setText("Internal error");
+        }
+        String text = message.getText();
+        if (text == null) {
+            LOGGER.info(new StringBuilder("Attempt to send an empty message from client id ")
+                    .append(message.getToId()).append(" to the room id ").append(message.getRoomId()));
+            return new Message(MessageStatus.ERROR).setText("Message text has not been set");
+        }
+        if (message.getFromId() == null) {
+            LOGGER.info("Attempt to send an anonymous message : fromId is null");
+            return new Message(MessageStatus.ERROR).setText("Client's id has not been set");
+        }
+        int fromId = message.getFromId();
+        if (message.getRoomId() == null) {
+            LOGGER.info(new StringBuilder("Attempt to sent a message from client id ").append(fromId)
+                    .append(" to undefined room"));
+        }
+        int roomId = message.getRoomId();
+        Message responseMessage;
+        try {
+            RoomProcessing.sendMessage(server, message);
+            responseMessage = new Message(MessageStatus.ACCEPTED);
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            responseMessage = new Message(MessageStatus.ERROR).setText("An internal error occurred");
+        }
+        return responseMessage;
     }
 
     /**

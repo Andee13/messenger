@@ -104,6 +104,7 @@ public class RoomProcessing {
         newRoom.setServer(server);
         newRoom.setAdminId(adminId);
         newRoom.setRoomId(newRoomId);
+        newRoom.getMembers().add(adminId);
         for (int clientId : clientsIds) {
             newRoom.getMembers().add(clientId);
         }
@@ -171,7 +172,7 @@ public class RoomProcessing {
      * @param           server the server where where the room is located
      * @param           message the text message to be sent
      *
-     * @throws          IOException in case if some kind of I/O exception has occured
+     * @throws          IOException in case if some kind of I/O exception has occurred
      *                  e.g. {@code sever.getConfig()} does not return a valid configuration set,
      *
      * @exception       ClientNotFoundException in case if the client specified by the {@code message.getFromId()}

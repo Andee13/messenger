@@ -26,6 +26,7 @@ public class Client implements Saveable {
     private int clientId;
     @XmlJavaTypeAdapter(SetAdapter.class)
     private Set<Integer> rooms;
+    //TODO to write a wrapper
     @XmlJavaTypeAdapter(SetAdapter.class)
     private Set<Integer> friends;
     @XmlElement

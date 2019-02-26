@@ -68,7 +68,7 @@ public class Message {
         return this;
     }
 
-    public int getRoomId() {
+    public Integer getRoomId() {
         return roomId;
     }
 
@@ -108,7 +108,7 @@ public class Message {
         return status;
     }
 
-    public int getFromId() {
+    public Integer getFromId() {
         return fromId;
     }
 
@@ -117,7 +117,7 @@ public class Message {
         return this;
     }
 
-    public int getToId() {
+    public Integer getToId() {
         return toId;
     }
 
