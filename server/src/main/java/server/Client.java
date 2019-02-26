@@ -122,14 +122,19 @@ public class Client implements Saveable {
         this.password = password;
     }
 
-    private static class SetAdapter extends XmlAdapter<HashSet<Integer>, Set<Integer>> {
+    private static class SetAdapter extends XmlAdapter<Integer[], Set<Integer>> {
         @Override
-        public Set<Integer> unmarshal(HashSet<Integer> v) throws Exception {
+        public Set<Integer> unmarshal(Integer[] v) {
             return FXCollections.synchronizedObservableSet(FXCollections.observableSet(v));
         }
         @Override
-        public HashSet<Integer> marshal(Set<Integer> v) throws Exception {
-            return new HashSet<>(v);
+        public Integer[] marshal(Set<Integer> v)  {
+            Integer [] result = new Integer[v.size()];
+            int index = 0;
+            for (int i : v) {
+                result[index++] = i;
+            }
+            return result;
         }
     }
 
@@ -216,11 +221,13 @@ public class Client implements Saveable {
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(this, clientFile);
             Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
             Client clientToCheck = (Client) unmarshaller.unmarshal(clientFile);
             return equals(clientToCheck);
         } catch (JAXBException e) {
+            e.printStackTrace();
             LOGGER.warn(e.getLocalizedMessage());
             return false;
         }

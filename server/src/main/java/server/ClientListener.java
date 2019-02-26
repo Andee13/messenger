@@ -176,6 +176,10 @@ public class ClientListener extends Thread{
         }
         try {
             sendResponseMessage(responseMessage);
+            if (MessageStatus.REGISTRATION.equals(message.getStatus())) {
+                sendResponseMessage(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
+                closeClientSession();
+            }
         } catch (IOException e) {
             LOGGER.fatal(e.getLocalizedMessage());
             if (logged) {
@@ -272,22 +276,14 @@ public class ClientListener extends Thread{
         } catch (IOException e) {
             return new Message(MessageStatus.ERROR).setText("Internal error");
         }
-        try {
-            Client client = new Client();
-            client.setLogin(login);
-            client.setServer(server);
-            client.setPassword(password);
-            client.setClientId(login.hashCode());
-            JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
-            Marshaller marshaller = jaxbContext.createMarshaller();
-            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-            marshaller.marshal(client,clientFile);
-            return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
-                    .append(login).append(" has been successfully created").toString());
-        } catch (JAXBException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            return new Message(MessageStatus.ERROR).setText("Internal problem");
-        }
+        Client client = new Client();
+        client.setLogin(login);
+        client.setServer(server);
+        client.setPassword(password);
+        client.setClientId(login.hashCode());
+        client.save();
+        return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
+                .append(login).append(" has been successfully created").toString());
     }
 
     /**
@@ -309,11 +305,12 @@ public class ClientListener extends Thread{
         * i.e. the client with such id must exists
         * */
         try {
-            // TODO npe here
             Room room = RoomProcessing.createRoom(server, message.getFromId());
             if (room == null) {
                 return new Message(MessageStatus.ERROR).setText("Some error has occurred during the room creation");
             } else {
+                client.getRooms().add(room.getRoomId());
+                client.save();
                 return new Message(MessageStatus.ACCEPTED).setRoomId(room.getRoomId())
                         .setText(new StringBuilder("The room id: ").append(room.getRoomId())
                                 .append(" has been successfully created").toString());

@@ -189,6 +189,24 @@ public class Main {
 
         System.err.println(properties.equals(properties1));*/
 
+
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        StringWriter stringWriter = new StringWriter();
+
+        Message message = new Message(MessageStatus.REGISTRATION).setLogin("Puser").setPassword("password");
+        Socket socket = new Socket("localhost", 5940);
+
+        DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+        marshaller.marshal(message, stringWriter);
+
+        dataOutputStream.writeUTF(stringWriter.toString());
+        dataOutputStream.flush();
+
+        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+
+        System.out.println(dataInputStream.readUTF());*/
+
         JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
