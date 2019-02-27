@@ -5,6 +5,7 @@ import common.message.MessageStatus;
 import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import server.room.Room;
 
 import javax.security.auth.login.FailedLoginException;
 import javax.xml.bind.JAXBContext;
@@ -472,6 +473,7 @@ public class ServerProcessing {
      * @throws          IOException if an I/O error occurs
      *
      * @return          an instance of {@code Message} that has been received from the server
+     *                  or {@code null} if {@code SocketException} has occurred (e.g. client closed the connection)
      * */
     private static Message sendAndWait(Message message, Socket socket, int timeout) throws IOException {
         if (message == null) {
@@ -511,6 +513,9 @@ public class ServerProcessing {
         } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
+        } catch (SocketException e) {
+            LOGGER.warn("The connection was closed");
+            return null;
         }
     }
 
@@ -536,28 +541,64 @@ public class ServerProcessing {
      *  The method {@code save} handles with invocation the {@code save()} method on every item of the passed collection
      * For example, it is invoked when server is being stopped.
      *
-     * NOTE! The method will skip {@code null} items if the passed {@code items} contains them
+     *  NOTE! It is expected that you do not pass any {@code null} values to this method
      *
      * @return          {@code true} if and only if every item has been successfully saved, {@code false otherwise}
      * */
     public static <K extends Object, V extends Saveable> boolean save(Set<Map.Entry<K, V>> items) {
+        boolean totalSuccess = true;
         if (items == null) {
             LOGGER.error("Attempt to save null");
             throw new NullPointerException("Collection has not been set");
         }
         try {
             for (Map.Entry<?, ? extends Saveable> entry : items) {
-                if (entry == null || entry.getValue() == null) {
+                if (entry.getValue() == null) {
                     continue;
                 }
                 if (!entry.getValue().save()) {
-                    return false;
+                    totalSuccess = false;
                 }
             }
-            return true;
+            return totalSuccess;
         } catch (Exception e) {
             LOGGER.error(e.getLocalizedMessage());
             return false;
         }
+    }
+
+    private static void saveRooms(Server server) {
+        if (server == null || server.getOnlineRooms() == null) {
+            String errorMessage = (server == null ? "A server" : "A set of online rooms").concat(" has not been set");
+            LOGGER.error(errorMessage);
+            throw new NullPointerException(errorMessage);
+        }
+        for (Map.Entry<Integer, Room> entry : server.getOnlineRooms().entrySet()) {
+            if (entry.getValue().getServer() != null && !entry.getValue().save()) {
+                LOGGER.error(new StringBuilder("Room id ").append(entry.getValue().getRoomId())
+                        .append(" has not been saved"));
+            }
+        }
+    }
+
+    private static void saveClients(Server server) {
+        if (server == null || server.getOnlineClients() == null) {
+            String errorMessage = (server == null ? "A server" : "A set of online clients").concat(" has not been set");
+            LOGGER.error(errorMessage);
+            throw new NullPointerException(errorMessage);
+        }
+        for (Map.Entry<Integer, ClientListener> entry : server.getOnlineClients().entrySet()) {
+            if (entry.getValue().getClient() != null && !entry.getValue().getClient().save()) {
+                LOGGER.error(new StringBuilder("Client id ").append(entry.getValue().getClient().getClientId())
+                        .append(" has not been saved"));
+            }
+        }
+    }
+
+    public static void stopServerSafety(Server server) {
+        saveClients(server);
+        saveRooms(server);
+        server.save();
+        server.interrupt();
     }
 }

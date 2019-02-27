@@ -26,7 +26,6 @@ public class Server extends Thread implements Saveable {
     private File roomsDir;
     private File serverConfigFile;
 
-
     public Properties getConfig() {
         return config;
     }
@@ -149,78 +148,36 @@ public class Server extends Thread implements Saveable {
 
     @Override
     public void run() {
-        /*if (!ServerProcessing.arePropertiesValid(config)) {
+        if (!ServerProcessing.arePropertiesValid(config)) {
             LOGGER.fatal("Unable to start the server. Server configurations are not valid.");
             interrupt();
             return;
-        }*/
-        ServerSocket serverSocket;
+        }
         Socket socket;
-        try {
-            serverSocket = new ServerSocket(Integer.parseInt(config.getProperty("port")));
+        try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(config.getProperty("port")))) {
+            while (!isInterrupted()) {
+                try {
+                    socket = serverSocket.accept();
+                    LOGGER.info(new StringBuilder("Incoming connection from: ")
+                            .append(socket.getInetAddress()).toString());
+                    ClientListener clientListener = new ClientListener(this, socket);
+                    clientListener.run();
+                } catch (IOException e) {
+                    LOGGER.error(e.getLocalizedMessage());
+                }
+            }
         } catch (IOException e) {
             LOGGER.fatal("Error occurred while starting the server: ".concat(e.getLocalizedMessage()));
-            interrupt();
-            return;
-        }
-        while (true) {
-            try {
-                socket = serverSocket.accept();
-                LOGGER.info(new StringBuilder("Incoming connection from: ")
-                        .append(socket.getInetAddress()).toString());
-                ClientListener clientListener = new ClientListener(this, socket);
-                clientListener.run();
-            } catch (IOException e) {
-               LOGGER.error(e.getLocalizedMessage());
-               if (!ServerProcessing.save(onlineClients.entrySet())) {
-                   LOGGER.warn("Some clients data has not been saved properly. Please, check it out");
-               }
-               if (!ServerProcessing.save(onlineRooms.entrySet())) {
-                   LOGGER.warn("Some rooms data has not been saved properly. Please, check it out");
-               }
-            }
+        } finally {
+            ServerProcessing.stopServerSafety(this);
         }
     }
-
-
 
     /**
      *  The method {@code clodseClientSession} just invokes the analogous method of the specified {@code ClientListener}
      * */
     public void closeClientSession (@NotNull ClientListener client) throws IOException {
         client.closeClientSession();
-    }
-
-    /**
-     *  The method {@code loadRoomToOnlineRooms} loads the specified room's data representing it by an instance of {@code Room}
-     *
-     * @param           roomId the id of the room to be load
-     *
-     * @exception       IllegalStateException if server configuration have not been set
-     *
-     * @exception       RoomNotFoundException there is not such room registered on the server     *
-     * */
-    public void loadRoomToOnlineRooms(int roomId) {
-        if (config == null) {
-            throw new IllegalStateException("Server configurations have not been set");
-        }
-        if (RoomProcessing.hasRoomBeenCreated(config, roomId) == 0L) {
-            throw new RoomNotFoundException("Unable to find the room id ".concat(String.valueOf(roomId)));
-        }
-        Room room;
-        try {
-            room = RoomProcessing.getRoom(this, roomId);
-            onlineRooms.put(roomId, room);
-        } catch (IOException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            throw new RuntimeException(e);
-        }
-        try {
-            onlineRooms.put(roomId, RoomProcessing.getRoom(this, roomId));
-        } catch (IOException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            throw new IllegalArgumentException(e);
-        }
     }
 
     /**
@@ -260,36 +217,17 @@ public class Server extends Thread implements Saveable {
             LOGGER.warn("Saving the server has been failed: server configuration file must not be null");
             return false;
         }
-        try (FileInputStream fileInputStream = new FileInputStream(serverConfigFile);
-             BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
-            Properties propertiesToCheck = new Properties();
-            propertiesToCheck.loadFromXML(bufferedInputStream);
-            if(propertiesToCheck.equals(config)){
-                return true;
-            }
-        } catch (Exception e) {
-            LOGGER.warn(e.getLocalizedMessage());
-        }
-        try (FileOutputStream fileOutputStream = new FileOutputStream(serverConfigFile);
-             BufferedOutputStream streamToClose = new BufferedOutputStream(fileOutputStream)) {
-            config.storeToXML(new BufferedOutputStream(fileOutputStream), null);
-            streamToClose.flush();
-        } catch (IOException e) {
-            LOGGER.warn(new StringBuilder("Saving the server has been failed: ")
-                    .append(e.getLocalizedMessage()).toString());
+        try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(serverConfigFile))) {
+            config.storeToXML(bos, null);
+            boolean allClientsHaveBeenSaved = ServerProcessing.save(onlineClients.entrySet());
+            boolean allRoomsHaveBeenSaved = ServerProcessing.save(onlineRooms.entrySet());
+            return allClientsHaveBeenSaved && allRoomsHaveBeenSaved;
+        } catch (FileNotFoundException e) {
+            LOGGER.error("Unable to find a server configuration file ".concat(serverConfigFile.getAbsolutePath()));
             return false;
-        }
-        try (FileInputStream fileInputStream = new FileInputStream(serverConfigFile);
-        BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
-            Properties propertiesToCheck = new Properties();
-            propertiesToCheck.loadFromXML(bufferedInputStream);
-            return propertiesToCheck.equals(config);
         } catch (IOException e) {
-            LOGGER.error(new StringBuilder("Saving the server has been failed: ").append(e.getLocalizedMessage()));
-            LOGGER.warn(new StringBuilder("Please, check the server configuration file ")
-                    .append(serverConfigFile == null ? "null" : serverConfigFile.getAbsolutePath()));
+            LOGGER.error(e.getLocalizedMessage());
             return false;
-
         }
     }
 }

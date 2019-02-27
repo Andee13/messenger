@@ -48,22 +48,7 @@ public class Room implements Saveable {
             messageHistory = FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
         }
         ((ObservableList<Message>)messageHistory).addListener((ListChangeListener<Message>) c -> {
-            c.next();
-            for (Message message : c.getAddedSubList()) {
-                for (int clientId : members) {
-                    if (server.getOnlineClients().containsKey(clientId)) {
-                        ClientListener clientListener = server.getOnlineClients().get(clientId);
-                        Message messageToInformClient = message;
-                        if (c.wasRemoved()) {
-                            messageToInformClient = new Message(MessageStatus.REMOVED_MESSAGE)
-                                    .setToId(message.getToId()).setFromId(message.getFromId())
-                                    .setCreationDateTime(message.getCreationDateTime())
-                                    .setRoomId(message.getRoomId()).setText(message.getText());
-                        }
-                        clientListener.sendResponseMessage(messageToInformClient);
-                    }
-                }
-            }
+            // TODO logic of change notification
         });
     }
 
@@ -132,12 +117,11 @@ public class Room implements Saveable {
 
     private static final class MembersObservableSetAdapter extends XmlAdapter<MembersObservableSetWrapper, Set<Integer>>{
         @Override
-        public Set<Integer> unmarshal(MembersObservableSetWrapper v) throws Exception {
+        public Set<Integer> unmarshal(MembersObservableSetWrapper v) {
             return v.getMembers();
         }
-
         @Override
-        public MembersObservableSetWrapper marshal(Set<Integer> v) throws Exception {
+        public MembersObservableSetWrapper marshal(Set<Integer> v) {
             MembersObservableSetWrapper membersObservableSetWrapper = new MembersObservableSetWrapper();
             membersObservableSetWrapper.setMembers(new HashSet<>(v));
             return membersObservableSetWrapper;
@@ -198,19 +182,16 @@ public class Room implements Saveable {
     @XmlAccessorType(XmlAccessType.FIELD)
     private static final class MessageHistoryObservableListWrapper {
         @XmlElement(name="message")
-        private List<Message> messages;
-
+        private List<Message> messages =
+                FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
         public MessageHistoryObservableListWrapper() {
         }
-
         public MessageHistoryObservableListWrapper(List<Message> list) {
             FXCollections.synchronizedObservableList(FXCollections.observableList(list));
         }
-
         public List<Message> getMessages() {
             return messages;
         }
-
         public void setMessages(List<Message> messages) {
             this.messages = FXCollections.synchronizedObservableList(FXCollections.observableList(messages));
         }
@@ -264,5 +245,4 @@ public class Room implements Saveable {
             return false;
         }
     }
-
 }

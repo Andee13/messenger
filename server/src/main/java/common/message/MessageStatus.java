@@ -13,11 +13,8 @@ public enum MessageStatus {
     DENIED,
     ERROR,
     STOP_SERVER,
-    GETSTATE,
-    STATE,
     KICK,
     NEW_MESSAGE,
-    REMOVED_MESSAGE,
     NEW_ROOM_MEMBER,
     MEMBER_LEFT_ROOM
 }

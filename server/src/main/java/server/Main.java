@@ -238,12 +238,24 @@ public class Main {
 
         System.out.println(dataInputStream.readUTF());
 
-        message = new Message(MessageStatus.MESSAGE).setText("Hello world :)").setFromId("Puser".hashCode()).setRoomId(1521425880);
+        message = new Message(MessageStatus.MESSAGE).setText("Hello world :)")
+                .setFromId("Puser".hashCode()).setRoomId(871831934);
         stringWriter = new StringWriter();
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
         System.out.println(dataInputStream.readUTF());
 
+        Socket socket1 = new Socket("localhost", 5940);
+        DataOutputStream dataOutputStream1 = new DataOutputStream(socket1.getOutputStream());
+        DataInputStream dataInputStream1 = new DataInputStream(socket1.getInputStream());
+
+        message = new Message(MessageStatus.STOP_SERVER).setLogin("God").setPassword("change_me");
+
+        stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream1.writeUTF(stringWriter.toString());
+
+        System.out.println(dataInputStream1.readUTF());
     }
 }

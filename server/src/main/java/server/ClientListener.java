@@ -21,6 +21,7 @@ import javax.xml.xpath.*;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -58,13 +59,13 @@ public class ClientListener extends Thread implements Saveable{
     public ClientListener(Server server, Socket socket) throws IOException {
         this.server = server;
         this.socket = socket;
+        socket.setSoTimeout(1000 /*ms*/ * 60 /*s*/ * 60 /*m*/);
         connected = LocalDateTime.now();
         out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
         in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
     }
 
-    @Override
-    public void run() {
+    private void identify() {
         try {
             while (!logged) {
                 ++connectAttempts;
@@ -97,30 +98,43 @@ public class ClientListener extends Thread implements Saveable{
                 }
             }
         } catch (SocketException e) {
-            if (logged) {
+            if (client != null) {
                 client.save();
             }
             interrupt();
-            return;
         } catch(IOException e) {
             LOGGER.fatal(e.getLocalizedMessage());
-            throw new RuntimeException(e);
+            interrupt();
         }
-        while (true) {
+    }
+
+    @Override
+    public void run() {
+        if (server == null) {
+            throw new IllegalStateException("Any server has not been specified");
+        }
+        while (!isInterrupted()) {
             try {
                 handle(Message.from(in.readUTF()));
                 lastInputMessage = LocalDateTime.now();
             } catch (SocketException e) {
-                if (logged) {
-                    client.save();
+                if (logged && client != null) {
+                    closeClientSession();
                 }
                 break;
+            } catch (SocketTimeoutException e) {
+                Message kickMessage = new Message(MessageStatus.KICK).setText("You have been AFK too long");
+                sendResponseMessage(kickMessage);
             } catch (Exception e) {
                 sendResponseMessage(new Message(MessageStatus.ERROR)
                             .setText(e.getClass().getName().concat(" occurred while handling the message")));
+            } finally {
+                if (client != null && !closeClientSession()) {
+                    LOGGER.error("Failed to save client id ".concat(String.valueOf(client.getClientId())));
+                }
+                interrupt();
             }
         }
-        interrupt();
     }
 
     public Socket getSocket() {
@@ -139,51 +153,99 @@ public class ClientListener extends Thread implements Saveable{
         return LocalDateTime.from(lastInputMessage);
     }
 
-    private void handle(Message message) {
-        if(message == null) {
-            throw new NullPointerException("Message must not be null");
-        }
+    private boolean isMessageFromLoggedUser(Message message) {
         if (logged && (message.getFromId() == null || message.getFromId() != client.getClientId())) {
-            sendResponseMessage(new Message(MessageStatus.ERROR).setText("Wrong clientId"));
+            LOGGER.warn(new StringBuilder("Expected to receive clientId ").append(client.getClientId())
+                    .append(" but found ").append(message.getFromId()).toString());
+            return false;
         }
-        Message responseMessage = null;
-        switch (message.getStatus()) {
-            case AUTH:
-                responseMessage = auth(message);
-                break;
-            case REGISTRATION:
-                responseMessage = registration(message);
+        return true;
 
-                break;
-            case MESSAGE:
-                try {
-                    RoomProcessing.sendMessage(server, message);
-                    responseMessage = new Message(MessageStatus.ACCEPTED);
-                } catch (IOException e) {
-                    LOGGER.error(e.getLocalizedMessage());
-                    responseMessage = new Message(MessageStatus.ERROR)
-                            .setText("Internal error. Message has not been sent");
-                }
-                break;
-            case USERBAN:
-                break;
-            case CREATE_ROOM:
-                responseMessage = createRoom(message);
-                break;
-            case DELETE_ROOM:
-                break;
-            case INVITE_USER:
-                break;
-            case UNINVITE_USER:
-                break;
+    }
+
+    private void handle(Message message) {
+        Message responseMessage = null;
+        try {
+            switch (message.getStatus()) {
+                case AUTH:
+                    responseMessage = auth(message);
+                    break;
+                case REGISTRATION:
+                    responseMessage = registration(message);
+                    break;
+                case MESSAGE:
+                    if (!isMessageFromLoggedUser(message)) {
+                        responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
+                    }
+                    try {
+                        RoomProcessing.sendMessage(server, message);
+                        responseMessage = new Message(MessageStatus.ACCEPTED);
+                    } catch (IOException e) {
+                        LOGGER.error(e.getLocalizedMessage());
+                        responseMessage = new Message(MessageStatus.ERROR)
+                                .setText("Internal error. Message has not been sent");
+                    }
+                    break;
+                case USERBAN:
+                    break;
+                case CREATE_ROOM:
+                    if (!isMessageFromLoggedUser(message)) {
+                        responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
+                    }
+                    responseMessage = createRoom(message);
+                    break;
+                case DELETE_ROOM:
+                    if (!isMessageFromLoggedUser(message)) {
+                        responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
+                    }
+                    break;
+                case INVITE_USER:
+                    if (!isMessageFromLoggedUser(message)) {
+                        responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
+                    }
+                    break;
+                case UNINVITE_USER:
+                    if (!isMessageFromLoggedUser(message)) {
+                        responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
+                    }
+                case STOP_SERVER:
+                    responseMessage = stopServer(message);
+                    break;
                 default: throw new RuntimeException(new StringBuilder("Unknown message status")
                         .append(message.getStatus().toString()).toString());
+            }
+        } catch (Exception e) {
+            LOGGER.error(e.getLocalizedMessage());
+            responseMessage = new Message(MessageStatus.ERROR)
+                    .setText(new StringBuilder("Internal ").append(e.getClass().getName()).append(" occurred").toString());
+        } finally {
+            sendResponseMessage(responseMessage);
+            if (MessageStatus.REGISTRATION.equals(message.getStatus())
+                    && MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
+                sendResponseMessage(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
+                closeClientSession();
+            }
         }
-        sendResponseMessage(responseMessage);
-        if (MessageStatus.REGISTRATION.equals(message.getStatus())
-                && MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
-            sendResponseMessage(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
-            closeClientSession();
+    }
+
+    private Message stopServer(@NotNull Message message) {
+        if (!MessageStatus.STOP_SERVER.equals(message.getStatus())) {
+            String errorMessage = new StringBuilder("Message of status ").append(MessageStatus.STOP_SERVER)
+                    .append(" was expected, but found ").append(message.getStatus()).toString();
+            LOGGER.warn(errorMessage);
+            throw new IllegalArgumentException(errorMessage);
+        }
+        if (!server.getConfig().getProperty("server_login").equals(message.getLogin())
+                || !server.getConfig().getProperty("server_password").equals(message.getPassword())) {
+            return new Message(MessageStatus.DENIED).setText("Please, check your login and password");
+        }
+        ServerProcessing.stopServerSafety(server);
+        if (server.isInterrupted()) {
+            LOGGER.trace("The server has been stopped from address ".concat(socket.getInetAddress().toString()));
+            return new Message(MessageStatus.ACCEPTED).setText("The server has been stopped");
+        } else {
+            LOGGER.trace("Attempt to stop the server has been failed");
+            return new Message(MessageStatus.ERROR).setText("Unable to stop the server");
         }
     }
 
@@ -380,7 +442,9 @@ public class ClientListener extends Thread implements Saveable{
             marshaller.marshal(message, stringWriter);
             out.writeUTF(stringWriter.toString());
             out.flush();
-        } catch (JAXBException | IOException e) {
+        } catch (SocketException e) {
+            LOGGER.warn("The connection was closed");
+        } catch (IOException | JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
         }
     }
@@ -397,25 +461,16 @@ public class ClientListener extends Thread implements Saveable{
      *                  {@code false} otherwise
      * */
     public boolean closeClientSession() {
-        if(isAlive() && !isInterrupted()){
-            try {
-                in.close();
-                out.close();
-                socket.close();
-            } catch (IOException e) {
-                LOGGER.error(e.getLocalizedMessage());
-                return false;
-            }
-            if (logged) {
-                if (!client.save()) {
-                    return false;
-                }
-                server.getOnlineClients().remove(client.getClientId());
-            }
-            interrupt();
-            return !server.getOnlineClients().containsKey(client.getClientId());
+        try {
+            socket.close();
+            in.close();
+            out.close();
+            server.getOnlineClients().remove(client.getClientId());
+            return socket.isClosed() && client.save() && !server.getOnlineClients().containsKey(client.getClientId());
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false;
         }
-        return false;
     }
 
     /**
@@ -531,28 +586,6 @@ public class ClientListener extends Thread implements Saveable{
         }
         target.setIsBannedUntill(willBebannedUntill);
         target.setBaned(true);
-    }
-
-    private void leaveRoom(@NotNull Message message) {
-        int roomId = message.getRoomId();
-        int fromId = message.getFromId();
-        if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), roomId) == 0L) {
-            throw new RoomNotFoundException("Unable to find the room id ".concat(String.valueOf(roomId)));
-        }
-        if (!ClientListener.clientExists(server.getConfig(), fromId)) {
-            throw new ClientNotFoundException("Unable to find the client id ".concat(String.valueOf(fromId)));
-        }
-        Room room;
-        if (!server.getOnlineRooms().containsKey(roomId)) {
-            server.loadRoomToOnlineRooms(roomId);
-        }
-        room = server.getOnlineRooms().get(roomId);
-        if (room.getMembers().contains(fromId)) {
-            room.getMembers().remove(fromId);
-        } else {
-            throw new ClientNotFoundException(new StringBuilder("The client id ").append(fromId)
-                    .append(" is not a member of a room id ").append(roomId).toString());
-        }
     }
 
     private static Client loadClient(Properties serverProperties, int clientId) {

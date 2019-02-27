@@ -51,6 +51,7 @@ public class RoomProcessing {
         File roomFile = new File(roomDir, roomDir.getName().concat(".xml"));
         if(roomFile.isFile()) {
             try {
+                LOGGER.trace("Loading the room id ".concat(String.valueOf(roomId)));
                 JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
                 Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
@@ -211,7 +212,7 @@ public class RoomProcessing {
         }
         // Checking whether the specified room is in the server "online" rooms set
         if (!server.getOnlineRooms().containsKey(roomId)) {
-            server.loadRoomToOnlineRooms(roomId);
+            // TODO load room to online rooms
         }
         Room room = server.getOnlineRooms().get(roomId);
         room.getMessageHistory().add(message);
