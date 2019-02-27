@@ -53,18 +53,14 @@ public class Room implements Saveable {
                 for (int clientId : members) {
                     if (server.getOnlineClients().containsKey(clientId)) {
                         ClientListener clientListener = server.getOnlineClients().get(clientId);
-                        try {
-                            Message messageToInformClient = message;
-                            if (c.wasRemoved()) {
-                                messageToInformClient = new Message(MessageStatus.REMOVED_MESSAGE)
-                                        .setToId(message.getToId()).setFromId(message.getFromId())
-                                        .setCreationDateTime(message.getCreationDateTime())
-                                        .setRoomId(message.getRoomId()).setText(message.getText());
-                            }
-                            clientListener.sendResponseMessage(messageToInformClient);
-                        } catch (IOException e) {
-                            LOGGER.error(e.getLocalizedMessage());
+                        Message messageToInformClient = message;
+                        if (c.wasRemoved()) {
+                            messageToInformClient = new Message(MessageStatus.REMOVED_MESSAGE)
+                                    .setToId(message.getToId()).setFromId(message.getFromId())
+                                    .setCreationDateTime(message.getCreationDateTime())
+                                    .setRoomId(message.getRoomId()).setText(message.getText());
                         }
+                        clientListener.sendResponseMessage(messageToInformClient);
                     }
                 }
             }
@@ -87,11 +83,7 @@ public class Room implements Saveable {
                         roomClientsChangeNotification = new Message(MessageStatus.NEW_ROOM_MEMBER).setRoomId(roomId)
                                 .setFromId(change.getElementAdded());
                     }
-                    try {
-                        clientListener.sendResponseMessage(roomClientsChangeNotification);
-                    } catch (IOException e) {
-                        LOGGER.error(e.getLocalizedMessage());
-                    }
+                    clientListener.sendResponseMessage(roomClientsChangeNotification);
                 }
             }
         });
@@ -266,10 +258,7 @@ public class Room implements Saveable {
             Marshaller marshaller = jaxbContext.createMarshaller();
             marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(this, roomFile);
-            // TODO distinguish the logic of saving checking to another (new) method
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            Room unmarshalledRoom = (Room) unmarshaller.unmarshal(roomFile);
-            return this.equals(unmarshalledRoom);
+            return true;
         } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
             return false;

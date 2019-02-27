@@ -1,8 +1,5 @@
 package server;
 
-import java.io.InputStream;
-import java.io.OutputStream;
-
 /**
  *  This interface marks entities that are able to be saved to place depending on their specific
  *

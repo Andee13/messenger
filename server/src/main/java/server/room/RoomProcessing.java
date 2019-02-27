@@ -29,7 +29,7 @@ public class RoomProcessing {
      * of two or more clients
      *
      * @param           roomId is an id of the room to be searched
-     * @param           serverConfig a server configuration file
+     * @param           server a server containing {@code room}
      *
      * @throws          IOException if {@code serverConfig} is not valid e.g. is {@code null}
      *                  or the specified in the {@code serverConfig} filepath does not points an existing file
@@ -38,11 +38,15 @@ public class RoomProcessing {
      *                  if there is not such room in the rooms directory of the server
      *                  than the method will return {@code null}
      * */
-    public static Room getRoom(Properties serverConfig, int roomId) throws IOException {
-        if (!ServerProcessing.arePropertiesValid(serverConfig)) {
-            throw new IOException("Properties are not valid");
+    public static Room getRoom(Server server, int roomId) throws IOException {
+        if (server == null) {
+            LOGGER.error("Passed null server value");
+            throw new NullPointerException("Server must not be null");
         }
-        File roomsDir = new File(serverConfig.getProperty("roomsDir"));
+        if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
+            throw new IOException("Server configurations are not valid");
+        }
+        File roomsDir = new File(server.getConfig().getProperty("roomsDir"));
         File roomDir = new File(roomsDir, String.valueOf(roomId));
         File roomFile = new File(roomDir, roomDir.getName().concat(".xml"));
         if(roomFile.isFile()) {
@@ -50,6 +54,7 @@ public class RoomProcessing {
                 JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
                 Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
+                room.setServer(server);
                 return room;
             } catch (JAXBException e) {
                 LOGGER.error(e.getLocalizedMessage());
@@ -114,7 +119,7 @@ public class RoomProcessing {
             throw new RuntimeException(errorMessage);
         }
         try {
-            return getRoom(server.getConfig(), newRoomId);
+            return getRoom(server, newRoomId);
         } catch (Exception e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);

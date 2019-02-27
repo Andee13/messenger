@@ -2,6 +2,7 @@ package server;
 
 import common.message.Message;
 import common.message.MessageStatus;
+import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
@@ -12,8 +13,7 @@ import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 import java.io.*;
 import java.net.*;
-import java.util.InvalidPropertiesFormatException;
-import java.util.Properties;
+import java.util.*;
 
 /**
  *  This class contains methods which operates with an instance of {@code Server}
@@ -530,5 +530,34 @@ public class ServerProcessing {
         File clientDir = new File(clientsDir, String.valueOf(id));
         File clientXml = new File(clientDir, String.valueOf(id).concat(".xml"));
         return clientDir.isDirectory() && clientXml.isFile();
+    }
+
+    /**
+     *  The method {@code save} handles with invocation the {@code save()} method on every item of the passed collection
+     * For example, it is invoked when server is being stopped.
+     *
+     * NOTE! The method will skip {@code null} items if the passed {@code items} contains them
+     *
+     * @return          {@code true} if and only if every item has been successfully saved, {@code false otherwise}
+     * */
+    public static <K extends Object, V extends Saveable> boolean save(Set<Map.Entry<K, V>> items) {
+        if (items == null) {
+            LOGGER.error("Attempt to save null");
+            throw new NullPointerException("Collection has not been set");
+        }
+        try {
+            for (Map.Entry<?, ? extends Saveable> entry : items) {
+                if (entry == null || entry.getValue() == null) {
+                    continue;
+                }
+                if (!entry.getValue().save()) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false;
+        }
     }
 }

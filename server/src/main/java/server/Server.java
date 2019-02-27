@@ -122,6 +122,8 @@ public class Server extends Thread implements Saveable {
      *                  e.g. is {@code null}, does not contain a property or it is not valid
      * */
     public Server(@NotNull File serverPropertiesFile) throws InvalidPropertiesFormatException {
+        initOnlineClients();
+        initOnlineRooms();
         if (!ServerProcessing.arePropertiesValid(serverPropertiesFile)) {
             throw new InvalidPropertiesFormatException("Either the specified properties or file are/is invalid");
         }
@@ -135,6 +137,14 @@ public class Server extends Thread implements Saveable {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
+    }
+
+    private void initOnlineClients() {
+        onlineClients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+    }
+
+    private void initOnlineRooms() {
+        onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
     }
 
     @Override
@@ -162,9 +172,17 @@ public class Server extends Thread implements Saveable {
                 clientListener.run();
             } catch (IOException e) {
                LOGGER.error(e.getLocalizedMessage());
+               if (!ServerProcessing.save(onlineClients.entrySet())) {
+                   LOGGER.warn("Some clients data has not been saved properly. Please, check it out");
+               }
+               if (!ServerProcessing.save(onlineRooms.entrySet())) {
+                   LOGGER.warn("Some rooms data has not been saved properly. Please, check it out");
+               }
             }
         }
     }
+
+
 
     /**
      *  The method {@code clodseClientSession} just invokes the analogous method of the specified {@code ClientListener}
@@ -191,14 +209,14 @@ public class Server extends Thread implements Saveable {
         }
         Room room;
         try {
-            room = RoomProcessing.getRoom(config, roomId);
+            room = RoomProcessing.getRoom(this, roomId);
             onlineRooms.put(roomId, room);
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
         try {
-            onlineRooms.put(roomId, RoomProcessing.getRoom(config, roomId));
+            onlineRooms.put(roomId, RoomProcessing.getRoom(this, roomId));
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new IllegalArgumentException(e);

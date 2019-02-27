@@ -18,6 +18,13 @@ public class Main {
 
     //private static final Logger logger = Logger.getLogger(Main.class);
     public static void main(String[] args) throws ParserConfigurationException, IOException, SAXException, XMLStreamException, JAXBException, XPathExpressionException, URISyntaxException {
+        /*Client client = new Client();
+        client.setLogin("login");
+        client.setPassword("password");
+        client.setClientId("login".hashCode());
+        JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        marshaller.marshal(client,System.out);*/
         
         /*DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
         documentBuilderFactory.setValidating(true);
@@ -174,8 +181,8 @@ public class Main {
             logger.error(i + " error");
         }*/
 
-        File file = new File(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
-        System.out.println(file.getAbsolutePath());
+        /*File file = new File(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
+        System.out.println(file.getAbsolutePath());*/
 
         /*Properties properties = new Properties();
         properties.setProperty("first", "первая пропертя");
@@ -189,7 +196,7 @@ public class Main {
 
         System.err.println(properties.equals(properties1));*/
 
-
+        // REGISTRATION
         /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
@@ -207,6 +214,7 @@ public class Main {
 
         System.out.println(dataInputStream.readUTF());*/
 
+        // AUTHORIZATION + ROOM CREATING
         JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
@@ -230,12 +238,12 @@ public class Main {
 
         System.out.println(dataInputStream.readUTF());
 
-        /*Client client = new Client();
-        client.setLogin("login");
-        client.setPassword("password");
-        client.setClientId("login".hashCode());
-        JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
-        Marshaller marshaller = jaxbContext.createMarshaller();
-        marshaller.marshal(client,System.out);*/
+        message = new Message(MessageStatus.MESSAGE).setText("Hello world :)").setFromId("Puser".hashCode()).setRoomId(1521425880);
+        stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream.writeUTF(stringWriter.toString());
+
+        System.out.println(dataInputStream.readUTF());
+
     }
 }

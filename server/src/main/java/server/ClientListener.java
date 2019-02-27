@@ -22,8 +22,7 @@ import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
 import java.time.LocalDateTime;
-import java.util.InvalidPropertiesFormatException;
-import java.util.Properties;
+import java.util.*;
 
 /**
  *  The class {@code ClientListener} handles operating incoming connections i.e. it's methods
@@ -35,7 +34,7 @@ import java.util.Properties;
  * been performed properly the methods return instances of {@code Message} of statuses {@code MessageStatus.ERROR}
  * or {@code MessageStatus.DENIED}. Some additional information may be provided in the field {@code Message.text}
  * */
-public class ClientListener extends Thread{
+public class ClientListener extends Thread implements Saveable{
     private Socket socket;
     private Server server;
     private DataOutputStream out;
@@ -572,5 +571,29 @@ public class ClientListener extends Thread{
         }
     }
 
+    public Set<Integer> getClientFriendsList () {
+        if (client == null) {
+            LOGGER.error("Attempt to get a set of friends ids of unspecified client");
+            throw new IllegalStateException("Client has not been set");
+        }
+        return client.getFriends();
+    }
 
+    public Set<Integer> getClientRoomsList () {
+        if (client == null) {
+            LOGGER.error("Attempt to get a set of room ids of unspecified client");
+            throw new IllegalStateException("Client has not been set");
+        }
+        return client.getRooms();
+    }
+
+    /**
+     *  Just invokes the same method of the {@code client}
+     *
+     * @return          {@code true} if and only if the {@code client} is set and it has been successfully saved
+     * */
+    @Override
+    public boolean save() {
+        return client != null && client.save();
+    }
 }
