@@ -24,10 +24,9 @@ import java.util.Set;
 public class Client implements Saveable {
     @XmlElement
     private int clientId;
-    @XmlJavaTypeAdapter(SetAdapter.class)
+    @XmlJavaTypeAdapter(RoomsWrapperAdapter.class)
     private Set<Integer> rooms;
-    //TODO to write a wrapper
-    @XmlJavaTypeAdapter(SetAdapter.class)
+    @XmlJavaTypeAdapter(FriendsWrapperAdapter.class)
     private Set<Integer> friends;
     @XmlElement
     private String login;
@@ -240,6 +239,72 @@ public class Client implements Saveable {
         } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
+        }
+    }
+
+    @XmlAccessorType(XmlAccessType.FIELD)
+    private static final class RoomsWrapper {
+        @XmlElement(name="roomId")
+        private Set<Integer> rooms;
+
+        public RoomsWrapper() {
+            rooms = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>()));
+        }
+
+        public RoomsWrapper(Set<Integer> wrappedSet){
+            rooms = wrappedSet;
+        }
+
+        public Set<Integer> getRooms() {
+            return rooms;
+        }
+
+        public void setRooms(HashSet<Integer> rooms) {
+            this.rooms = rooms;
+        }
+    }
+
+    private static final class RoomsWrapperAdapter extends XmlAdapter<RoomsWrapper, Set<Integer>> {
+        @Override
+        public Set<Integer> unmarshal(RoomsWrapper v) {
+            return v.getRooms();
+        }
+        @Override
+        public RoomsWrapper marshal(Set<Integer> v) {
+            return new RoomsWrapper(v);
+        }
+    }
+
+    @XmlAccessorType(XmlAccessType.FIELD)
+    private static final class FriendsWrapper {
+        @XmlElement(name="clientId")
+        private Set<Integer> rooms;
+
+        public FriendsWrapper() {
+            rooms = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>()));
+        }
+
+        public FriendsWrapper(Set<Integer> wrappedSet){
+            rooms = wrappedSet;
+        }
+
+        public Set<Integer> getRooms() {
+            return rooms;
+        }
+
+        public void setRooms(HashSet<Integer> rooms) {
+            this.rooms = rooms;
+        }
+    }
+
+    private static final class FriendsWrapperAdapter extends XmlAdapter<FriendsWrapper, Set<Integer>> {
+        @Override
+        public Set<Integer> unmarshal(FriendsWrapper v) {
+            return v.getRooms();
+        }
+        @Override
+        public FriendsWrapper marshal(Set<Integer> v) {
+            return new FriendsWrapper(v);
         }
     }
 }

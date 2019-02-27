@@ -117,13 +117,8 @@ public class ClientListener extends Thread{
                 }
                 break;
             } catch (Exception e) {
-                try {
-                    sendResponseMessage(new Message(MessageStatus.ERROR)
+                sendResponseMessage(new Message(MessageStatus.ERROR)
                             .setText(e.getClass().getName().concat(" occurred while handling the message")));
-                } catch (IOException e1) {
-                    LOGGER.fatal(e1.getLocalizedMessage());
-                    break;
-                }
             }
         }
         interrupt();
@@ -146,8 +141,11 @@ public class ClientListener extends Thread{
     }
 
     private void handle(Message message) {
-        if(message == null){
+        if(message == null) {
             throw new NullPointerException("Message must not be null");
+        }
+        if (logged && (message.getFromId() == null || message.getFromId() != client.getClientId())) {
+            sendResponseMessage(new Message(MessageStatus.ERROR).setText("Wrong clientId"));
         }
         Message responseMessage = null;
         switch (message.getStatus()) {
@@ -156,6 +154,7 @@ public class ClientListener extends Thread{
                 break;
             case REGISTRATION:
                 responseMessage = registration(message);
+
                 break;
             case MESSAGE:
                 try {
@@ -181,17 +180,11 @@ public class ClientListener extends Thread{
                 default: throw new RuntimeException(new StringBuilder("Unknown message status")
                         .append(message.getStatus().toString()).toString());
         }
-        try {
-            sendResponseMessage(responseMessage);
-            if (MessageStatus.REGISTRATION.equals(message.getStatus())) {
-                sendResponseMessage(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
-                closeClientSession();
-            }
-        } catch (IOException e) {
-            LOGGER.fatal(e.getLocalizedMessage());
-            if (logged) {
-                client.save();
-            }
+        sendResponseMessage(responseMessage);
+        if (MessageStatus.REGISTRATION.equals(message.getStatus())
+                && MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
+            sendResponseMessage(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
+            closeClientSession();
         }
     }
 
@@ -334,9 +327,10 @@ public class ClientListener extends Thread{
         client.setServer(server);
         client.setPassword(password);
         client.setClientId(login.hashCode());
-        client.save();
+        closeClientSession();
         return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
                 .append(login).append(" has been successfully created").toString());
+
     }
 
     /**
@@ -378,7 +372,7 @@ public class ClientListener extends Thread{
         return LocalDateTime.from(connected);
     }
 
-    public void sendResponseMessage(Message message) throws IOException {
+    public void sendResponseMessage(Message message) {
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
@@ -387,22 +381,42 @@ public class ClientListener extends Thread{
             marshaller.marshal(message, stringWriter);
             out.writeUTF(stringWriter.toString());
             out.flush();
-        } catch (JAXBException e) {
+        } catch (JAXBException | IOException e) {
             LOGGER.error(e.getLocalizedMessage());
         }
     }
 
-    public void closeClientSession() throws IOException {
+    /**
+     *  The method {@code closeClientSession} closes client's socket and all the streams were used for wrapping the
+     * socket's streams (i.e. streams have been got by calling {@code socket.getInputStream()},
+     * {@code socket.getOutputStream()})
+     *  Also it saves the client's data if the person has logged in and removes current thread from server list of
+     * online clients
+     *
+     * @return          {@code true} if and only if the client's socket and wrapping streams were successfully closed,
+     *                  current client's id value has been removed from the {@code server} list of online clients
+     *                  {@code false} otherwise
+     * */
+    public boolean closeClientSession() {
         if(isAlive() && !isInterrupted()){
-            in.close();
-            out.close();
-            socket.close();
+            try {
+                in.close();
+                out.close();
+                socket.close();
+            } catch (IOException e) {
+                LOGGER.error(e.getLocalizedMessage());
+                return false;
+            }
             if (logged) {
-                client.save();
+                if (!client.save()) {
+                    return false;
+                }
                 server.getOnlineClients().remove(client.getClientId());
             }
             interrupt();
+            return !server.getOnlineClients().containsKey(client.getClientId());
         }
+        return false;
     }
 
     /**
@@ -557,4 +571,6 @@ public class ClientListener extends Thread{
             throw new RuntimeException(e);
         }
     }
+
+
 }
