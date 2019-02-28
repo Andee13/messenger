@@ -2,7 +2,6 @@ package server;
 
 import common.message.Message;
 import common.message.MessageStatus;
-import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.room.Room;
@@ -15,7 +14,10 @@ import javax.xml.bind.Unmarshaller;
 import java.io.*;
 import java.net.*;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.InvalidPropertiesFormatException;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
 /**
  *  This class contains methods which operates with an instance of {@code Server}
@@ -156,7 +158,12 @@ public class ServerProcessing {
                     .append(properties.getProperty("clientsDir")));
             return false;
         }
-        if(properties.getProperty("messageStorageDimension") == null){
+        try {
+            if(properties.getProperty("messageStorageDimension") == null
+                    || Integer.parseInt(properties.getProperty("messageStorageDimension")) <= 0){
+                return false;
+            }
+        } catch (NumberFormatException e) {
             return false;
         }
         return true;
@@ -318,6 +325,14 @@ public class ServerProcessing {
                     .append(File.separatorChar).append("logs")
                     .append(File.separatorChar).append("folder")
                     .append(File.separatorChar).append("path")
+                    .toString()
+            );
+            // setting the folder where the server configuration file will be stored
+            properties.setProperty("serverConfig",new StringBuilder("change")
+                    .append(File.separatorChar).append("the")
+                    .append(File.separatorChar).append("serverConfig")
+                    .append(File.separatorChar).append("path")
+                    .append(File.separatorChar).append("serverConfig.xml")
                     .toString()
             );
             defaultProperties = properties;
@@ -602,5 +617,35 @@ public class ServerProcessing {
         saveRooms(server);
         server.save();
         server.interrupt();
+    }
+
+    private static void restartServer(Server server) throws IOException, FailedLoginException {
+        restartServer(server.getConfig());
+    }
+
+    private static void restartServer(File serverConfigFile)
+            throws IOException, FailedLoginException {
+        if (!arePropertiesValid(serverConfigFile)) {
+            throw new InvalidPropertiesFormatException(new StringBuilder("The file ")
+                    .append(serverConfigFile.getAbsolutePath())
+                    .append(" does not contain valid server configurations").toString());
+        }
+        Properties properties = new Properties();
+        properties.loadFromXML(new BufferedInputStream(new FileInputStream(serverConfigFile)));
+        restartServer(properties);
+    }
+
+    private static void restartServer(Properties serverProperties) throws IOException, FailedLoginException {
+        if (!arePropertiesValid(serverProperties)) {
+            throw new InvalidPropertiesFormatException(new StringBuilder("The server properties ")
+                    .append(serverProperties)
+                    .append(" does not contain valid server configurations").toString());
+        }
+        if (!isServerLaunched(serverProperties)) {
+            throw new IllegalStateException("The server specified by the properties is not launched");
+        }
+        stopServer(serverProperties);
+        File serverConfigFile = new File(serverProperties.getProperty("serverConfig"));
+        startServer(serverConfigFile);
     }
 }
