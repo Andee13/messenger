@@ -35,6 +35,14 @@ public class LoginController {
             String b = Username.getText();
             String a = password.getText();
             System.out.println(b + " " + a);
+            try {
+                Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Chat.fxml"));
+                App.getStage().setTitle("Hello World");
+                App.getStage().setScene(new Scene(root, 800, 500));
+                App.getStage().show();
+            } catch (IOException ex) {
+                System.out.println(ex);
+            }
         });
         Register.setOnAction(event -> {
 
