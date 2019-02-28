@@ -3,6 +3,7 @@ package common.message;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.Server;
+import server.ServerProcessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -165,11 +166,11 @@ public class Message {
 
     public static class LocalDateTimeAdapter extends XmlAdapter<String, LocalDateTime> {
         public LocalDateTime unmarshal(String v) throws Exception {
-            return LocalDateTime.from(Server.dateTimeFormatter.parse(v));
+            return LocalDateTime.from(ServerProcessing.DATE_TIME_FORMATTER.parse(v));
         }
 
         public String marshal(LocalDateTime v) throws Exception {
-            return Server.dateTimeFormatter.format(v);
+            return ServerProcessing.DATE_TIME_FORMATTER.format(v);
         }
     }
 

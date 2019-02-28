@@ -86,11 +86,11 @@ public class RoomProcessing {
             throw new InvalidPropertiesFormatException("The specified server configurations are not valid");
         }
         if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), adminId)) {
-            throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(adminId)));
+            throw new ClientNotFoundException(adminId);
         }
         for (int id : clientsIds) {
             if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), id)) {
-                throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(id)));
+                throw new ClientNotFoundException(id);
             }
         }
         File roomsDir = new File(server.getConfig().getProperty("roomsDir"));
@@ -202,8 +202,7 @@ public class RoomProcessing {
         }
         // Checking whether the specified user exists
         if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
-            throw new ClientNotFoundException(new StringBuilder("There is not such client id: ")
-                    .append(fromId).append(" registered on the server").toString());
+            throw new ClientNotFoundException(fromId);
         }
         // Checking whether the specified room exists
         long currentTime = System.currentTimeMillis();

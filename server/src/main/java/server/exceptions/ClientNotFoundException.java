@@ -8,14 +8,24 @@ import java.util.NoSuchElementException;
  * */
 public class ClientNotFoundException extends NoSuchElementException {
     private String message;
-
-    public ClientNotFoundException(String message) {
+    private final int clientId;
+    public ClientNotFoundException(int clientId, String message) {
         this.message = message;
+        this.clientId = clientId;
     }
 
-    public ClientNotFoundException(String s, String message) {
+    public ClientNotFoundException(int clientId) {
+        this.clientId = clientId;
+    }
+
+    public ClientNotFoundException(int clientId, String s, String message) {
         super(s);
         this.message = message;
+        this.clientId = clientId;
+    }
+
+    public int getClientId() {
+        return clientId;
     }
 
     @Override

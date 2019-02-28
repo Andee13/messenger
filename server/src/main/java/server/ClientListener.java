@@ -561,7 +561,7 @@ public class ClientListener extends Thread implements Saveable{
 
     private static Client loadClient(Properties serverProperties, int clientId) {
         if (!clientExists(serverProperties, clientId)) {
-            throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(clientId)));
+            throw new ClientNotFoundException(clientId);
         }
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
@@ -602,7 +602,7 @@ public class ClientListener extends Thread implements Saveable{
     }
 
     /**
-     *  The method {@code userBan} handles with requests of blocking a user. It is expected that
+     *  The method {@code clientBan} handles with requests of blocking a user.
      *
      * @param           message an instance of {@code Message} that represents a request about blocking a user.
      *                  NOTE! It is expected that message contains following non-null fields
@@ -615,7 +615,7 @@ public class ClientListener extends Thread implements Saveable{
      *                              the end of the ban (expected to be a future timestamp).
      *                              NOTE! It must be formatted using ServerProcessing.DATE_TIME_FORMATTER
      *
-     * @return          an instace of {@code Message} that contains info about performed (or not) operation.
+     * @return          an instance of {@code Message} that contains info about performed (or not) operation.
      *                  It may be of the following statuses
      *                      {@code MessageStatus.ACCEPTED}  -   if the specified client has been banned
      *                      {@code MessageStatus.DENIED}    -   if the specified client is an admin,
@@ -623,12 +623,12 @@ public class ClientListener extends Thread implements Saveable{
      *                                                          does not have admin rights
      *                      {@code MessageStatus.ERROR}     -   if an error occurred while executing the operation
      * */
-    private Message userBan (@NotNull Message message) {
+    private Message clientBan(@NotNull Message message) {
         String errorMessage;
         StringBuilder errorMessageBuilder;
         if (message == null) {
             LOGGER.error("Passed null-message to perform client ban");
-            return new Message(MessageStatus.ERROR).setText("Error occurred (null)");
+            return new Message(MessageStatus.ERROR).setText("Error occurred while banning(null)");
         }
         if (message.getToId() == null) {
             errorMessage = new StringBuilder("Attempt to ban unspecified account from ")
@@ -639,8 +639,8 @@ public class ClientListener extends Thread implements Saveable{
         int toId = message.getToId();
         if (!isMessageFromThisLoggedClient(message)) {
             errorMessageBuilder = new StringBuilder("Attempt to perform an action before log-in");
-            errorMessage = errorMessageBuilder.append(": ").append(message).toString();
-            LOGGER.trace(errorMessageBuilder.toString());
+            errorMessage = errorMessageBuilder.toString();
+            LOGGER.trace(errorMessageBuilder.append(": ").append(message).toString());
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         int fromId = message.getFromId();
@@ -669,12 +669,18 @@ public class ClientListener extends Thread implements Saveable{
             LOGGER.trace(errorMessageBuilder.toString());
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
-        Client clientIsBeingBanned = loadClient(server.getConfig(), toId);
+        Client clientIsBeingBanned;
+        try {
+            clientIsBeingBanned = loadClient(server.getConfig(), toId);
+        } catch (ClientNotFoundException e) {
+            errorMessageBuilder = new StringBuilder("Client id ").append(e.getClientId()).append(" has not been found");
+            LOGGER.error(errorMessageBuilder.toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessageBuilder.toString());
+        }
         Client admin = server.getOnlineClients().get(fromId).getClient();
         boolean isAdmin = admin.isAdmin();
         boolean isAlreadyBanned = clientIsBeingBanned.isBaned();
         boolean isBeingBannedAdmin = clientIsBeingBanned.isAdmin();
-
         if (!isAdmin || isBeingBannedAdmin || isAlreadyBanned || bannedUntil.isBefore(LocalDateTime.now())) {
             String deniedMessage = "Not enough rights to perform this operation: ".concat(
                     (!isAdmin || isBeingBannedAdmin) ?  "not enough rights" :
@@ -688,5 +694,72 @@ public class ClientListener extends Thread implements Saveable{
         clientIsBeingBanned.save();
         return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The client id ").append(toId)
                 .append(" has been banned").toString());
+    }
+
+    /**
+     *  The method {@code userUnban} handles with requests of unblocking a user.
+     *
+     * @param           message an instance of {@code Message} that represents a request about blocking a user.
+     *                  NOTE! It is expected that message contains following non-null fields
+     *                      1) {@code fromId} - id of registered user who has admin rights
+     *                          i.e. an instance of {@code Client} representing his account
+     *                          has {@code isAdmin == true}
+     *                      2)  {@code toId} - id of registered client who is currently banned
+     *
+     * @return          an instance of {@code Message} that contains info about performed (or not) operation.
+     *                  It may be of the following statuses:
+     *                      {@code MessageStatus.ACCEPTED}  -   if the specified client has been unbanned
+     *                      {@code MessageStatus.DENIED}    -   if the sender is not an admin or specified client
+     *                                                          is not currently banned
+     *                      {@code MessageStatus.ERROR}     -   if an error occurred while executing the operation
+     * */
+    private Message clientUnban(Message message) {
+        String errorMessage;
+        StringBuilder errorMessageBuilder;
+        if (message == null) {
+            LOGGER.error("Passed null-message to perform client unbanning");
+            return new Message(MessageStatus.ERROR).setText("Error occurred while unbanning (null)");
+        }
+        if (message.getToId() == null) {
+            errorMessageBuilder = new StringBuilder("Attempt to unban unspecified account");
+            errorMessage = errorMessageBuilder.toString();
+            LOGGER.trace(errorMessageBuilder.append(" from ")
+                    .append(message.getFromId() != null ? message.getFromId() : "unspecified client").toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        int toId = message.getToId();
+        if (!isMessageFromThisLoggedClient(message)) {
+            errorMessageBuilder = new StringBuilder("Attempt to perform an action before log-in");
+            errorMessage = errorMessageBuilder.append(": ").toString();
+            LOGGER.trace(errorMessageBuilder.append(": ").append(message).toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        int fromId = message.getFromId();
+        if (ServerProcessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
+            errorMessageBuilder = new StringBuilder("Attempt to unban unregistered client");
+            errorMessage = errorMessageBuilder.toString();
+            LOGGER.error(errorMessageBuilder.append(" from client (admin) id ").append(fromId).toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        Client admin = loadClient(server.getConfig(), fromId);
+        Client clientToUnban = loadClient(server.getConfig(), toId);
+        if (!admin.isAdmin()) {
+            errorMessageBuilder = new StringBuilder("Not enough rights to perform this operation");
+            errorMessage = errorMessageBuilder.toString();
+            LOGGER.error(errorMessageBuilder.append(" (client id ").append(admin.getClientId())
+                    .append(" attempts to unban client id ").append(clientToUnban.getClientId()).toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        if (!clientToUnban.isBaned()) {
+            errorMessageBuilder = new StringBuilder("Client is not banned");
+            errorMessage = errorMessageBuilder.toString();
+            LOGGER.error(errorMessageBuilder.append("(id ").append(clientToUnban.getClientId()).append(")").toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        clientToUnban.setBaned(false);
+        clientToUnban.setIsBannedUntill(null);
+        clientToUnban.save();
+        return new Message(MessageStatus.ACCEPTED)
+                .setText(new StringBuilder("Client id ").append(toId).append(" is unbanned").toString());
     }
 }

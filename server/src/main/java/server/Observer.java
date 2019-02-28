@@ -39,12 +39,8 @@ public class Observer extends Thread {
                 ClientListener clientListener = entry.getValue();
                 if (clientListener.getLastInputMessage().plusHours(1).isAfter(LocalDateTime.now())) {
                     Message kickMessage = new Message(MessageStatus.KICK).setText("You have been AFK too long");
-                    try {
-                        clientListener.sendMessageToConnectedClient(kickMessage);
-                        server.closeClientSession(clientListener);
-                    } catch (IOException e) {
-                        LOGGER.error(e.getLocalizedMessage());
-                    }
+                    clientListener.sendMessageToConnectedClient(kickMessage);
+                    server.closeClientSession(clientListener.getClient().getClientId());
                 }
             }
             /*
