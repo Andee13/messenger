@@ -40,7 +40,7 @@ public class Observer extends Thread {
                 if (clientListener.getLastInputMessage().plusHours(1).isAfter(LocalDateTime.now())) {
                     Message kickMessage = new Message(MessageStatus.KICK).setText("You have been AFK too long");
                     try {
-                        clientListener.sendResponseMessage(kickMessage);
+                        clientListener.sendMessageToConnectedClient(kickMessage);
                         server.closeClientSession(clientListener);
                     } catch (IOException e) {
                         LOGGER.error(e.getLocalizedMessage());

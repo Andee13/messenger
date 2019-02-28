@@ -16,5 +16,7 @@ public enum MessageStatus {
     KICK,
     NEW_MESSAGE,
     NEW_ROOM_MEMBER,
-    MEMBER_LEFT_ROOM
+    MEMBER_LEFT_ROOM,
+    CLIENT_ONLINE,
+    CLIENT_OFFLINE
 }

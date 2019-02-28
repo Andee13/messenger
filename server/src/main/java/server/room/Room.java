@@ -4,15 +4,11 @@ import common.message.Message;
 import common.message.MessageStatus;
 import javafx.collections.*;
 import org.apache.log4j.Logger;
-import server.ClientListener;
-import server.Saveable;
-import server.Server;
-import server.ServerProcessing;
+import server.*;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
@@ -43,32 +39,57 @@ public class Room implements Saveable {
         initMessageHistoryListener();
     }
 
+    /**
+     *  This method initialize {@code messageHistory} list (synchronized + observable) and sets the observer, which will
+     * inform every client whose id is currently stored in the server set of online clients.
+     *
+     *  NOTE! Current version of the server does not support the message removing operation
+     *
+     * @exception           UnsupportedOperationException in case if a message
+     *                      has been removed from the {@code messageHistory}
+     * */
     private void initMessageHistoryListener() {
         if (messageHistory == null) {
             messageHistory = FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
         }
         ((ObservableList<Message>)messageHistory).addListener((ListChangeListener<Message>) c -> {
-            // TODO logic of change notification
+            c.next();
+            if (c.wasAdded()) {
+                List <Message> sentMessages = (List<Message>) c.getAddedSubList();
+                for (int clientId : members) {
+                    if (server.getOnlineClients().containsKey(clientId)) {
+                        for (Message message : sentMessages) {
+                            server.getOnlineClients().get(clientId).sendMessageToConnectedClient(message);
+                        }
+                    }
+                }
+            } else {
+                throw new UnsupportedOperationException("Current version of server does not support the operation of message deletion");
+            }
         });
     }
 
+    /**
+     *  This method initialize {@code members} set (synchronized + observable) and sets the observer, which will
+     *
+     * */
     private void initMembersListener() {
         if (members == null) {
             members = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new TreeSet<>()));
         }
         ((ObservableSet<Integer>)members).addListener((SetChangeListener<Integer>) change -> {
-            for (int clientId : members) {
-                if (clientId != change.getElementAdded() && server.getOnlineClients().containsKey(clientId)) {
-                    ClientListener clientListener = server.getOnlineClients().get(clientId);
-                    Message roomClientsChangeNotification;
-                    if (change.wasRemoved()) {
-                        roomClientsChangeNotification = new Message(MessageStatus.MEMBER_LEFT_ROOM).setRoomId(roomId)
-                                .setFromId(change.getElementRemoved());
-                    } else {
-                        roomClientsChangeNotification = new Message(MessageStatus.NEW_ROOM_MEMBER).setRoomId(roomId)
-                                .setFromId(change.getElementAdded());
-                    }
-                    clientListener.sendResponseMessage(roomClientsChangeNotification);
+            Message notificationMessage;
+            int clientId;
+            if (change.wasAdded()) {
+                clientId = change.getElementAdded();
+                notificationMessage = new Message(MessageStatus.CLIENT_ONLINE).setFromId(clientId);
+            } else { // change.wasRemoved() == true
+                clientId = change.getElementRemoved();
+                notificationMessage = new Message(MessageStatus.CLIENT_OFFLINE).setFromId(clientId);
+            }
+            for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().entrySet()) {
+                if (clientWrapper.getValue().getClient().getClientId() != clientId) {
+                    clientWrapper.getValue().sendMessageToConnectedClient(notificationMessage);
                 }
             }
         });

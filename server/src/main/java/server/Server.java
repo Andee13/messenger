@@ -19,7 +19,6 @@ import server.exceptions.RoomNotFoundException;
 public class Server extends Thread implements Saveable {
     private volatile Map<Integer, ClientListener> onlineClients;
     private volatile Map<Integer, Room> onlineRooms;
-    public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ISO_DATE_TIME;
     private static final Logger LOGGER = Logger.getLogger("Server");
     private Properties config;
     private File clientsDir;
@@ -174,10 +173,14 @@ public class Server extends Thread implements Saveable {
     }
 
     /**
-     *  The method {@code clodseClientSession} just invokes the analogous method of the specified {@code ClientListener}
+     *  The method {@code clodseClientSession} safely closes specified client's session
+     *  in case if this client is currently online
      * */
-    public void closeClientSession (@NotNull ClientListener client) throws IOException {
-        client.closeClientSession();
+    public void closeClientSession (int clientId) {
+        if (onlineClients.containsKey(clientId)) {
+            onlineClients.get(clientId).closeClientSession();
+        }
+        LOGGER.trace(new StringBuilder("Client ").append(clientId).append(" is offline/not exists"));
     }
 
     /**

@@ -9,7 +9,6 @@ import org.xml.sax.InputSource;
 import server.exceptions.ClientNotFoundException;
 import server.exceptions.IllegalOperationException;
 import server.exceptions.IllegalPasswordException;
-import server.exceptions.RoomNotFoundException;
 import server.room.Room;
 import server.room.RoomProcessing;
 
@@ -23,6 +22,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
 /**
@@ -73,7 +73,7 @@ public class ClientListener extends Thread implements Saveable{
                 if(!MessageStatus.AUTH.equals(firstMessage.getStatus())
                         && !MessageStatus.REGISTRATION.equals(firstMessage.getStatus())) {
                     if(connectAttempts == 3) {
-                        sendResponseMessage(new Message(MessageStatus.ERROR)
+                        sendMessageToConnectedClient(new Message(MessageStatus.ERROR)
                                 .setText("Too much wrong input, please, try again later"));
                         closeClientSession();
                     }
@@ -81,7 +81,7 @@ public class ClientListener extends Thread implements Saveable{
                             .setText(new StringBuilder("The first message must be either ")
                                     .append(MessageStatus.AUTH).append(" or ").append(MessageStatus.REGISTRATION)
                                     .append(" status. But found ").append(firstMessage.getStatus()).toString());
-                    sendResponseMessage(wrongFirstMessage);
+                    sendMessageToConnectedClient(wrongFirstMessage);
                 }
                 try {
                     Message responseMessage;
@@ -90,10 +90,10 @@ public class ClientListener extends Thread implements Saveable{
                     } else {
                         responseMessage = registration(firstMessage);
                     }
-                    sendResponseMessage(responseMessage);
+                    sendMessageToConnectedClient(responseMessage);
                 } catch (IllegalPasswordException | ClientNotFoundException e) {
                     LOGGER.warn(e.getLocalizedMessage());
-                    sendResponseMessage(new Message(MessageStatus.DENIED)
+                    sendMessageToConnectedClient(new Message(MessageStatus.DENIED)
                             .setText("Login or password is incorrect. Please, check your data"));
                 }
             }
@@ -124,9 +124,9 @@ public class ClientListener extends Thread implements Saveable{
                 break;
             } catch (SocketTimeoutException e) {
                 Message kickMessage = new Message(MessageStatus.KICK).setText("You have been AFK too long");
-                sendResponseMessage(kickMessage);
+                sendMessageToConnectedClient(kickMessage);
             } catch (Exception e) {
-                sendResponseMessage(new Message(MessageStatus.ERROR)
+                sendMessageToConnectedClient(new Message(MessageStatus.ERROR)
                             .setText(e.getClass().getName().concat(" occurred while handling the message")));
             } finally {
                 if (client != null && !closeClientSession()) {
@@ -153,14 +153,29 @@ public class ClientListener extends Thread implements Saveable{
         return LocalDateTime.from(lastInputMessage);
     }
 
-    private boolean isMessageFromLoggedUser(Message message) {
+    /**
+     *  This methods may inform if the message is from current client
+     *
+     * @param           message a {@code Message} to be checked
+     *
+     * @return          {@code true} if and only if the client has logged in and his {@code clientId}
+     *                  is equal to {@code fromId} of the {@code message}, {@code false otherwise}
+     * */
+    private boolean isMessageFromThisLoggedClient(Message message) {
+        if (message == null) {
+            LOGGER.trace("Passed null-message value to check the addresser id");
+            return false;
+        }
+        if (!logged) {
+            LOGGER.trace("Passed message to check before log-in: ".concat(message.toString()));
+            return false;
+        }
         if (logged && (message.getFromId() == null || message.getFromId() != client.getClientId())) {
             LOGGER.warn(new StringBuilder("Expected to receive clientId ").append(client.getClientId())
-                    .append(" but found ").append(message.getFromId()).toString());
+                    .append(" but found ").append(message.getFromId()));
             return false;
         }
         return true;
-
     }
 
     private void handle(Message message) {
@@ -174,7 +189,7 @@ public class ClientListener extends Thread implements Saveable{
                     responseMessage = registration(message);
                     break;
                 case MESSAGE:
-                    if (!isMessageFromLoggedUser(message)) {
+                    if (!isMessageFromThisLoggedClient(message)) {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
                     }
                     try {
@@ -189,23 +204,23 @@ public class ClientListener extends Thread implements Saveable{
                 case USERBAN:
                     break;
                 case CREATE_ROOM:
-                    if (!isMessageFromLoggedUser(message)) {
+                    if (!isMessageFromThisLoggedClient(message)) {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
                     }
                     responseMessage = createRoom(message);
                     break;
                 case DELETE_ROOM:
-                    if (!isMessageFromLoggedUser(message)) {
+                    if (!isMessageFromThisLoggedClient(message)) {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
                     }
                     break;
                 case INVITE_USER:
-                    if (!isMessageFromLoggedUser(message)) {
+                    if (!isMessageFromThisLoggedClient(message)) {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
                     }
                     break;
                 case UNINVITE_USER:
-                    if (!isMessageFromLoggedUser(message)) {
+                    if (!isMessageFromThisLoggedClient(message)) {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
                     }
                 case STOP_SERVER:
@@ -219,10 +234,10 @@ public class ClientListener extends Thread implements Saveable{
             responseMessage = new Message(MessageStatus.ERROR)
                     .setText(new StringBuilder("Internal ").append(e.getClass().getName()).append(" occurred").toString());
         } finally {
-            sendResponseMessage(responseMessage);
+            sendMessageToConnectedClient(responseMessage);
             if (MessageStatus.REGISTRATION.equals(message.getStatus())
                     && MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
-                sendResponseMessage(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
+                sendMessageToConnectedClient(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
                 closeClientSession();
             }
         }
@@ -433,7 +448,7 @@ public class ClientListener extends Thread implements Saveable{
         return LocalDateTime.from(connected);
     }
 
-    public void sendResponseMessage(Message message) {
+    public void sendMessageToConnectedClient(Message message) {
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
@@ -544,50 +559,6 @@ public class ClientListener extends Thread implements Saveable{
         }
     }
 
-    private void userBan(@NotNull Message message) {
-        if (ServerProcessing.hasAccountBeenRegistered(server.getConfig(), message.getToId())) {
-            throw new ClientNotFoundException(new StringBuilder("Unable to find a client id ")
-                    .append(message.getToId()).toString());
-        }
-        Client target = loadClient(server.getConfig(), message.getToId());
-        if (!target.isBaned()) {
-            LOGGER.info(new StringBuilder("The client id ").append(message.getToId())
-                    .append(" is not banned").toString());
-            throw new IllegalStateException(new StringBuilder("The client id ").append(message.getToId())
-                    .append(" is not baned").toString());
-        }
-        if (!client.isAdmin()) {
-            LOGGER.info("Not enough rights to perform ban operation");
-            throw new IllegalOperationException("Not enough rights to perform ban operation");
-        }
-        target.setIsBannedUntill(null);
-        target.setBaned(false);
-    }
-
-    private void userUnBan(@NotNull Message message) {
-        Client target = loadClient(server.getConfig(), message.getToId());
-        if (target.isBaned()) {
-            LOGGER.info(new StringBuilder("The client id ").append(message.getToId())
-                    .append(" is already baned").toString());
-            throw new IllegalStateException(new StringBuilder("The client id ").append(message.getToId())
-                    .append(" is already baned").toString());
-        }
-        if (!client.isAdmin()) {
-            LOGGER.info("Not enough rights to perform ban operation");
-            throw new IllegalOperationException("Not enough rights to perform ban operation");
-        }
-        if (target.isAdmin()) {
-            throw new IllegalOperationException("Not enough rights to ban the admin");
-        }
-        LocalDateTime willBebannedUntill = LocalDateTime.parse(message.getText(), Server.dateTimeFormatter);
-        if (willBebannedUntill.isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("The future date is required, but found "
-                    .concat(willBebannedUntill.toString()));
-        }
-        target.setIsBannedUntill(willBebannedUntill);
-        target.setBaned(true);
-    }
-
     private static Client loadClient(Properties serverProperties, int clientId) {
         if (!clientExists(serverProperties, clientId)) {
             throw new ClientNotFoundException("Unable to find client id ".concat(String.valueOf(clientId)));
@@ -628,5 +599,94 @@ public class ClientListener extends Thread implements Saveable{
     @Override
     public boolean save() {
         return client != null && client.save();
+    }
+
+    /**
+     *  The method {@code userBan} handles with requests of blocking a user. It is expected that
+     *
+     * @param           message an instance of {@code Message} that represents a request about blocking a user.
+     *                  NOTE! It is expected that message contains following non-null fields
+     *                          1) {@code fromId} - id of registered user who has admin rights
+     *                              i.e. an instance of {@code Client} representing his account
+     *                              has {@code isAdmin == true}
+     *                          2)  {@code toId} - id of registered client who does not have admin
+     *                              rights and is not banned
+     *                          3)  {@code text} - a text representation of a {@code LocalDateTime} instance that points
+     *                              the end of the ban (expected to be a future timestamp).
+     *                              NOTE! It must be formatted using ServerProcessing.DATE_TIME_FORMATTER
+     *
+     * @return          an instace of {@code Message} that contains info about performed (or not) operation.
+     *                  It may be of the following statuses
+     *                      {@code MessageStatus.ACCEPTED}  -   if the specified client has been banned
+     *                      {@code MessageStatus.DENIED}    -   if the specified client is an admin,
+     *                                                          is already banned or the client who sent this request
+     *                                                          does not have admin rights
+     *                      {@code MessageStatus.ERROR}     -   if an error occurred while executing the operation
+     * */
+    private Message userBan (@NotNull Message message) {
+        String errorMessage;
+        StringBuilder errorMessageBuilder;
+        if (message == null) {
+            LOGGER.error("Passed null-message to perform client ban");
+            return new Message(MessageStatus.ERROR).setText("Error occurred (null)");
+        }
+        if (message.getToId() == null) {
+            errorMessage = new StringBuilder("Attempt to ban unspecified account from ")
+                    .append(message.getFromId() != null ? message.getFromId() : " unspecified client").toString();
+            LOGGER.trace(errorMessage);
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        int toId = message.getToId();
+        if (!isMessageFromThisLoggedClient(message)) {
+            errorMessageBuilder = new StringBuilder("Attempt to perform an action before log-in");
+            errorMessage = errorMessageBuilder.append(": ").append(message).toString();
+            LOGGER.trace(errorMessageBuilder.toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        int fromId = message.getFromId();
+        if (message.getText() == null) {
+            errorMessageBuilder = new StringBuilder("Attempt to ban client without specifying the term");
+            errorMessage = errorMessageBuilder.toString();
+            LOGGER.trace(errorMessageBuilder
+                    .append(" from ").append(message.getFromId()).append(" to ").append(message.getToId()).toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        LocalDateTime bannedUntil/* = null*/;
+        try {
+            bannedUntil = LocalDateTime.parse(message.getText(), ServerProcessing.DATE_TIME_FORMATTER);
+        } catch (DateTimeParseException e) {
+            errorMessageBuilder = new StringBuilder("Invalid (unparseable) end data of ban has been set: ")
+                    .append(message.getText());
+            errorMessage = errorMessageBuilder.toString();
+            errorMessageBuilder.append(" from ").append(fromId).append(" to ").append(toId);
+            LOGGER.trace(errorMessageBuilder.toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        if (LocalDateTime.now().isAfter(bannedUntil)) {
+            errorMessageBuilder = new StringBuilder("Invalid (past) end data of ban has been set: ").append(bannedUntil);
+            errorMessage = errorMessageBuilder.toString();
+            errorMessageBuilder.append(" from ").append(fromId).append(" to ").append(toId);
+            LOGGER.trace(errorMessageBuilder.toString());
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
+        }
+        Client clientIsBeingBanned = loadClient(server.getConfig(), toId);
+        Client admin = server.getOnlineClients().get(fromId).getClient();
+        boolean isAdmin = admin.isAdmin();
+        boolean isAlreadyBanned = clientIsBeingBanned.isBaned();
+        boolean isBeingBannedAdmin = clientIsBeingBanned.isAdmin();
+
+        if (!isAdmin || isBeingBannedAdmin || isAlreadyBanned || bannedUntil.isBefore(LocalDateTime.now())) {
+            String deniedMessage = "Not enough rights to perform this operation: ".concat(
+                    (!isAdmin || isBeingBannedAdmin) ?  "not enough rights" :
+                    (isAlreadyBanned) ? "the specified client is already banned" : "invalid date");
+            LOGGER.trace(deniedMessage);
+            return new Message(MessageStatus.DENIED).setText(deniedMessage);
+        }
+        server.closeClientSession(toId);
+        clientIsBeingBanned.setBaned(true);
+        clientIsBeingBanned.setIsBannedUntill(bannedUntil);
+        clientIsBeingBanned.save();
+        return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The client id ").append(toId)
+                .append(" has been banned").toString());
     }
 }
