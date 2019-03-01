@@ -1,12 +1,14 @@
 package server;
 
 import common.Saveable;
+import server.client.Client;
 import server.client.ClientListener;
 import server.room.Room;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import sun.misc.Cleaner;
 
 import javax.xml.bind.annotation.XmlRootElement;
 import java.io.*;
@@ -167,6 +169,10 @@ public class Server extends Thread implements Saveable {
             LOGGER.fatal("Error occurred while starting the server: ".concat(e.getLocalizedMessage()));
         } finally {
             save();
+            interruptOnlineClientsThreads();
+            if (!isInterrupted()) {
+                interrupt();
+            }
         }
     }
 
@@ -222,10 +228,23 @@ public class Server extends Thread implements Saveable {
         }
         try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(serverConfigFile))) {
             config.storeToXML(bos, null);
-            boolean allClientsHaveBeenSaved = ServerProcessing.save(onlineClients.entrySet());
-            boolean allRoomsHaveBeenSaved = ServerProcessing.save(onlineRooms.entrySet());
+            for (Map.Entry<Integer, ClientListener> onlineClients : onlineClients.entrySet()) {
+                ClientListener clientListener = onlineClients.getValue();
+                if (!clientListener.save()) {
+                    LOGGER.error(new StringBuilder("Failed to save the client id ")
+                            .append(clientListener.getClient().getClientId()));
+                    return false;
+                }
+            }
+            for (Map.Entry<Integer, Room> onlineRooms : onlineRooms.entrySet()) {
+                if (!onlineRooms.getValue().save()) {
+                    LOGGER.error(new StringBuilder("Failed to save the room id ")
+                            .append(onlineRooms.getValue().getRoomId()).toString());
+                    return false;
+                }
+            }
             config.storeToXML(new FileOutputStream(serverConfigFile), null);
-            return allClientsHaveBeenSaved && allRoomsHaveBeenSaved;
+            return true;
         } catch (FileNotFoundException e) {
             LOGGER.error("Unable to find a server configuration file ".concat(serverConfigFile.getAbsolutePath()));
             return false;
@@ -233,5 +252,17 @@ public class Server extends Thread implements Saveable {
             LOGGER.error(e.getLocalizedMessage());
             return false;
         }
+    }
+
+    private boolean interruptOnlineClientsThreads() {
+        for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.entrySet()) {
+            clientListenerEntry.getValue().interrupt();
+            if (!clientListenerEntry.getValue().isInterrupted()) {
+                LOGGER.error(new StringBuilder("Failed to interrupt client's (id ")
+                        .append(clientListenerEntry.getValue().getClient().getClientId()).append(") thread"));
+                return false;
+            }
+        }
+        return true;
     }
 }

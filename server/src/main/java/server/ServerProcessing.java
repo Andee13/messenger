@@ -547,26 +547,6 @@ public class ServerProcessing {
         return clientDir.isDirectory() && clientXml.isFile();
     }
 
-    /**
-     *  The method {@code save} handles with invocation the {@code save()} method on every item of the passed collection
-     * For example, it is invoked when server is being stopped.
-     *
-     * @return          {@code true} if and only if every item has been successfully saved, {@code false otherwise}
-     * */
-    public static <K extends Object, V extends Saveable> boolean save(@NotNull Set<Map.Entry<K, V>> items) {
-        try {
-            for (Map.Entry<?, ? extends Saveable> entry : items) {
-                if (!entry.getValue().save()) {
-                    return false;
-                }
-            }
-            return true;
-        } catch (Exception e) {
-            LOGGER.error(e.getLocalizedMessage());
-            return false;
-        }
-    }
-
     public static void saveRooms(Server server) {
         if (server == null || server.getOnlineRooms() == null) {
             String errorMessage = (server == null ? "A server" : "A set of online rooms").concat(" has not been set");
