@@ -197,25 +197,24 @@ public class Main {
         System.err.println(properties.equals(properties1));*/
 
         // REGISTRATION
-        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
         Message message = new Message(MessageStatus.REGISTRATION).setLogin("Puser").setPassword("password");
         Socket socket = new Socket("localhost", 5940);
-
+        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
         DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+
         marshaller.marshal(message, stringWriter);
 
         dataOutputStream.writeUTF(stringWriter.toString());
         dataOutputStream.flush();
 
-        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
-
-        System.out.println(dataInputStream.readUTF());*/
+        System.out.println(dataInputStream.readUTF());
 
         // AUTHORIZATION + ROOM CREATING
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -256,6 +255,6 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream1.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream1.readUTF());
+        System.out.println(dataInputStream1.readUTF());*/
     }
 }

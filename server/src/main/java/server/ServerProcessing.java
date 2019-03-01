@@ -251,6 +251,7 @@ public class ServerProcessing {
                 defaultProperties.setProperty("roomsDir", roomsDir.getAbsolutePath());
                 defaultProperties.setProperty("clientsDir", clientsDir.getAbsolutePath());
                 defaultProperties.setProperty("logsDir", clientsDir.getAbsolutePath());
+                defaultProperties.setProperty("serverConfig", serverConfig.getAbsolutePath());
                 try(FileOutputStream fos = new FileOutputStream(serverConfig)) {
                     defaultProperties.storeToXML(fos,null);
                     LOGGER.info(new StringBuilder("The default properties have been stored in the file ")

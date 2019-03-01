@@ -174,6 +174,9 @@ public class Client implements Saveable {
 
     }
 
+    /**
+     *  The method {@code save} in {@code Client} class is used only for saving during a session closing
+     * */
     @Override
     public boolean save() {
         if (server == null) {

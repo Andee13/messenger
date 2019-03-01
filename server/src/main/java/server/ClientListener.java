@@ -11,6 +11,7 @@ import server.exceptions.IllegalOperationException;
 import server.exceptions.IllegalPasswordException;
 import server.room.Room;
 import server.room.RoomProcessing;
+import sun.misc.Cleaner;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -65,75 +66,48 @@ public class ClientListener extends Thread implements Saveable{
         in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
     }
 
-    private void identify() {
-        try {
-            while (!logged) {
-                ++connectAttempts;
-                Message firstMessage = Message.from(in.readUTF());
-                if(!MessageStatus.AUTH.equals(firstMessage.getStatus())
-                        && !MessageStatus.REGISTRATION.equals(firstMessage.getStatus())) {
-                    if(connectAttempts == 3) {
-                        sendMessageToConnectedClient(new Message(MessageStatus.ERROR)
-                                .setText("Too much wrong input, please, try again later"));
-                        closeClientSession();
-                    }
-                    Message wrongFirstMessage = new Message(MessageStatus.ERROR)
-                            .setText(new StringBuilder("The first message must be either ")
-                                    .append(MessageStatus.AUTH).append(" or ").append(MessageStatus.REGISTRATION)
-                                    .append(" status. But found ").append(firstMessage.getStatus()).toString());
-                    sendMessageToConnectedClient(wrongFirstMessage);
-                }
-                try {
-                    Message responseMessage;
-                    if (MessageStatus.AUTH.equals(firstMessage.getStatus())) {
-                        responseMessage = auth(firstMessage);
-                    } else {
-                        responseMessage = registration(firstMessage);
-                    }
-                    sendMessageToConnectedClient(responseMessage);
-                } catch (IllegalPasswordException | ClientNotFoundException e) {
-                    LOGGER.warn(e.getLocalizedMessage());
-                    sendMessageToConnectedClient(new Message(MessageStatus.DENIED)
-                            .setText("Login or password is incorrect. Please, check your data"));
-                }
-            }
-        } catch (SocketException e) {
-            if (client != null) {
-                client.save();
-            }
-            interrupt();
-        } catch(IOException e) {
-            LOGGER.fatal(e.getLocalizedMessage());
-            interrupt();
-        }
-    }
-
     @Override
     public void run() {
         if (server == null) {
-            throw new IllegalStateException("Any server has not been specified");
+            LOGGER.fatal("Server must not be null");
+            interrupt();
+            return;
+        } else if (!State.RUNNABLE.equals(server.getState())) {
+            LOGGER.fatal(new StringBuilder("Server must have ")
+                    .append(State.RUNNABLE)
+                    .append(" state, but currently has ")
+                    .append(server.getState()));
+            interrupt();
+            return;
         }
-        while (!isInterrupted()) {
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            String messageXml;
             try {
-                handle(Message.from(in.readUTF()));
-                lastInputMessage = LocalDateTime.now();
+                while (!isInterrupted()) {
+                    messageXml = in.readUTF();
+                    handle((Message) unmarshaller.unmarshal(new StringReader(messageXml)));
+                }
             } catch (SocketException e) {
-                if (logged && client != null) {
-                    closeClientSession();
+                StringBuilder stringBuilder = new StringBuilder("The client ");
+                if (client != null) {
+                    stringBuilder.append(" (id ").append(client.getClientId()).append(") ");
                 }
-                break;
-            } catch (SocketTimeoutException e) {
-                Message kickMessage = new Message(MessageStatus.KICK).setText("You have been AFK too long");
-                sendMessageToConnectedClient(kickMessage);
-            } catch (Exception e) {
-                sendMessageToConnectedClient(new Message(MessageStatus.ERROR)
-                            .setText(e.getClass().getName().concat(" occurred while handling the message")));
-            } finally {
-                if (client != null && !closeClientSession()) {
-                    LOGGER.error("Failed to save client id ".concat(String.valueOf(client.getClientId())));
+                stringBuilder.append(" disconnected (address ").append(socket.getRemoteSocketAddress());
+                LOGGER.info(stringBuilder.toString());
+                if (!save()) {
+                    LOGGER.warn(new StringBuilder("Saving the client id ").append(client.getClientId())
+                            .append(" has not been completed properly"));
                 }
-                interrupt();
+            } catch (IOException e) {
+                LOGGER.trace(e.getLocalizedMessage());
             }
+        } catch (JAXBException e) {
+            LOGGER.fatal(e.getLocalizedMessage());
+        } finally {
+            closeClientSessionSafely();
+            interrupt();
         }
     }
 
@@ -238,7 +212,7 @@ public class ClientListener extends Thread implements Saveable{
             if (MessageStatus.REGISTRATION.equals(message.getStatus())
                     && MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
                 sendMessageToConnectedClient(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
-                closeClientSession();
+                closeClientSessionSafely();
             }
         }
     }
@@ -248,7 +222,7 @@ public class ClientListener extends Thread implements Saveable{
             String errorMessage = new StringBuilder("Message of status ").append(MessageStatus.STOP_SERVER)
                     .append(" was expected, but found ").append(message.getStatus()).toString();
             LOGGER.warn(errorMessage);
-            throw new IllegalArgumentException(errorMessage);
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         if (!server.getConfig().getProperty("server_login").equals(message.getLogin())
                 || !server.getConfig().getProperty("server_password").equals(message.getPassword())) {
@@ -256,10 +230,10 @@ public class ClientListener extends Thread implements Saveable{
         }
         ServerProcessing.stopServerSafety(server);
         if (server.isInterrupted()) {
-            LOGGER.trace("The server has been stopped from address ".concat(socket.getInetAddress().toString()));
+            LOGGER.info("The server has been stopped from address ".concat(socket.getInetAddress().toString()));
             return new Message(MessageStatus.ACCEPTED).setText("The server has been stopped");
         } else {
-            LOGGER.trace("Attempt to stop the server has been failed");
+            LOGGER.error("Attempt to stop the server has been failed");
             return new Message(MessageStatus.ERROR).setText("Unable to stop the server");
         }
     }
@@ -335,9 +309,10 @@ public class ClientListener extends Thread implements Saveable{
             return new Message(MessageStatus.ERROR).setText("Internal error");
         }
         if (!MessageStatus.AUTH.equals(message.getStatus())) {
-            LOGGER.error(new StringBuilder("Message of the ").append(MessageStatus.AUTH)
-                    .append(" was expected but found ").append(message.getStatus().toString()));
-            return new Message(MessageStatus.ERROR).setText("Internal error");
+            StringBuilder errorStringBuilder = new StringBuilder("Message of the ").append(MessageStatus.AUTH)
+                    .append(" was expected but found ").append(message.getStatus().toString());
+            LOGGER.warn(errorStringBuilder.toString());
+            return new Message(MessageStatus.ERROR).setText(errorStringBuilder.toString());
         }
         if (message.getLogin() == null || message.getPassword() == null) {
             return new Message(MessageStatus.ERROR)
@@ -354,18 +329,18 @@ public class ClientListener extends Thread implements Saveable{
             Client client = (Client) unmarshaller.unmarshal(clientFile);
             logged = client.getPassword().equals(message.getPassword());
             if (logged) {
-                this.client = Client.from(clientFile);
+                this.client = client;
                 this.client.setServer(server);
+                System.out.println(client);
+                LOGGER.trace(new StringBuilder("Client id ").append(client.getClientId()).append(" has logged in"));
                 return new Message(MessageStatus.ACCEPTED);
             } else {
+                LOGGER.trace("Wrong password from client id ".concat(String.valueOf(client.getClientId())));
                 return new Message(MessageStatus.DENIED).setText("Please, check your password and login");
             }
         } catch (JAXBException e) {
             LOGGER.fatal(e.getLocalizedMessage());
             return new Message(MessageStatus.ERROR).setText("Internal error");
-        } catch (FileNotFoundException e) {
-            LOGGER.error("Unable to find client's file ".concat(clientFile.getAbsolutePath()));
-            return new Message(MessageStatus.ERROR).setText("Internal error. Unable to find client's file");
         }
     }
 
@@ -403,7 +378,15 @@ public class ClientListener extends Thread implements Saveable{
         client.setServer(server);
         client.setPassword(password);
         client.setClientId(login.hashCode());
-        closeClientSession();
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            marshaller.marshal(client, clientFile);
+            LOGGER.info(new StringBuilder("New client id ").append(client.getClientId()).append(" has been registered"));
+        } catch (JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+        }
         return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
                 .append(login).append(" has been successfully created").toString());
 
@@ -468,20 +451,30 @@ public class ClientListener extends Thread implements Saveable{
      *  The method {@code closeClientSession} closes client's socket and all the streams were used for wrapping the
      * socket's streams (i.e. streams have been got by calling {@code socket.getInputStream()},
      * {@code socket.getOutputStream()})
+     *
      *  Also it saves the client's data if the person has logged in and removes current thread from server list of
      * online clients
      *
-     * @return          {@code true} if and only if the client's socket and wrapping streams were successfully closed,
-     *                  current client's id value has been removed from the {@code server} list of online clients
-     *                  {@code false} otherwise
+     * NOTE! This method does not interrupt current stream
+     *
+     * @return          In case if no user has been set (e.g. before registration) the method returns {@code true}
+     *                  if the {@code socket} was closed
+     *                  If the {@code client} was set - the method will return {@code true} if and only if the condition
+     *                  above are met and the {@code client} has been successfully saved
      * */
-    public boolean closeClientSession() {
+    public boolean closeClientSessionSafely() {
         try {
-            socket.close();
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
             in.close();
             out.close();
-            server.getOnlineClients().remove(client.getClientId());
-            return socket.isClosed() && client.save() && !server.getOnlineClients().containsKey(client.getClientId());
+            Map<Integer, ClientListener> onlineClients = server.getOnlineClients();
+            if (client != null) {
+                onlineClients.remove(client.getClientId());
+                return client.save() & socket.isClosed();
+            }
+            return socket.isClosed();
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             return false;

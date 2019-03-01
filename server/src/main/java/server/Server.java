@@ -149,7 +149,6 @@ public class Server extends Thread implements Saveable {
     public void run() {
         if (!ServerProcessing.arePropertiesValid(config)) {
             LOGGER.fatal("Unable to start the server. Server configurations are not valid.");
-            interrupt();
             return;
         }
         Socket socket;
@@ -160,7 +159,7 @@ public class Server extends Thread implements Saveable {
                     LOGGER.info(new StringBuilder("Incoming connection from: ")
                             .append(socket.getInetAddress()).toString());
                     ClientListener clientListener = new ClientListener(this, socket);
-                    clientListener.run();
+                    clientListener.start();
                 } catch (IOException e) {
                     LOGGER.error(e.getLocalizedMessage());
                 }
@@ -173,12 +172,15 @@ public class Server extends Thread implements Saveable {
     }
 
     /**
-     *  The method {@code clodseClientSession} safely closes specified client's session
+     *  The method {@code closeClientSession} safely closes specified client's session
      *  in case if this client is currently online
      * */
     public void closeClientSession (int clientId) {
         if (onlineClients.containsKey(clientId)) {
-            onlineClients.get(clientId).closeClientSession();
+            if (!onlineClients.get(clientId).closeClientSessionSafely()) {
+                LOGGER.warn(new StringBuilder("Client's (id ").append(clientId)
+                        .append(") session has not been closed properly"));
+            }
         }
         LOGGER.trace(new StringBuilder("Client ").append(clientId).append(" is offline/not exists"));
     }
