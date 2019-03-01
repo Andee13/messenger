@@ -1,4 +1,4 @@
-package server;
+package server.client;
 
 import common.message.Message;
 import common.message.MessageStatus;
@@ -6,12 +6,13 @@ import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
+import common.Saveable;
+import server.Server;
+import server.ServerProcessing;
 import server.exceptions.ClientNotFoundException;
-import server.exceptions.IllegalOperationException;
 import server.exceptions.IllegalPasswordException;
 import server.room.Room;
 import server.room.RoomProcessing;
-import sun.misc.Cleaner;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -21,7 +22,6 @@ import javax.xml.xpath.*;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
-import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -36,16 +36,17 @@ import java.util.*;
  * been performed properly the methods return instances of {@code Message} of statuses {@code MessageStatus.ERROR}
  * or {@code MessageStatus.DENIED}. Some additional information may be provided in the field {@code Message.text}
  * */
-public class ClientListener extends Thread implements Saveable{
-    private Socket socket;
-    private Server server;
-    private DataOutputStream out;
-    private DataInputStream in;
+public class ClientListener extends Thread implements Saveable {
+
+
+    private volatile Socket socket;
+    private volatile Server server;
+    private volatile DataOutputStream out;
+    private volatile DataInputStream in;
     private LocalDateTime lastInputMessage;
     private boolean logged;
     private LocalDateTime connected;
     private Client client;
-    private int connectAttempts;
 
     public Client getClient() {
         return client;
@@ -96,7 +97,7 @@ public class ClientListener extends Thread implements Saveable{
                 }
                 stringBuilder.append(" disconnected (address ").append(socket.getRemoteSocketAddress());
                 LOGGER.info(stringBuilder.toString());
-                if (!save()) {
+                if (client != null && !save()) {
                     LOGGER.warn(new StringBuilder("Saving the client id ").append(client.getClientId())
                             .append(" has not been completed properly"));
                 }
@@ -153,7 +154,7 @@ public class ClientListener extends Thread implements Saveable{
     }
 
     private void handle(Message message) {
-        Message responseMessage = null;
+        Message responseMessage = new Message(MessageStatus.ERROR);
         try {
             switch (message.getStatus()) {
                 case AUTH:
@@ -199,16 +200,19 @@ public class ClientListener extends Thread implements Saveable{
                     }
                 case STOP_SERVER:
                     responseMessage = stopServer(message);
+                    LOGGER.fatal(message);
+                    if (MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
+                        LOGGER.trace("Interrupting the server");
+                        server.interrupt();
+                    }
                     break;
-                default: throw new RuntimeException(new StringBuilder("Unknown message status")
+                default:
+                    responseMessage = new Message(MessageStatus.ERROR).setText(new StringBuilder("Unknown message status ")
                         .append(message.getStatus().toString()).toString());
             }
-        } catch (Exception e) {
-            LOGGER.error(e.getLocalizedMessage());
-            responseMessage = new Message(MessageStatus.ERROR)
-                    .setText(new StringBuilder("Internal ").append(e.getClass().getName()).append(" occurred").toString());
         } finally {
             sendMessageToConnectedClient(responseMessage);
+            LOGGER.trace("Message has been sent");
             if (MessageStatus.REGISTRATION.equals(message.getStatus())
                     && MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
                 sendMessageToConnectedClient(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
@@ -222,20 +226,13 @@ public class ClientListener extends Thread implements Saveable{
             String errorMessage = new StringBuilder("Message of status ").append(MessageStatus.STOP_SERVER)
                     .append(" was expected, but found ").append(message.getStatus()).toString();
             LOGGER.warn(errorMessage);
-            return new Message(MessageStatus.ERROR).setText(errorMessage);
+            return new Message(MessageStatus.ERROR).setText("Internal error: ".concat(errorMessage));
         }
         if (!server.getConfig().getProperty("server_login").equals(message.getLogin())
                 || !server.getConfig().getProperty("server_password").equals(message.getPassword())) {
             return new Message(MessageStatus.DENIED).setText("Please, check your login and password");
         }
-        ServerProcessing.stopServerSafety(server);
-        if (server.isInterrupted()) {
-            LOGGER.info("The server has been stopped from address ".concat(socket.getInetAddress().toString()));
-            return new Message(MessageStatus.ACCEPTED).setText("The server has been stopped");
-        } else {
-            LOGGER.error("Attempt to stop the server has been failed");
-            return new Message(MessageStatus.ERROR).setText("Unable to stop the server");
-        }
+        return new Message(MessageStatus.ACCEPTED).setText("Server is going to shut down");
     }
 
     /**
@@ -754,5 +751,11 @@ public class ClientListener extends Thread implements Saveable{
         clientToUnban.save();
         return new Message(MessageStatus.ACCEPTED)
                 .setText(new StringBuilder("Client id ").append(toId).append(" is unbanned").toString());
+    }
+
+    @Override
+    public void interrupt() {
+        save();
+        super.interrupt();
     }
 }

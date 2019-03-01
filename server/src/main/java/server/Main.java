@@ -197,7 +197,7 @@ public class Main {
         System.err.println(properties.equals(properties1));*/
 
         // REGISTRATION
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -211,10 +211,10 @@ public class Main {
         dataOutputStream.writeUTF(stringWriter.toString());
         dataOutputStream.flush();
 
-        System.out.println(dataInputStream.readUTF());
+        System.out.println(dataInputStream.readUTF());*/
 
         // AUTHORIZATION + ROOM CREATING
-        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -238,14 +238,14 @@ public class Main {
         System.out.println(dataInputStream.readUTF());
 
         message = new Message(MessageStatus.MESSAGE).setText("Hello world :)")
-                .setFromId("Puser".hashCode()).setRoomId(871831934);
+                .setFromId("Puser".hashCode()).setRoomId(1188034207);
         stringWriter = new StringWriter();
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
         System.out.println(dataInputStream.readUTF());
 
-        Socket socket1 = new Socket("localhost", 5940);
+        /*Socket socket1 = new Socket("localhost", 5940);
         DataOutputStream dataOutputStream1 = new DataOutputStream(socket1.getOutputStream());
         DataInputStream dataInputStream1 = new DataInputStream(socket1.getInputStream());
 

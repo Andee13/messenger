@@ -1,5 +1,6 @@
 package server;
 
+import server.client.ClientListener;
 import server.room.Room;
 import common.message.Message;
 import common.message.MessageStatus;

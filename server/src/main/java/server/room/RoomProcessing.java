@@ -211,7 +211,8 @@ public class RoomProcessing {
         }
         // Checking whether the specified room is in the server "online" rooms set
         if (!server.getOnlineRooms().containsKey(roomId)) {
-            // TODO load room to online rooms
+            Map<Integer, Room> onlineRoms = server.getOnlineRooms();
+            onlineRoms.put(roomId, RoomProcessing.getRoom(server, message.getRoomId()));
         }
         Room room = server.getOnlineRooms().get(roomId);
         room.getMessageHistory().add(message);

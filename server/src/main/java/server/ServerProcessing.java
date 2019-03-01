@@ -2,8 +2,10 @@ package server;
 
 import common.message.Message;
 import common.message.MessageStatus;
+import common.Saveable;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import server.client.ClientListener;
 import server.room.Room;
 
 import javax.security.auth.login.FailedLoginException;
@@ -77,7 +79,7 @@ public class ServerProcessing {
                 break;
             case STOP:
                 try {
-                    stopServer(serverProperiesFile);
+                    sendStopServerMessage(serverProperiesFile);
                 } catch (Exception e) {
                     LOGGER.error(e.getLocalizedMessage());
                 }
@@ -404,57 +406,47 @@ public class ServerProcessing {
     }
 
     /**
-     *  The method {@code stopServer} stops the server denoted by the specified {@code serverProperties}
-     *
-     * @param           serverProperties a set of server properties
-     *
-     * @throws          IOException if the {@code serverProperties} are invalid
-     *
-     * @exception       IllegalStateException if the server denoted by the specified properties
-     *                                        has not been launched on this {@code localhost} yet
-     *
-     * @exception       NullPointerException if the {@code serverProperties} are {@code null}
-     *
-     * @exception       FailedLoginException in case if failed to authorize on the server
-     *                  i.e. the response message status is not {@code MessageStatus.ACCEPTED}
+     *  The method {@code sendStopServerMessage} stops the server specified by the properties
      * */
-    public static void stopServer(@NotNull Properties serverProperties) throws IOException, FailedLoginException {
-        if (serverProperties == null) {
-            throw new NullPointerException("The serverProperties must not be null");
-        }
+    public static void sendStopServerMessage(@NotNull Properties serverProperties) {
         if (!arePropertiesValid(serverProperties)) {
-            throw new IOException("The server properties are not valid");
+            LOGGER.error(new StringBuilder("Invalid server properties passed ").append(serverProperties));
+            return;
         }
-        Message loginMessage = new Message(MessageStatus.AUTH).setLogin(serverProperties.getProperty("server_login"))
-                .setPassword(serverProperties.getProperty("server_password"));
-        Message stopRequestMessage = new Message(MessageStatus.STOP_SERVER)
-                .setLogin(serverProperties.getProperty("server_login"))
-                .setPassword(serverProperties.getProperty("server_password"));
-        Socket socket = new Socket("localhost", Integer.parseInt(serverProperties.getProperty("port")));
-        Message responseMessage = sendAndWait(loginMessage, socket, 30);
-        if (!MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
-            StringBuilder failedAuthInfo = new StringBuilder("Unable to authorize on the server ")
-                    .append(socket.getRemoteSocketAddress()).append("\nResponse status:")
-                    .append(responseMessage.getStatus());
-            if (responseMessage.getText() != null && !responseMessage.getText().isEmpty()) {
-                failedAuthInfo.append(responseMessage.getText());
+        try (Socket socket = new Socket("localhost", Integer.parseInt(serverProperties.getProperty("port")));
+             DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream())) {
+            try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(serverProperties.getProperty("port")))) {
+                serverSocket.setSoTimeout(5000);
+                serverSocket.accept();
+                return;
+            } catch (SocketTimeoutException e) {
+                LOGGER.info(new StringBuilder("The server ").append("localhost:")
+                        .append(serverProperties.getProperty("port")).append(" is not currently active"));
+                return;
+            } catch (SocketException e) {
+                LOGGER.info("The server is launched");
             }
-            throw new FailedLoginException(failedAuthInfo.toString());
-        }
-        responseMessage = sendAndWait(stopRequestMessage, socket, 30);
-        if (!MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
-            StringBuilder failedStopInfo = new StringBuilder("Unable to stop the server. Response status: ")
-                    .append(responseMessage.getStatus());
-            if (responseMessage.getText() != null && !responseMessage.getText().isEmpty()) {
-                failedStopInfo.append(responseMessage.getText());
-            }
-            throw new RuntimeException(failedStopInfo.toString());
+            Message message = new Message(MessageStatus.STOP_SERVER)
+                    .setPassword(serverProperties.getProperty("server_password"))
+                    .setLogin(serverProperties.getProperty("server_login"));
+            socket.setSoTimeout(10000);
+            StringWriter stringWriter = new StringWriter();
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            marshaller.marshal(message, stringWriter);
+            dataOutputStream.writeUTF(stringWriter.toString());
+            dataOutputStream.flush();
+            LOGGER.info(new StringBuilder("The Message of ").append(MessageStatus.STOP_SERVER)
+                    .append(" status has been sent to address localhost:").append(serverProperties.getProperty("port")));
+        } catch (IOException | JAXBException e) {
+            LOGGER.fatal(e.getMessage());
+            return;
         }
     }
 
     /**
-     *  The method {@code stopServer} is just an interagent who unpacks server properties from the specified file
-     * and invokes {@code stopServer(Properties serverProperties)}
+     *  The method {@code sendStopServerMessage} is just an interagent who unpacks server properties from the specified file
+     * and invokes {@code sendStopServerMessage(Properties serverProperties)}
      *
      * @param           serverPropertiesFile the file which stores server properties
      *
@@ -464,13 +456,13 @@ public class ServerProcessing {
      * @throws          FailedLoginException in case if the authorization on the server has been failed
      *                  e.g. a wrong server login/password has/have been entered
      * */
-    public static void stopServer(@NotNull File serverPropertiesFile) throws IOException, FailedLoginException {
+    public static void sendStopServerMessage(@NotNull File serverPropertiesFile) throws IOException, FailedLoginException {
         if (!arePropertiesValid(serverPropertiesFile)) {
             throw new InvalidPropertiesFormatException("The properties file are not valid");
         }
         Properties properties = new Properties();
         properties.loadFromXML(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
-        stopServer(properties);
+        sendStopServerMessage(properties);
     }
 
     /**
@@ -481,29 +473,29 @@ public class ServerProcessing {
      * that there is an opened socket on the another end and it is listening to connections.
      *
      * @param           message the message to be sent
-     * @param           socket the socket that will be used to send the message via {@code socket.getOutputStream()}
+     * @param           port the port to be listened by the target server
      * @param           timeout the time period (in seconds) during which a response will be being waited
      *
      * @exception       ConnectException in case if no response has been got
-     * @exception       NullPointerException if {@code message} or {@code socket} is {@code null}
+     * @exception       NullPointerException if {@code message} is {@code null}
      * @exception       IllegalArgumentException if {@code timeout} is less than 0
+     *                  or port is less than 0 or greater than zero
      *
      * @throws          IOException if an I/O error occurs
      *
      * @return          an instance of {@code Message} that has been received from the server
      *                  or {@code null} if {@code SocketException} has occurred (e.g. client closed the connection)
      * */
-    private static Message sendAndWait(Message message, Socket socket, int timeout) throws IOException {
+    private static Message sendAndWait(Message message, int timeout, int port) throws IOException {
         if (message == null) {
             throw new NullPointerException("Message must not be null");
-        }
-        if (socket == null) {
-            throw new NullPointerException("Socket must not be null");
         }
         if (timeout < 0) {
             throw new IllegalArgumentException(new StringBuilder("Timeout must be a positive number:")
                     .append(timeout).toString());
         }
+        Socket socket = new Socket(Inet4Address.getLocalHost(), port);
+        socket.setSoTimeout(timeout);
         DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
         DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
         try {
@@ -559,33 +551,23 @@ public class ServerProcessing {
      *  The method {@code save} handles with invocation the {@code save()} method on every item of the passed collection
      * For example, it is invoked when server is being stopped.
      *
-     *  NOTE! It is expected that you do not pass any {@code null} values to this method
-     *
      * @return          {@code true} if and only if every item has been successfully saved, {@code false otherwise}
      * */
-    public static <K extends Object, V extends Saveable> boolean save(Set<Map.Entry<K, V>> items) {
-        boolean totalSuccess = true;
-        if (items == null) {
-            LOGGER.error("Attempt to save null");
-            throw new NullPointerException("Collection has not been set");
-        }
+    public static <K extends Object, V extends Saveable> boolean save(@NotNull Set<Map.Entry<K, V>> items) {
         try {
             for (Map.Entry<?, ? extends Saveable> entry : items) {
-                if (entry.getValue() == null) {
-                    continue;
-                }
                 if (!entry.getValue().save()) {
-                    totalSuccess = false;
+                    return false;
                 }
             }
-            return totalSuccess;
+            return true;
         } catch (Exception e) {
             LOGGER.error(e.getLocalizedMessage());
             return false;
         }
     }
 
-    private static void saveRooms(Server server) {
+    public static void saveRooms(Server server) {
         if (server == null || server.getOnlineRooms() == null) {
             String errorMessage = (server == null ? "A server" : "A set of online rooms").concat(" has not been set");
             LOGGER.error(errorMessage);
@@ -599,7 +581,7 @@ public class ServerProcessing {
         }
     }
 
-    private static void saveClients(Server server) {
+    public static void saveClients(Server server) {
         if (server == null || server.getOnlineClients() == null) {
             String errorMessage = (server == null ? "A server" : "A set of online clients").concat(" has not been set");
             LOGGER.error(errorMessage);
@@ -611,13 +593,6 @@ public class ServerProcessing {
                         .append(" has not been saved"));
             }
         }
-    }
-
-    public static void stopServerSafety(Server server) {
-        saveClients(server);
-        saveRooms(server);
-        server.save();
-        server.interrupt();
     }
 
     private static void restartServer(Server server) throws IOException, FailedLoginException {
@@ -645,7 +620,7 @@ public class ServerProcessing {
         if (!isServerLaunched(serverProperties)) {
             throw new IllegalStateException("The server specified by the properties is not launched");
         }
-        stopServer(serverProperties);
+        sendStopServerMessage(serverProperties);
         File serverConfigFile = new File(serverProperties.getProperty("serverConfig"));
         startServer(serverConfigFile);
     }

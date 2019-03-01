@@ -1,4 +1,4 @@
-package server;
+package common;
 
 /**
  *  This interface marks entities that are able to be saved to place depending on their specific

@@ -1,7 +1,8 @@
 package server;
 
+import common.Saveable;
+import server.client.ClientListener;
 import server.room.Room;
-import server.room.RoomProcessing;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
@@ -11,9 +12,7 @@ import javax.xml.bind.annotation.XmlRootElement;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
-import server.exceptions.RoomNotFoundException;
 
 @XmlRootElement
 public class Server extends Thread implements Saveable {
@@ -167,7 +166,7 @@ public class Server extends Thread implements Saveable {
         } catch (IOException e) {
             LOGGER.fatal("Error occurred while starting the server: ".concat(e.getLocalizedMessage()));
         } finally {
-            ServerProcessing.stopServerSafety(this);
+            save();
         }
     }
 
@@ -212,20 +211,20 @@ public class Server extends Thread implements Saveable {
     public boolean save() {
         if (config == null) {
             LOGGER.warn("Saving the server has been failed: undefined server configurations.");
-            return false;
         }
-        if (ServerProcessing.arePropertiesValid(config)) {
+        if (!ServerProcessing.arePropertiesValid(config)) {
             LOGGER.warn("Saving the server has been failed: invalid server properties.");
             return false;
         }
         if (serverConfigFile == null) {
-            LOGGER.warn("Saving the server has been failed: server configuration file must not be null");
+            LOGGER.fatal("Saving the server has been failed: server configuration file must not be null");
             return false;
         }
         try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(serverConfigFile))) {
             config.storeToXML(bos, null);
             boolean allClientsHaveBeenSaved = ServerProcessing.save(onlineClients.entrySet());
             boolean allRoomsHaveBeenSaved = ServerProcessing.save(onlineRooms.entrySet());
+            config.storeToXML(new FileOutputStream(serverConfigFile), null);
             return allClientsHaveBeenSaved && allRoomsHaveBeenSaved;
         } catch (FileNotFoundException e) {
             LOGGER.error("Unable to find a server configuration file ".concat(serverConfigFile.getAbsolutePath()));

@@ -2,9 +2,11 @@ package server.room;
 
 import common.message.Message;
 import common.message.MessageStatus;
+import common.Saveable;
 import javafx.collections.*;
 import org.apache.log4j.Logger;
 import server.*;
+import server.client.ClientListener;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -235,9 +237,6 @@ public class Room implements Saveable {
     @Override
     public boolean save() {
         Properties serverProperties = server.getConfig();
-        if (!ServerProcessing.arePropertiesValid(serverProperties)) {
-            throw new RuntimeException("Properties are not valid for a room to be saved into its file");
-        }
         File roomsDir = new File(serverProperties.getProperty("roomsDir"));
         if (!roomsDir.isDirectory() && !roomsDir.mkdir()) {
             return false;
