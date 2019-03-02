@@ -197,7 +197,7 @@ public class Server extends Thread implements Saveable {
      *                  data as {@code serverConfigFile}
      * */
     @Override
-    public boolean save() {
+    public synchronized boolean save() {
         if (config == null) {
             LOGGER.warn("Saving the server has been failed: undefined server configurations.");
         }

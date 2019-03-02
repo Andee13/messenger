@@ -15,8 +15,6 @@ import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 
@@ -34,29 +32,21 @@ public class Room implements Saveable {
 
     private static Logger LOGGER = Logger.getLogger("Room");
 
-    public Room(){
-        messageHistory = FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
-        members = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new TreeSet<>()));
-        initMembersListener();
-        initMessageHistoryListener();
+    public Room() {
+        ObservableList<Message> oHistory = FXCollections.synchronizedObservableList(
+                FXCollections.observableList(new LinkedList<>()));
+        ObservableSet<Integer> oMembers = FXCollections.synchronizedObservableSet(
+                FXCollections.observableSet(new TreeSet<>()));
+        initMembersListener(oMembers);
+        initMessageHistoryListener(oHistory);
+        messageHistory = oHistory;
+        members = oMembers;
     }
 
-    /**
-     *  This method initialize {@code messageHistory} list (synchronized + observable) and sets the observer, which will
-     * inform every client whose id is currently stored in the server set of online clients.
-     *
-     *  NOTE! Current version of the server does not support the message removing operation
-     *
-     * @exception           UnsupportedOperationException in case if a message
-     *                      has been removed from the {@code messageHistory}
-     * */
-    private void initMessageHistoryListener() {
-        if (messageHistory == null) {
-            messageHistory = FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
-        }
-        ((ObservableList<Message>)messageHistory).addListener((ListChangeListener<Message>) c -> {
+    private void initMessageHistoryListener(ObservableList<Message> messageHistory) {
+        messageHistory.addListener((ListChangeListener<Message>) c -> {
             c.next();
-            if (c.wasAdded()) {
+            if (c.wasAdded() && !c.wasRemoved()) {
                 List <Message> sentMessages = (List<Message>) c.getAddedSubList();
                 for (int clientId : members) {
                     if (server.getOnlineClients().containsKey(clientId)) {
@@ -65,29 +55,24 @@ public class Room implements Saveable {
                         }
                     }
                 }
-            } else {
-                throw new UnsupportedOperationException("Current version of server does not support the operation of message deletion");
+            } else if (c.wasRemoved() && !c.wasAdded()) {
+                // TODO methods of removing the message from chat
             }
         });
     }
 
-    /**
-     *  This method initialize {@code members} set (synchronized + observable) and sets the observer, which will
-     *
-     * */
-    private void initMembersListener() {
-        if (members == null) {
-            members = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new TreeSet<>()));
-        }
-        ((ObservableSet<Integer>)members).addListener((SetChangeListener<Integer>) change -> {
+    public void initMembersListener(ObservableSet<Integer> members) {
+        members.addListener((SetChangeListener<Integer>) change -> {
             Message notificationMessage;
             int clientId;
-            if (change.wasAdded()) {
+            if (change.wasAdded() && !change.wasRemoved()) {
                 clientId = change.getElementAdded();
-                notificationMessage = new Message(MessageStatus.CLIENT_ONLINE).setFromId(clientId);
-            } else { // change.wasRemoved() == true
+                notificationMessage = new Message(MessageStatus.NEW_ROOM_MEMBER).setFromId(clientId).setRoomId(roomId);
+            } else if (change.wasRemoved() && !change.wasAdded()) { // change.wasRemoved() == true
                 clientId = change.getElementRemoved();
-                notificationMessage = new Message(MessageStatus.CLIENT_OFFLINE).setFromId(clientId);
+                notificationMessage = new Message(MessageStatus.MEMBER_LEFT_ROOM).setFromId(clientId).setRoomId(roomId);
+            } else { // somehow replaced ???
+                return;
             }
             for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().entrySet()) {
                 if (clientWrapper.getValue().getClient().getClientId() != clientId) {
@@ -95,6 +80,20 @@ public class Room implements Saveable {
                 }
             }
         });
+    }
+
+    public void setMessageHistoryWithListener(List<Message> messageHistory) {
+        ObservableList<Message> o = FXCollections.synchronizedObservableList(
+                FXCollections.observableList(messageHistory));
+        initMessageHistoryListener(o);
+        this.messageHistory = o;
+    }
+
+    public void setMembersWithListener(Set<Integer> members) {
+        ObservableSet<Integer> o = FXCollections.synchronizedObservableSet(
+                FXCollections.observableSet(members));
+        initMembersListener(o);
+        this.members = o;
     }
 
     public void setRoomId(int roomId) {
@@ -229,7 +228,7 @@ public class Room implements Saveable {
     }
 
     @Override
-    public boolean save() {
+    public synchronized boolean save() {
         Properties serverProperties = server.getConfig();
         File roomsDir = new File(serverProperties.getProperty("roomsDir"));
         if (!roomsDir.isDirectory() && !roomsDir.mkdir()) {

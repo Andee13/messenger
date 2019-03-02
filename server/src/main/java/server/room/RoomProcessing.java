@@ -219,9 +219,16 @@ public class RoomProcessing {
             throw new RoomNotFoundException("Unable to find room id: ".concat(String.valueOf(roomId)));
         }
         // Checking whether the specified room is in the server "online" rooms set
+
         if (!server.getOnlineRooms().containsKey(roomId)) {
             Map<Integer, Room> onlineRoms = server.getOnlineRooms();
             onlineRoms.put(roomId, RoomProcessing.loadRoom(server, message.getRoomId()));
+        }
+        Room room = server.getOnlineRooms().get(roomId);
+        List<Message> messagesHistory = room.getMessageHistory();
+        if (messagesHistory.size() >= Integer.parseInt(server.getConfig().getProperty("messageStorageDimension"))) {
+            messagesHistory.set(messagesHistory.size() - 1, message);
+            return true;
         }
         return server.getOnlineRooms().get(roomId).getMessageHistory().add(message);
     }

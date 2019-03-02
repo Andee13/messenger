@@ -171,6 +171,19 @@ public class ClientListener extends Thread {
                         server.interrupt();
                     }
                     break;
+                case ROOM_LIST:
+                    if (logged) {
+                        responseMessage = getRooms();
+                    } else {
+                        responseMessage = new Message(MessageStatus.DENIED).setText("Has not been logged");
+                    }
+                    break;
+                case FRIEND_LIST:
+                    if (logged) {
+                        responseMessage = getFriends();
+                    } else {
+                        responseMessage = new Message(MessageStatus.DENIED).setText("Has not been logged");
+                    }
                 default:
                     responseMessage = new Message(MessageStatus.ERROR).setText(new StringBuilder("Unknown message status ")
                         .append(message.getStatus().toString()).toString());
@@ -184,6 +197,42 @@ public class ClientListener extends Thread {
                 interrupt();
             }
         }
+    }
+
+    private Message addFriend(Message message) {
+        if (message == null) {
+            LOGGER.warn("null message passed");
+            return new Message(MessageStatus.ERROR).setText("Internal error");
+        }
+        if (!isMessageFromThisLoggedClient(message)) {
+            LOGGER.warn("null toId passed");
+            return new Message(MessageStatus.DENIED).setText("Wrong addresser");
+        }
+        if (message.getToId() == null) {
+            LOGGER.warn("null toId passed");
+            return new Message(MessageStatus.ERROR).setText("Wrong addressee");
+        }
+        int toId = message.getToId();
+        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
+            LOGGER.trace(new StringBuilder("Unable to find a client (id ").append(toId).append(")"));
+            return new Message(MessageStatus.ERROR).setText(new StringBuilder("The client (id ").append(toId)
+                    .append(") has not been found").toString());
+        }
+        Client client;
+        if (server.getOnlineClients().containsKey(toId)) {
+            client = server.getOnlineClients().get(toId).getClient();
+        } else {
+            client = loadClient(server.getConfig(), toId);
+        }
+        if (client.getFriends().contains(this.client.getClientId())) {
+            return new Message(MessageStatus.DENIED).setText("You are already friends").setFromId(message.getToId())
+                    .setToId(message.getFromId());
+        }
+        client.getFriends().add(this.client.getClientId());
+        this.client.getFriends().add(client.getClientId());
+        client.save();
+        return new Message(MessageStatus.ACCEPTED).setText("Client are friends now").setFromId(message.getToId())
+                .setToId(message.getFromId());
     }
 
     private Message stopServer(@NotNull Message message) {

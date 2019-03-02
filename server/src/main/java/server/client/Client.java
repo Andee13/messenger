@@ -180,7 +180,7 @@ public class Client implements Saveable {
      *  The method {@code save} in {@code Client} class is used only for saving during a session closing
      * */
     @Override
-    public boolean save() {
+    public synchronized boolean save() {
         if (server == null) {
             LOGGER.warn("The client saving has been failed: a server has not been set");
             return false;
