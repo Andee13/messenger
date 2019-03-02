@@ -15,22 +15,22 @@ import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.FIELD)
 public class Room implements Saveable {
-    @XmlElement
-    private int roomId;
-    @XmlElement
-    private int adminId;
+    private volatile int roomId;
+    private volatile int adminId;
     @XmlJavaTypeAdapter(MessageHistoryObservableListAdapter.class)
-    private List<Message> messageHistory;
+    private volatile List<Message> messageHistory;
     @XmlJavaTypeAdapter(MembersObservableSetAdapter.class)
-    private Set<Integer> members;
+    private volatile Set<Integer> members;
     @XmlTransient
-    private Server server;
+    private volatile Server server;
 
     private static Logger LOGGER = Logger.getLogger("Room");
 
@@ -121,23 +121,6 @@ public class Room implements Saveable {
         this.messageHistory = messageHistory;
     }
 
-    @XmlAccessorType(XmlAccessType.FIELD)
-    private static final class MembersObservableSetWrapper {
-        @XmlElement(name="clientId")
-        private HashSet<Integer> members = new HashSet<>();
-
-        public MembersObservableSetWrapper() {
-        }
-
-        public HashSet<Integer> getMembers() {
-            return members;
-        }
-
-        public void setMembers(Set<Integer> members) {
-            this.members = new HashSet<>(members);
-        }
-    }
-
     private static final class MembersObservableSetAdapter extends XmlAdapter<MembersObservableSetWrapper, Set<Integer>>{
         @Override
         public Set<Integer> unmarshal(MembersObservableSetWrapper v) {
@@ -203,33 +186,44 @@ public class Room implements Saveable {
     }
 
     @XmlAccessorType(XmlAccessType.FIELD)
-    private static final class MessageHistoryObservableListWrapper {
-        @XmlElement(name="message")
-        private List<Message> messages =
-                FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
-        public MessageHistoryObservableListWrapper() {
+    private static final class MembersObservableSetWrapper {
+        @XmlElement(name="clientId")
+        private HashSet<Integer> members = new HashSet<>();
+        public MembersObservableSetWrapper() {
         }
-        public MessageHistoryObservableListWrapper(List<Message> list) {
-            FXCollections.synchronizedObservableList(FXCollections.observableList(list));
+        public HashSet<Integer> getMembers() {
+            return members;
         }
-        public List<Message> getMessages() {
-            return messages;
-        }
-        public void setMessages(List<Message> messages) {
-            this.messages = FXCollections.synchronizedObservableList(FXCollections.observableList(messages));
+
+        public void setMembers(Set<Integer> members) {
+            this.members = new HashSet<>(members);
         }
     }
 
-    private static final class MessageHistoryObservableListAdapter
-            extends XmlAdapter<MessageHistoryObservableListWrapper, List<Message>> {
-        public MessageHistoryObservableListAdapter() {
+    @XmlAccessorType(XmlAccessType.FIELD)
+    private static class MessageHistoryObservableListWrapper {
+        @XmlElement(name="message")
+        private LinkedList<Message> messages;
+        public MessageHistoryObservableListWrapper(List<Message> list) {
+            messages = new LinkedList<>(list);
         }
+        public MessageHistoryObservableListWrapper() {
+            messages = new LinkedList<>();
+        }
+        public LinkedList<Message> getMessages() {
+            return messages;
+        }
+        public void setMessages(List<Message> messages) {
+            this.messages = new LinkedList<>(messages);
+        }
+    }
 
-        public List<Message> unmarshal(MessageHistoryObservableListWrapper messages) throws Exception {
+    private static class MessageHistoryObservableListAdapter
+            extends XmlAdapter<MessageHistoryObservableListWrapper, List<Message>> {
+        public List<Message> unmarshal(MessageHistoryObservableListWrapper messages) {
             return FXCollections.synchronizedObservableList(FXCollections.observableList(messages.getMessages()));
         }
-
-        public MessageHistoryObservableListWrapper marshal(List<Message> messages) throws Exception {
+        public MessageHistoryObservableListWrapper marshal(List<Message> messages) {
             return new MessageHistoryObservableListWrapper(messages);
         }
     }

@@ -11,17 +11,16 @@ import server.Server;
 import server.ServerProcessing;
 import server.exceptions.ClientNotFoundException;
 import server.exceptions.IllegalPasswordException;
+import server.exceptions.RoomNotFoundException;
 import server.room.Room;
 import server.room.RoomProcessing;
 
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
+import javax.xml.bind.*;
 import javax.xml.xpath.*;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -36,24 +35,17 @@ import java.util.*;
  * been performed properly the methods return instances of {@code Message} of statuses {@code MessageStatus.ERROR}
  * or {@code MessageStatus.DENIED}. Some additional information may be provided in the field {@code Message.text}
  * */
-public class ClientListener extends Thread implements Saveable {
-
+public class ClientListener extends Thread {
 
     private volatile Socket socket;
     private volatile Server server;
     private volatile DataOutputStream out;
     private volatile DataInputStream in;
-    private LocalDateTime lastInputMessage;
     private boolean logged;
-    private LocalDateTime connected;
     private Client client;
 
     public Client getClient() {
         return client;
-    }
-
-    public void setClient(Client client) {
-        this.client = client;
     }
 
     private static final Logger LOGGER = Logger.getLogger("Client");
@@ -61,8 +53,6 @@ public class ClientListener extends Thread implements Saveable {
     public ClientListener(Server server, Socket socket) throws IOException {
         this.server = server;
         this.socket = socket;
-        socket.setSoTimeout(1000 /*ms*/ * 60 /*s*/ * 60 /*m*/);
-        connected = LocalDateTime.now();
         out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
         in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
     }
@@ -85,47 +75,33 @@ public class ClientListener extends Thread implements Saveable {
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
             String messageXml;
+            socket.setSoTimeout(1000 /*ms*/ * 60 /*s*/ * 60 /*m*/);
             try {
                 while (!isInterrupted()) {
                     messageXml = in.readUTF();
                     handle((Message) unmarshaller.unmarshal(new StringReader(messageXml)));
                 }
-            } catch (SocketException e) {
-                StringBuilder stringBuilder = new StringBuilder("The client ");
+            } catch (SocketTimeoutException e) { // client disconnected
+                StringBuilder stringBuilder = new StringBuilder("The client");
                 if (client != null) {
-                    stringBuilder.append(" (id ").append(client.getClientId()).append(") ");
+                    stringBuilder.append(" (id ").append(client.getClientId()).append(")");
                 }
-                stringBuilder.append(" disconnected (address ").append(socket.getRemoteSocketAddress());
+                stringBuilder.append(" disconnected (address ").append(socket.getRemoteSocketAddress()).append(')');
                 LOGGER.info(stringBuilder.toString());
-                if (client != null && !save()) {
-                    LOGGER.warn(new StringBuilder("Saving the client id ").append(client.getClientId())
-                            .append(" has not been completed properly"));
+                if (client != null && !client.save()) {
+                    LOGGER.warn(new StringBuilder("Saving the client (id ").append(client.getClientId())
+                            .append(") has not been completed properly"));
                 }
-            } catch (IOException e) {
-                LOGGER.trace(e.getLocalizedMessage());
+            } catch (IOException e) { // any I/O exception
+                LOGGER.fatal(e.getLocalizedMessage());
             }
-        } catch (JAXBException e) {
+        } catch (JAXBException e) { // unknown error
             LOGGER.fatal(e.getLocalizedMessage());
-        } finally {
-            closeClientSessionSafely();
+        } catch (SocketException e) {
+            LOGGER.error(e.getLocalizedMessage());
+        } finally { // TODO tracking in which case the thread begins to execute this code (in order to prevent double-saving)
             interrupt();
         }
-    }
-
-    public Socket getSocket() {
-        return socket;
-    }
-
-    public DataOutputStream getOut() {
-        return out;
-    }
-
-    public DataInputStream getIn() {
-        return in;
-    }
-
-    public LocalDateTime getLastInputMessage(){
-        return LocalDateTime.from(lastInputMessage);
     }
 
     /**
@@ -138,7 +114,7 @@ public class ClientListener extends Thread implements Saveable {
      * */
     private boolean isMessageFromThisLoggedClient(Message message) {
         if (message == null) {
-            LOGGER.trace("Passed null-message value to check the addresser id");
+            LOGGER.error("Passed null-message value to check the addresser id");
             return false;
         }
         if (!logged) {
@@ -146,7 +122,7 @@ public class ClientListener extends Thread implements Saveable {
             return false;
         }
         if (logged && (message.getFromId() == null || message.getFromId() != client.getClientId())) {
-            LOGGER.warn(new StringBuilder("Expected to receive clientId ").append(client.getClientId())
+            LOGGER.info(new StringBuilder("Expected to receive clientId ").append(client.getClientId())
                     .append(" but found ").append(message.getFromId()));
             return false;
         }
@@ -164,17 +140,7 @@ public class ClientListener extends Thread implements Saveable {
                     responseMessage = registration(message);
                     break;
                 case MESSAGE:
-                    if (!isMessageFromThisLoggedClient(message)) {
-                        responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
-                    }
-                    try {
-                        RoomProcessing.sendMessage(server, message);
-                        responseMessage = new Message(MessageStatus.ACCEPTED);
-                    } catch (IOException e) {
-                        LOGGER.error(e.getLocalizedMessage());
-                        responseMessage = new Message(MessageStatus.ERROR)
-                                .setText("Internal error. Message has not been sent");
-                    }
+                    responseMessage = sendMessage(message);
                     break;
                 case USERBAN:
                     break;
@@ -200,7 +166,6 @@ public class ClientListener extends Thread implements Saveable {
                     }
                 case STOP_SERVER:
                     responseMessage = stopServer(message);
-                    LOGGER.fatal(message);
                     if (MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
                         LOGGER.trace("Interrupting the server");
                         server.interrupt();
@@ -216,7 +181,7 @@ public class ClientListener extends Thread implements Saveable {
             if (MessageStatus.REGISTRATION.equals(message.getStatus())
                     && MessageStatus.ACCEPTED.equals(responseMessage.getStatus())) {
                 sendMessageToConnectedClient(new Message(MessageStatus.KICK).setText("Please, re-login on the server"));
-                closeClientSessionSafely();
+                interrupt();
             }
         }
     }
@@ -254,22 +219,15 @@ public class ClientListener extends Thread implements Saveable {
             LOGGER.error("Message is null");
             return new Message(MessageStatus.ERROR).setText("Internal error");
         }
-        String text = message.getText();
-        if (text == null) {
-            LOGGER.info(new StringBuilder("Attempt to send an empty message from client id ")
-                    .append(message.getToId()).append(" to the room id ").append(message.getRoomId()));
+        if (message.getText() == null) {
             return new Message(MessageStatus.ERROR).setText("Message text has not been set");
         }
         if (message.getFromId() == null) {
-            LOGGER.info("Attempt to send an anonymous message : fromId is null");
-            return new Message(MessageStatus.ERROR).setText("Client's id has not been set");
+            return new Message(MessageStatus.ERROR).setText("Addresser's id has not been set");
         }
-        int fromId = message.getFromId();
         if (message.getRoomId() == null) {
-            LOGGER.info(new StringBuilder("Attempt to sent a message from client id ").append(fromId)
-                    .append(" to undefined room"));
+            return new Message(MessageStatus.ERROR).setText("The room id is not set");
         }
-        int roomId = message.getRoomId();
         Message responseMessage;
         try {
             RoomProcessing.sendMessage(server, message);
@@ -277,12 +235,15 @@ public class ClientListener extends Thread implements Saveable {
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             responseMessage = new Message(MessageStatus.ERROR).setText("An internal error occurred");
+        } catch (RoomNotFoundException e) {
+            LOGGER.trace(new StringBuilder("Room id ").append(message.getRoomId()).append(" has not been found"));
+            responseMessage = new Message(MessageStatus.ERROR).setText("Unable to find the room having the specified id");
         }
         return responseMessage;
     }
 
     /**
-     * The method that turns an incoming connection to a client's session
+     *  The method that turns an incoming connection to a client's session
      * Verifies the {@code message} of status {@code MessageStatus.AUTH} comparing the incoming user data
      * such as a login and a password.
      *
@@ -314,6 +275,9 @@ public class ClientListener extends Thread implements Saveable {
         if (message.getLogin() == null || message.getPassword() == null) {
             return new Message(MessageStatus.ERROR)
                     .setText((message.getLogin() == null ? "Login" : "Password").concat(" must be set"));
+        }
+        if (message.getFromId() != null) {
+            return new Message(MessageStatus.ERROR).setText("Registration request must not have set fromId");
         }
         File clientFolder = new File(server.getClientsDir(), String.valueOf(message.getLogin().hashCode()));
         File clientFile = new File(clientFolder, String.valueOf(message.getLogin().hashCode()).concat(".xml"));
@@ -398,13 +362,15 @@ public class ClientListener extends Thread implements Saveable {
      * @return          an instance of {@code Message} that informs whether new room was created or not
      * */
     private Message createRoom(@NotNull Message message) {
-        if (!message.getStatus().equals(MessageStatus.CREATE_ROOM)) {
+        if (!MessageStatus.CREATE_ROOM.equals(message.getStatus())) {
+            LOGGER.error(new StringBuilder("Unexpected message status. Expected ").append(MessageStatus.CREATE_ROOM)
+                    .append(". But found ").append(message.getStatus()));
             return new Message(MessageStatus.ERROR)
                     .setText(new StringBuilder("The message status must be ").append(MessageStatus.CREATE_ROOM)
                             .append(" but found ").append(message.getStatus()).toString());
         }
         /*
-        * The field toId is considered as an id of the initial room member, thus it must be valid
+        *   The field toId is considered as an id of the initial room member, thus it must be valid
         * i.e. the client with such id must exists
         * */
         try {
@@ -413,19 +379,15 @@ public class ClientListener extends Thread implements Saveable {
                 return new Message(MessageStatus.ERROR).setText("Some error has occurred during the room creation");
             } else {
                 client.getRooms().add(room.getRoomId());
-                client.save();
+                LOGGER.trace(new StringBuilder("New room (id ").append(room.getRoomId()).append(") has been created"));
                 return new Message(MessageStatus.ACCEPTED).setRoomId(room.getRoomId())
                         .setText(new StringBuilder("The room id: ").append(room.getRoomId())
                                 .append(" has been successfully created").toString());
             }
-        } catch (InvalidPropertiesFormatException e) {
+        } catch (InvalidPropertiesFormatException e) { // error while room creation
             LOGGER.error(e.getLocalizedMessage());
             return new Message(MessageStatus.ERROR).setText("Internal has error occurred");
         }
-    }
-
-    public LocalDateTime getConnected() {
-        return LocalDateTime.from(connected);
     }
 
     public void sendMessageToConnectedClient(Message message) {
@@ -437,44 +399,8 @@ public class ClientListener extends Thread implements Saveable {
             marshaller.marshal(message, stringWriter);
             out.writeUTF(stringWriter.toString());
             out.flush();
-        } catch (SocketException e) {
-            LOGGER.warn("The connection was closed");
         } catch (IOException | JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
-        }
-    }
-
-    /**
-     *  The method {@code closeClientSession} closes client's socket and all the streams were used for wrapping the
-     * socket's streams (i.e. streams have been got by calling {@code socket.getInputStream()},
-     * {@code socket.getOutputStream()})
-     *
-     *  Also it saves the client's data if the person has logged in and removes current thread from server list of
-     * online clients
-     *
-     * NOTE! This method does not interrupt current stream
-     *
-     * @return          In case if no user has been set (e.g. before registration) the method returns {@code true}
-     *                  if the {@code socket} was closed
-     *                  If the {@code client} was set - the method will return {@code true} if and only if the condition
-     *                  above are met and the {@code client} has been successfully saved
-     * */
-    public boolean closeClientSessionSafely() {
-        try {
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
-            }
-            in.close();
-            out.close();
-            Map<Integer, ClientListener> onlineClients = server.getOnlineClients();
-            if (client != null) {
-                onlineClients.remove(client.getClientId());
-                return client.save() & socket.isClosed();
-            }
-            return socket.isClosed();
-        } catch (IOException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            return false;
         }
     }
 
@@ -565,32 +491,6 @@ public class ClientListener extends Thread implements Saveable {
         }
     }
 
-    public Set<Integer> getClientFriendsList () {
-        if (client == null) {
-            LOGGER.error("Attempt to get a set of friends ids of unspecified client");
-            throw new IllegalStateException("Client has not been set");
-        }
-        return client.getFriends();
-    }
-
-    public Set<Integer> getClientRoomsList () {
-        if (client == null) {
-            LOGGER.error("Attempt to get a set of room ids of unspecified client");
-            throw new IllegalStateException("Client has not been set");
-        }
-        return client.getRooms();
-    }
-
-    /**
-     *  Just invokes the same method of the {@code client}
-     *
-     * @return          {@code true} if and only if the {@code client} is set and it has been successfully saved
-     * */
-    @Override
-    public boolean save() {
-        return client != null && client.save();
-    }
-
     /**
      *  The method {@code clientBan} handles with requests of blocking a user.
      *
@@ -678,7 +578,9 @@ public class ClientListener extends Thread implements Saveable {
             LOGGER.trace(deniedMessage);
             return new Message(MessageStatus.DENIED).setText(deniedMessage);
         }
-        server.closeClientSession(toId);
+        if (server.getOnlineClients().containsKey(message.getToId())) {
+            server.getOnlineClients().get(message.getToId()).interrupt();
+        }
         clientIsBeingBanned.setBaned(true);
         clientIsBeingBanned.setIsBannedUntill(bannedUntil);
         clientIsBeingBanned.save();
@@ -755,7 +657,130 @@ public class ClientListener extends Thread implements Saveable {
 
     @Override
     public void interrupt() {
-        save();
+        if (client != null && !client.save()) {
+            LOGGER.error(new StringBuilder("Saving the client (id").append(client.getClientId())
+                    .append(") has not been finished properly"));
+        }
         super.interrupt();
+    }
+
+    private Message getFriends(){
+        if (client.getFriends().size() == 0) {
+            return new Message(MessageStatus.FRIEND_LIST).setText("");
+        }
+        StringBuilder stringBuilder = new StringBuilder();
+        for (int clientId : client.getFriends()) {
+            stringBuilder.append(clientId).append(',');
+        }
+        return new Message(MessageStatus.FRIEND_LIST).setText(stringBuilder.substring(0,stringBuilder.length() - 1));
+    }
+
+    public Message getRooms() {
+        if (client.getRooms().size() == 0) {
+            return new Message(MessageStatus.ROOM_LIST).setText("");
+        }
+        StringBuilder stringBuilder = new StringBuilder();
+        for (int roomId : client.getRooms()) {
+            stringBuilder.append(roomId).append(',');
+        }
+        return new Message(MessageStatus.ROOM_LIST).setText(stringBuilder.substring(0, stringBuilder.length() - 1));
+    }
+
+    private Message inviteClient(Message message) {
+        if (message == null) {
+            LOGGER.warn("null-message");
+            return new Message(MessageStatus.ERROR).setText("Internal error");
+        }
+        if (message.getFromId() == null) {
+            LOGGER.warn("null fromId");
+            return new Message(MessageStatus.ERROR).setText("Missed addresser id");
+        }
+        if (message.getToId() == null) {
+            LOGGER.warn("null toId");
+            return new Message(MessageStatus.ERROR).setText("Missed client to be invited");
+        }
+        if (message.getRoomId() == null) {
+            LOGGER.warn("null roomId");
+            return new Message(MessageStatus.ERROR).setText("Missed roomId");
+        }
+        if (!server.getOnlineRooms().containsKey(message.getRoomId())) {
+            try {
+                server.getOnlineRooms().put(message.getRoomId(), RoomProcessing.loadRoom(server, message.getRoomId()));
+            } catch (InvalidPropertiesFormatException e) {
+                LOGGER.error(new StringBuilder("Unknown error ").append(e.getClass().getName()).append(" ")
+                        .append(e.getMessage()));
+                return new Message(MessageStatus.ERROR).setText("Internal error");
+            } catch (RoomNotFoundException e) {
+                LOGGER.trace(new StringBuilder("Unable to find a room (id ").append(message.getRoomId()).append(')'));
+                return new Message(MessageStatus.DENIED)
+                        .setText(new StringBuilder("Unable to find the specified room (id ").append(message.getRoomId())
+                                .append(')').toString());
+            }
+        }
+        Room room = server.getOnlineRooms().get(message.getRoomId());
+        if (!room.getMembers().contains(message.getFromId())) {
+            LOGGER.trace(new StringBuilder("The client id ").append(message.getFromId())
+                    .append(" is not a member of the room id ").append(message.getRoomId()));
+            return new Message(MessageStatus.DENIED).setText("Not a member of the room");
+        }
+        if (room.getMembers().contains(message.getToId())) {
+            LOGGER.trace(new StringBuilder("Attempt to remove client (id").append(message.getToId())
+                    .append(") who is already a member of the room (id ").append(message.getRoomId()).append(')'));
+            return new Message(MessageStatus.DENIED).setText("This client is already a member of the room");
+        }
+        room.getMembers().add(message.getToId());
+        String infoString = new StringBuilder("Client (id ").append(message.getToId())
+                .append(") is a member of the room (id ").append(message.getRoomId()).append(')').toString();
+        LOGGER.trace(infoString);
+        return new Message(MessageStatus.ACCEPTED).setText(infoString);
+    }
+
+    private Message uninviteClient(Message message) {
+        if (message == null) {
+            LOGGER.warn("null-message");
+            return new Message(MessageStatus.ERROR).setText("Internal error");
+        }
+        if (message.getFromId() == null) {
+            LOGGER.warn("null fromId");
+            return new Message(MessageStatus.ERROR).setText("Missed addresser id");
+        }
+        if (message.getToId() == null) {
+            LOGGER.warn("null toId");
+            return new Message(MessageStatus.ERROR).setText("Missed client to be uninvited");
+        }
+        if (message.getRoomId() == null) {
+            LOGGER.warn("null roomId");
+            return new Message(MessageStatus.ERROR).setText("Missed roomId");
+        }
+        if (!server.getOnlineRooms().containsKey(message.getRoomId())) {
+            try {
+                server.getOnlineRooms().put(message.getRoomId(), RoomProcessing.loadRoom(server, message.getRoomId()));
+            } catch (InvalidPropertiesFormatException e) {
+                LOGGER.error(new StringBuilder("Unknown error ").append(e.getClass().getName()).append(" ")
+                        .append(e.getMessage()));
+                return new Message(MessageStatus.ERROR).setText("Internal error");
+            } catch (RoomNotFoundException e) {
+                LOGGER.trace(new StringBuilder("Unable to find a room (id ").append(message.getRoomId()).append(')'));
+                return new Message(MessageStatus.DENIED)
+                        .setText(new StringBuilder("Unable to find the specified room (id ").append(message.getRoomId())
+                                .append(')').toString());
+            }
+        }
+        Room room = server.getOnlineRooms().get(message.getRoomId());
+        if (!room.getMembers().contains(message.getFromId())) {
+            LOGGER.trace(new StringBuilder("The client id ").append(message.getFromId())
+                    .append(" is not a member of the room id ").append(message.getRoomId()));
+            return new Message(MessageStatus.DENIED).setText("Not a member of the room");
+        }
+        if (!room.getMembers().contains(message.getToId())) {
+            LOGGER.trace(new StringBuilder("Attempt to remove client (id").append(message.getToId())
+                    .append(") who is not a member of the room (id ").append(message.getRoomId()).append(')'));
+            return new Message(MessageStatus.DENIED).setText("This client is not a member of the room");
+        }
+        room.getMembers().remove(message.getToId());
+        String infoString = new StringBuilder("Client (id ").append(message.getToId())
+                .append(") is not a member of the room (id ").append(message.getRoomId()).append(')').toString();
+        LOGGER.trace(infoString);
+        return new Message(MessageStatus.ACCEPTED).setText(infoString);
     }
 }

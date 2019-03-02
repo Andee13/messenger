@@ -37,12 +37,7 @@ public class Observer extends Thread {
         Map<Integer, Room> onlineRooms = server.getOnlineRooms();
         while (true) {
             for (Map.Entry<Integer, ClientListener> entry : onlineClients.entrySet()) {
-                ClientListener clientListener = entry.getValue();
-                if (clientListener.getLastInputMessage().plusHours(1).isAfter(LocalDateTime.now())) {
-                    Message kickMessage = new Message(MessageStatus.KICK).setText("You have been AFK too long");
-                    clientListener.sendMessageToConnectedClient(kickMessage);
-                    server.closeClientSession(clientListener.getClient().getClientId());
-                }
+                // TODO write a kicker
             }
             /*
             *   This loop saves the room in case if there is no longer online member of it on sever

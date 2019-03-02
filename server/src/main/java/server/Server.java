@@ -1,27 +1,28 @@
 package server;
 
 import common.Saveable;
-import server.client.Client;
-import server.client.ClientListener;
-import server.room.Room;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
-import sun.misc.Cleaner;
+import server.client.ClientListener;
+import server.room.Room;
 
 import javax.xml.bind.annotation.XmlRootElement;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.*;
+import java.util.InvalidPropertiesFormatException;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
 
 @XmlRootElement
 public class Server extends Thread implements Saveable {
     private volatile Map<Integer, ClientListener> onlineClients;
     private volatile Map<Integer, Room> onlineRooms;
     private static final Logger LOGGER = Logger.getLogger("Server");
-    private Properties config;
+    private volatile Properties config;
     private File clientsDir;
     private File roomsDir;
     private File serverConfigFile;
@@ -168,26 +169,8 @@ public class Server extends Thread implements Saveable {
         } catch (IOException e) {
             LOGGER.fatal("Error occurred while starting the server: ".concat(e.getLocalizedMessage()));
         } finally {
-            save();
-            interruptOnlineClientsThreads();
-            if (!isInterrupted()) {
-                interrupt();
-            }
+            interrupt();
         }
-    }
-
-    /**
-     *  The method {@code closeClientSession} safely closes specified client's session
-     *  in case if this client is currently online
-     * */
-    public void closeClientSession (int clientId) {
-        if (onlineClients.containsKey(clientId)) {
-            if (!onlineClients.get(clientId).closeClientSessionSafely()) {
-                LOGGER.warn(new StringBuilder("Client's (id ").append(clientId)
-                        .append(") session has not been closed properly"));
-            }
-        }
-        LOGGER.trace(new StringBuilder("Client ").append(clientId).append(" is offline/not exists"));
     }
 
     /**
@@ -230,7 +213,7 @@ public class Server extends Thread implements Saveable {
             config.storeToXML(bos, null);
             for (Map.Entry<Integer, ClientListener> onlineClients : onlineClients.entrySet()) {
                 ClientListener clientListener = onlineClients.getValue();
-                if (!clientListener.save()) {
+                if (clientListener.getClient() != null && !clientListener.getClient().save()) {
                     LOGGER.error(new StringBuilder("Failed to save the client id ")
                             .append(clientListener.getClient().getClientId()));
                     return false;
@@ -243,7 +226,6 @@ public class Server extends Thread implements Saveable {
                     return false;
                 }
             }
-            config.storeToXML(new FileOutputStream(serverConfigFile), null);
             return true;
         } catch (FileNotFoundException e) {
             LOGGER.error("Unable to find a server configuration file ".concat(serverConfigFile.getAbsolutePath()));
@@ -253,7 +235,6 @@ public class Server extends Thread implements Saveable {
             return false;
         }
     }
-
     private boolean interruptOnlineClientsThreads() {
         for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.entrySet()) {
             clientListenerEntry.getValue().interrupt();
@@ -264,5 +245,12 @@ public class Server extends Thread implements Saveable {
             }
         }
         return true;
+    }
+    @Override
+    public void interrupt() {
+        save();
+        interruptOnlineClientsThreads();
+        super.interrupt();
+        System.exit(1);
     }
 }
