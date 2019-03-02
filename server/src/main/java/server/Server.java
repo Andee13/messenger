@@ -1,26 +1,28 @@
 package server;
 
-import server.room.Room;
-import server.room.RoomProcessing;
+import common.Saveable;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import server.client.ClientListener;
+import server.room.Room;
 
 import javax.xml.bind.annotation.XmlRootElement;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import server.exceptions.RoomNotFoundException;
+import java.util.InvalidPropertiesFormatException;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
 
 @XmlRootElement
 public class Server extends Thread implements Saveable {
     private volatile Map<Integer, ClientListener> onlineClients;
     private volatile Map<Integer, Room> onlineRooms;
     private static final Logger LOGGER = Logger.getLogger("Server");
-    private Properties config;
+    private volatile Properties config;
     private File clientsDir;
     private File roomsDir;
     private File serverConfigFile;
@@ -149,7 +151,6 @@ public class Server extends Thread implements Saveable {
     public void run() {
         if (!ServerProcessing.arePropertiesValid(config)) {
             LOGGER.fatal("Unable to start the server. Server configurations are not valid.");
-            interrupt();
             return;
         }
         Socket socket;
@@ -160,7 +161,7 @@ public class Server extends Thread implements Saveable {
                     LOGGER.info(new StringBuilder("Incoming connection from: ")
                             .append(socket.getInetAddress()).toString());
                     ClientListener clientListener = new ClientListener(this, socket);
-                    clientListener.run();
+                    clientListener.start();
                 } catch (IOException e) {
                     LOGGER.error(e.getLocalizedMessage());
                 }
@@ -168,19 +169,8 @@ public class Server extends Thread implements Saveable {
         } catch (IOException e) {
             LOGGER.fatal("Error occurred while starting the server: ".concat(e.getLocalizedMessage()));
         } finally {
-            ServerProcessing.stopServerSafety(this);
+            interrupt();
         }
-    }
-
-    /**
-     *  The method {@code clodseClientSession} safely closes specified client's session
-     *  in case if this client is currently online
-     * */
-    public void closeClientSession (int clientId) {
-        if (onlineClients.containsKey(clientId)) {
-            onlineClients.get(clientId).closeClientSession();
-        }
-        LOGGER.trace(new StringBuilder("Client ").append(clientId).append(" is offline/not exists"));
     }
 
     /**
@@ -207,24 +197,36 @@ public class Server extends Thread implements Saveable {
      *                  data as {@code serverConfigFile}
      * */
     @Override
-    public boolean save() {
+    public synchronized boolean save() {
         if (config == null) {
             LOGGER.warn("Saving the server has been failed: undefined server configurations.");
-            return false;
         }
-        if (ServerProcessing.arePropertiesValid(config)) {
+        if (!ServerProcessing.arePropertiesValid(config)) {
             LOGGER.warn("Saving the server has been failed: invalid server properties.");
             return false;
         }
         if (serverConfigFile == null) {
-            LOGGER.warn("Saving the server has been failed: server configuration file must not be null");
+            LOGGER.fatal("Saving the server has been failed: server configuration file must not be null");
             return false;
         }
         try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(serverConfigFile))) {
             config.storeToXML(bos, null);
-            boolean allClientsHaveBeenSaved = ServerProcessing.save(onlineClients.entrySet());
-            boolean allRoomsHaveBeenSaved = ServerProcessing.save(onlineRooms.entrySet());
-            return allClientsHaveBeenSaved && allRoomsHaveBeenSaved;
+            for (Map.Entry<Integer, ClientListener> onlineClients : onlineClients.entrySet()) {
+                ClientListener clientListener = onlineClients.getValue();
+                if (clientListener.getClient() != null && !clientListener.getClient().save()) {
+                    LOGGER.error(new StringBuilder("Failed to save the client id ")
+                            .append(clientListener.getClient().getClientId()));
+                    return false;
+                }
+            }
+            for (Map.Entry<Integer, Room> onlineRooms : onlineRooms.entrySet()) {
+                if (!onlineRooms.getValue().save()) {
+                    LOGGER.error(new StringBuilder("Failed to save the room id ")
+                            .append(onlineRooms.getValue().getRoomId()).toString());
+                    return false;
+                }
+            }
+            return true;
         } catch (FileNotFoundException e) {
             LOGGER.error("Unable to find a server configuration file ".concat(serverConfigFile.getAbsolutePath()));
             return false;
@@ -232,5 +234,23 @@ public class Server extends Thread implements Saveable {
             LOGGER.error(e.getLocalizedMessage());
             return false;
         }
+    }
+    private boolean interruptOnlineClientsThreads() {
+        for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.entrySet()) {
+            clientListenerEntry.getValue().interrupt();
+            if (!clientListenerEntry.getValue().isInterrupted()) {
+                LOGGER.error(new StringBuilder("Failed to interrupt client's (id ")
+                        .append(clientListenerEntry.getValue().getClient().getClientId()).append(") thread"));
+                return false;
+            }
+        }
+        return true;
+    }
+    @Override
+    public void interrupt() {
+        save();
+        interruptOnlineClientsThreads();
+        super.interrupt();
+        System.exit(1);
     }
 }

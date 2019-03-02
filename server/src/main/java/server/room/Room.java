@@ -2,9 +2,11 @@ package server.room;
 
 import common.message.Message;
 import common.message.MessageStatus;
+import common.Saveable;
 import javafx.collections.*;
 import org.apache.log4j.Logger;
 import server.*;
+import server.client.ClientListener;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -19,42 +21,32 @@ import java.util.*;
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.FIELD)
 public class Room implements Saveable {
-    @XmlElement
-    private int roomId;
-    @XmlElement
-    private int adminId;
+    private volatile int roomId;
+    private volatile int adminId;
     @XmlJavaTypeAdapter(MessageHistoryObservableListAdapter.class)
-    private List<Message> messageHistory;
+    private volatile List<Message> messageHistory;
     @XmlJavaTypeAdapter(MembersObservableSetAdapter.class)
-    private Set<Integer> members;
+    private volatile Set<Integer> members;
     @XmlTransient
-    private Server server;
+    private volatile Server server;
 
     private static Logger LOGGER = Logger.getLogger("Room");
 
-    public Room(){
-        messageHistory = FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
-        members = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new TreeSet<>()));
-        initMembersListener();
-        initMessageHistoryListener();
+    public Room() {
+        ObservableList<Message> oHistory = FXCollections.synchronizedObservableList(
+                FXCollections.observableList(new LinkedList<>()));
+        ObservableSet<Integer> oMembers = FXCollections.synchronizedObservableSet(
+                FXCollections.observableSet(new TreeSet<>()));
+        initMembersListener(oMembers);
+        initMessageHistoryListener(oHistory);
+        messageHistory = oHistory;
+        members = oMembers;
     }
 
-    /**
-     *  This method initialize {@code messageHistory} list (synchronized + observable) and sets the observer, which will
-     * inform every client whose id is currently stored in the server set of online clients.
-     *
-     *  NOTE! Current version of the server does not support the message removing operation
-     *
-     * @exception           UnsupportedOperationException in case if a message
-     *                      has been removed from the {@code messageHistory}
-     * */
-    private void initMessageHistoryListener() {
-        if (messageHistory == null) {
-            messageHistory = FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
-        }
-        ((ObservableList<Message>)messageHistory).addListener((ListChangeListener<Message>) c -> {
+    private void initMessageHistoryListener(ObservableList<Message> messageHistory) {
+        messageHistory.addListener((ListChangeListener<Message>) c -> {
             c.next();
-            if (c.wasAdded()) {
+            if (c.wasAdded() && !c.wasRemoved()) {
                 List <Message> sentMessages = (List<Message>) c.getAddedSubList();
                 for (int clientId : members) {
                     if (server.getOnlineClients().containsKey(clientId)) {
@@ -63,29 +55,24 @@ public class Room implements Saveable {
                         }
                     }
                 }
-            } else {
-                throw new UnsupportedOperationException("Current version of server does not support the operation of message deletion");
+            } else if (c.wasRemoved() && !c.wasAdded()) {
+                // TODO methods of removing the message from chat
             }
         });
     }
 
-    /**
-     *  This method initialize {@code members} set (synchronized + observable) and sets the observer, which will
-     *
-     * */
-    private void initMembersListener() {
-        if (members == null) {
-            members = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new TreeSet<>()));
-        }
-        ((ObservableSet<Integer>)members).addListener((SetChangeListener<Integer>) change -> {
+    public void initMembersListener(ObservableSet<Integer> members) {
+        members.addListener((SetChangeListener<Integer>) change -> {
             Message notificationMessage;
             int clientId;
-            if (change.wasAdded()) {
+            if (change.wasAdded() && !change.wasRemoved()) {
                 clientId = change.getElementAdded();
-                notificationMessage = new Message(MessageStatus.CLIENT_ONLINE).setFromId(clientId);
-            } else { // change.wasRemoved() == true
+                notificationMessage = new Message(MessageStatus.NEW_ROOM_MEMBER).setFromId(clientId).setRoomId(roomId);
+            } else if (change.wasRemoved() && !change.wasAdded()) { // change.wasRemoved() == true
                 clientId = change.getElementRemoved();
-                notificationMessage = new Message(MessageStatus.CLIENT_OFFLINE).setFromId(clientId);
+                notificationMessage = new Message(MessageStatus.MEMBER_LEFT_ROOM).setFromId(clientId).setRoomId(roomId);
+            } else { // somehow replaced ???
+                return;
             }
             for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().entrySet()) {
                 if (clientWrapper.getValue().getClient().getClientId() != clientId) {
@@ -93,6 +80,20 @@ public class Room implements Saveable {
                 }
             }
         });
+    }
+
+    public void setMessageHistoryWithListener(List<Message> messageHistory) {
+        ObservableList<Message> o = FXCollections.synchronizedObservableList(
+                FXCollections.observableList(messageHistory));
+        initMessageHistoryListener(o);
+        this.messageHistory = o;
+    }
+
+    public void setMembersWithListener(Set<Integer> members) {
+        ObservableSet<Integer> o = FXCollections.synchronizedObservableSet(
+                FXCollections.observableSet(members));
+        initMembersListener(o);
+        this.members = o;
     }
 
     public void setRoomId(int roomId) {
@@ -117,23 +118,6 @@ public class Room implements Saveable {
 
     private void setMessageHistory(ObservableList<Message> messageHistory) {
         this.messageHistory = messageHistory;
-    }
-
-    @XmlAccessorType(XmlAccessType.FIELD)
-    private static final class MembersObservableSetWrapper {
-        @XmlElement(name="clientId")
-        private HashSet<Integer> members = new HashSet<>();
-
-        public MembersObservableSetWrapper() {
-        }
-
-        public HashSet<Integer> getMembers() {
-            return members;
-        }
-
-        public void setMembers(Set<Integer> members) {
-            this.members = new HashSet<>(members);
-        }
     }
 
     private static final class MembersObservableSetAdapter extends XmlAdapter<MembersObservableSetWrapper, Set<Integer>>{
@@ -201,43 +185,51 @@ public class Room implements Saveable {
     }
 
     @XmlAccessorType(XmlAccessType.FIELD)
-    private static final class MessageHistoryObservableListWrapper {
-        @XmlElement(name="message")
-        private List<Message> messages =
-                FXCollections.synchronizedObservableList(FXCollections.observableList(new ArrayList<>()));
-        public MessageHistoryObservableListWrapper() {
+    private static final class MembersObservableSetWrapper {
+        @XmlElement(name="clientId")
+        private HashSet<Integer> members = new HashSet<>();
+        public MembersObservableSetWrapper() {
         }
-        public MessageHistoryObservableListWrapper(List<Message> list) {
-            FXCollections.synchronizedObservableList(FXCollections.observableList(list));
+        public HashSet<Integer> getMembers() {
+            return members;
         }
-        public List<Message> getMessages() {
-            return messages;
-        }
-        public void setMessages(List<Message> messages) {
-            this.messages = FXCollections.synchronizedObservableList(FXCollections.observableList(messages));
+
+        public void setMembers(Set<Integer> members) {
+            this.members = new HashSet<>(members);
         }
     }
 
-    private static final class MessageHistoryObservableListAdapter
-            extends XmlAdapter<MessageHistoryObservableListWrapper, List<Message>> {
-        public MessageHistoryObservableListAdapter() {
+    @XmlAccessorType(XmlAccessType.FIELD)
+    private static class MessageHistoryObservableListWrapper {
+        @XmlElement(name="message")
+        private LinkedList<Message> messages;
+        public MessageHistoryObservableListWrapper(List<Message> list) {
+            messages = new LinkedList<>(list);
         }
+        public MessageHistoryObservableListWrapper() {
+            messages = new LinkedList<>();
+        }
+        public LinkedList<Message> getMessages() {
+            return messages;
+        }
+        public void setMessages(List<Message> messages) {
+            this.messages = new LinkedList<>(messages);
+        }
+    }
 
-        public List<Message> unmarshal(MessageHistoryObservableListWrapper messages) throws Exception {
+    private static class MessageHistoryObservableListAdapter
+            extends XmlAdapter<MessageHistoryObservableListWrapper, List<Message>> {
+        public List<Message> unmarshal(MessageHistoryObservableListWrapper messages) {
             return FXCollections.synchronizedObservableList(FXCollections.observableList(messages.getMessages()));
         }
-
-        public MessageHistoryObservableListWrapper marshal(List<Message> messages) throws Exception {
+        public MessageHistoryObservableListWrapper marshal(List<Message> messages) {
             return new MessageHistoryObservableListWrapper(messages);
         }
     }
 
     @Override
-    public boolean save() {
+    public synchronized boolean save() {
         Properties serverProperties = server.getConfig();
-        if (!ServerProcessing.arePropertiesValid(serverProperties)) {
-            throw new RuntimeException("Properties are not valid for a room to be saved into its file");
-        }
         File roomsDir = new File(serverProperties.getProperty("roomsDir"));
         if (!roomsDir.isDirectory() && !roomsDir.mkdir()) {
             return false;

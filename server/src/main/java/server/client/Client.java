@@ -1,8 +1,10 @@
-package server;
+package server.client;
 
 import common.message.Message;
 import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
+import common.Saveable;
+import server.Server;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -174,8 +176,11 @@ public class Client implements Saveable {
 
     }
 
+    /**
+     *  The method {@code save} in {@code Client} class is used only for saving during a session closing
+     * */
     @Override
-    public boolean save() {
+    public synchronized boolean save() {
         if (server == null) {
             LOGGER.warn("The client saving has been failed: a server has not been set");
             return false;
@@ -228,7 +233,7 @@ public class Client implements Saveable {
             return equals(clientToCheck);
         } catch (JAXBException e) {
             e.printStackTrace();
-            LOGGER.warn(e.getLocalizedMessage());
+            LOGGER.error(e.getLocalizedMessage());
             return false;
         }
     }

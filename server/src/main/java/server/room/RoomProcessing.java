@@ -25,26 +25,26 @@ public class RoomProcessing {
     private static final Logger LOGGER = Logger.getLogger("Room");
 
     /**
-     *  The method {@code getRoom} returns an instance of {@code Room} - representation of a place for communication
+     *  The method {@code loadRoom} returns an instance of {@code Room} - representation of a place for communication
      * of two or more clients
      *
      * @param           roomId is an id of the room to be searched
      * @param           server a server containing {@code room}
      *
-     * @throws          IOException if {@code serverConfig} is not valid e.g. is {@code null}
+     * @throws          InvalidPropertiesFormatException if {@code serverConfig} is not valid e.g. is {@code null}
      *                  or the specified in the {@code serverConfig} filepath does not points an existing file
      *
      * @return          an instance of Room that has {@code roomId} equal to the specified parameter
      *                  if there is not such room in the rooms directory of the server
      *                  than the method will return {@code null}
      * */
-    public static Room getRoom(Server server, int roomId) throws IOException {
+    public static Room loadRoom(Server server, int roomId) throws InvalidPropertiesFormatException {
         if (server == null) {
             LOGGER.error("Passed null server value");
             throw new NullPointerException("Server must not be null");
         }
         if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
-            throw new IOException("Server configurations are not valid");
+            throw new InvalidPropertiesFormatException("Server configurations are not valid");
         }
         File roomsDir = new File(server.getConfig().getProperty("roomsDir"));
         File roomDir = new File(roomsDir, String.valueOf(roomId));
@@ -120,7 +120,7 @@ public class RoomProcessing {
             throw new RuntimeException(errorMessage);
         }
         try {
-            return getRoom(server, newRoomId);
+            return loadRoom(server, newRoomId);
         } catch (Exception e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
@@ -164,7 +164,7 @@ public class RoomProcessing {
             }
             JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
             Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            Room room = (Room) unmarshaller.unmarshal(roomFile);
+            unmarshaller.unmarshal(roomFile); // just for checking that it is possible to create a room from the file
             return roomFile.lastModified();
         } catch (Throwable e) {
             return 0L;
@@ -178,6 +178,8 @@ public class RoomProcessing {
      * @param           server the server where where the room is located
      * @param           message the text message to be sent
      *
+     * @return          {@code true} in case if message has been added to the room history
+     *
      * @throws          IOException in case if some kind of I/O exception has occurred
      *                  e.g. {@code sever.getConfig()} does not return a valid configuration set,
      *
@@ -186,34 +188,48 @@ public class RoomProcessing {
      * @exception       RoomNotFoundException in case if the room specified by the {@code message.getRoomId()}
      *      *                  has not been created on server or it's data is unreachable
      * */
-    public static void sendMessage(@NotNull Server server, @NotNull Message message) throws IOException {
+    public static boolean sendMessage(@NotNull Server server, @NotNull Message message) throws IOException {
+        // checking the message status
         if (message.getStatus() != MessageStatus.MESSAGE) {
             throw new IllegalArgumentException(new StringBuilder("Message status is expected to be ")
                     .append(MessageStatus.MESSAGE).append(" but found ").append(message.getStatus()).toString());
         }
+        // checking the properties
         if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("The specified server has invalid configurations");
         }
-        int fromId = message.getFromId();
-        int roomId = message.getRoomId();
-        String text = message.getText();
-        if (text == null) {
+        if (message.getFromId() == null) {
+            throw new IOException("Unset addresser");
+        }
+        if (message.getRoomId() == null) {
+            throw new IOException("Unset roomId");
+        }
+        if (message.getText() == null) {
             throw new IOException("Text has not been set");
         }
+        int fromId = message.getFromId();
+        int roomId = message.getRoomId();
         // Checking whether the specified user exists
         if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
             throw new ClientNotFoundException(fromId);
         }
         // Checking whether the specified room exists
-        long currentTime = System.currentTimeMillis();
+        // TODO handle the exceptions ?! in the ClientListener.handle() !!!
         if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), roomId) == 0) {
             throw new RoomNotFoundException("Unable to find room id: ".concat(String.valueOf(roomId)));
         }
         // Checking whether the specified room is in the server "online" rooms set
+
         if (!server.getOnlineRooms().containsKey(roomId)) {
-            // TODO load room to online rooms
+            Map<Integer, Room> onlineRoms = server.getOnlineRooms();
+            onlineRoms.put(roomId, RoomProcessing.loadRoom(server, message.getRoomId()));
         }
         Room room = server.getOnlineRooms().get(roomId);
-        room.getMessageHistory().add(message);
+        List<Message> messagesHistory = room.getMessageHistory();
+        if (messagesHistory.size() >= Integer.parseInt(server.getConfig().getProperty("messageStorageDimension"))) {
+            messagesHistory.set(messagesHistory.size() - 1, message);
+            return true;
+        }
+        return server.getOnlineRooms().get(roomId).getMessageHistory().add(message);
     }
 }

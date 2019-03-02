@@ -4,6 +4,8 @@ import common.message.Message;
 import common.message.MessageStatus;
 import lombok.extern.log4j.Log4j;
 import org.xml.sax.SAXException;
+import server.room.Room;
+import server.room.RoomProcessing;
 
 import javax.xml.bind.*;
 import javax.xml.parsers.ParserConfigurationException;
@@ -203,14 +205,13 @@ public class Main {
 
         Message message = new Message(MessageStatus.REGISTRATION).setLogin("Puser").setPassword("password");
         Socket socket = new Socket("localhost", 5940);
-
+        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
         DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+
         marshaller.marshal(message, stringWriter);
 
         dataOutputStream.writeUTF(stringWriter.toString());
         dataOutputStream.flush();
-
-        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
 
         System.out.println(dataInputStream.readUTF());*/
 
@@ -239,14 +240,14 @@ public class Main {
         System.out.println(dataInputStream.readUTF());
 
         message = new Message(MessageStatus.MESSAGE).setText("Hello world :)")
-                .setFromId("Puser".hashCode()).setRoomId(871831934);
+                .setFromId("Puser".hashCode()).setRoomId(408753972);
         stringWriter = new StringWriter();
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
         System.out.println(dataInputStream.readUTF());
 
-        Socket socket1 = new Socket("localhost", 5940);
+        /*Socket socket1 = new Socket("localhost", 5940);
         DataOutputStream dataOutputStream1 = new DataOutputStream(socket1.getOutputStream());
         DataInputStream dataInputStream1 = new DataInputStream(socket1.getInputStream());
 
@@ -256,6 +257,41 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream1.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream1.readUTF());
+        System.out.println(dataInputStream1.readUTF());*/
+
+        // TESTING MESSAGE MARSHALLING - OK
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        StringWriter stringWriter = new StringWriter();
+
+        Message message = new Message(MessageStatus.AUTH).setLogin("Puser").setPassword("password");
+        stringWriter = new StringWriter();
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+        marshaller.marshal(message, stringWriter);
+        System.out.println(stringWriter.toString());*/
+
+
+
+        // TESTING ROOM MARSHALLING
+        /*try {
+            Room room = new Room();
+            Message message1 = new Message(MessageStatus.MESSAGE).setFromId(1).setText("first");
+            Message message2 = new Message(MessageStatus.MESSAGE).setFromId(1).setText("second");
+            Message message3 = new Message(MessageStatus.MESSAGE).setFromId(1).setText("third");
+            room.getMessageHistory().add(message1);
+            room.getMessageHistory().add(message2);
+            room.getMessageHistory().add(message3);
+
+            JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            StringWriter stringWriter = new StringWriter();
+
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            marshaller.marshal(room, stringWriter);
+            System.out.println(stringWriter.toString());
+        } catch (JAXBException e) {
+            e.printStackTrace();
+        }*/
+
     }
 }
