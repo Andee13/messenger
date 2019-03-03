@@ -142,7 +142,8 @@ public class ClientListener extends Thread {
     }
 
     private void handle(Message message) {
-        Message responseMessage = new Message(MessageStatus.ERROR);
+        Message responseMessage = new Message(MessageStatus.ERROR)
+                .setText("This is a default text. If you got this message, that means that something went wrong.");
         try {
             switch (message.getStatus()) {
                 case AUTH:
@@ -198,9 +199,16 @@ public class ClientListener extends Thread {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Has not been logged");
                     }
                     break;
-                case USERUNBAN:
+                case CLIENTUNBAN:
                     responseMessage = clientUnban(message);
                     break;
+                case RESTART_SERVER:
+                    try {
+                        ServerProcessing.restartServer(server.getConfig());
+                    } catch (InvalidPropertiesFormatException e) {
+                        LOGGER.error(e.getClass().getName().concat(" occurred"));
+                        throw new RuntimeException(e);
+                    }
                 default:
                     responseMessage = new Message(MessageStatus.ERROR).setText(new StringBuilder("Unknown message status ")
                         .append(message.getStatus().toString()).toString());
@@ -882,8 +890,8 @@ public class ClientListener extends Thread {
         }
         Room room = server.getOnlineRooms().get(message.getRoomId());
         if (!room.getMembers().contains(message.getFromId())) {
-            LOGGER.trace(new StringBuilder("The client id ").append(message.getFromId())
-                    .append(" is not a member of the room id ").append(message.getRoomId()));
+            LOGGER.trace(new StringBuilder("The client (id ").append(message.getFromId())
+                    .append(") is not a member of the room id ").append(message.getRoomId()));
             return new Message(MessageStatus.DENIED).setText("Not a member of the room");
         }
         if (!room.getMembers().contains(message.getToId())) {

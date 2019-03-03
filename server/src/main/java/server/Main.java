@@ -323,7 +323,7 @@ public class Main {
 
 
         // AUTH + UNBAN
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -337,12 +337,12 @@ public class Main {
         dataOutputStream.writeUTF(stringWriter.toString());
         System.out.println(dataInputStream.readUTF());
 
-        message = new Message(MessageStatus.USERUNBAN).setToId(3329).setFromId(77480987);
+        message = new Message(MessageStatus.CLIENTUNBAN).setToId(3329).setFromId(77480987);
         stringWriter = new StringWriter();
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream.readUTF());
+        System.out.println(dataInputStream.readUTF());*/
 
 
     }
