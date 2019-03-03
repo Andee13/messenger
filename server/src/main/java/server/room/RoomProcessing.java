@@ -22,7 +22,7 @@ import server.exceptions.RoomNotFoundException;
  * */
 public class RoomProcessing {
 
-    private static final Logger LOGGER = Logger.getLogger("Room");
+    private static final Logger LOGGER = Logger.getLogger("RoomProcessing");
 
     /**
      *  The method {@code loadRoom} returns an instance of {@code Room} - representation of a place for communication
