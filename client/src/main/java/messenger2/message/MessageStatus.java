@@ -1,4 +1,4 @@
-package common.message;
+package messenger2.message;
 
 public enum MessageStatus {
     AUTH,
@@ -18,5 +18,7 @@ public enum MessageStatus {
     NEW_ROOM_MEMBER,
     MEMBER_LEFT_ROOM,
     CLIENT_ONLINE,
-    CLIENT_OFFLINE
+    CLIENT_OFFLINE,
+    FRIEND_LIST,
+    ROOM_LIST
 }

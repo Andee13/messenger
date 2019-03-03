@@ -1,13 +1,9 @@
-package common.message;
+package messenger2.message;
 
-import org.apache.log4j.Logger;
-import org.jetbrains.annotations.NotNull;
-import server.Server;
-import server.ServerProcessing;
+
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
-import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
@@ -16,6 +12,7 @@ import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.io.StringReader;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 
 @XmlAccessorType(XmlAccessType.FIELD)
@@ -166,11 +163,11 @@ public class Message {
 
     public static class LocalDateTimeAdapter extends XmlAdapter<String, LocalDateTime> {
         public LocalDateTime unmarshal(String v) throws Exception {
-            return LocalDateTime.from(ServerProcessing.DATE_TIME_FORMATTER.parse(v));
+            return LocalDateTime.from(DateTimeFormatter.ISO_DATE_TIME.parse(v));
         }
 
         public String marshal(LocalDateTime v) throws Exception {
-            return ServerProcessing.DATE_TIME_FORMATTER.format(v);
+            return  DateTimeFormatter.ISO_DATE_TIME.format(v);
         }
     }
 
@@ -194,7 +191,7 @@ public class Message {
         return Objects.hash(creationDateTime, status, text, login, password, fromId, toId, roomId);
     }
 
-    public static Message from (@NotNull String xml) {
+    public static Message from (String xml) {
         if (xml == null) {
             throw new NullPointerException("xml must not be null");
         }

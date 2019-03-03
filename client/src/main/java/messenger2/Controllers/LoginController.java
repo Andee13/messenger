@@ -8,8 +8,17 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.ImageView;
 import messenger2.App;
+import messenger2.message.Message;
+import messenger2.message.MessageStatus;
+
+import javax.xml.bind.JAXBException;
+
+import static messenger2.Utils.*;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.util.Scanner;
 
 public class LoginController {
 
@@ -32,10 +41,21 @@ public class LoginController {
     @FXML
     void initialize() {
         loginButton.setOnAction(event -> {
-            String b = Username.getText();
-            String a = password.getText();
-            System.out.println(b + " " + a);
             try {
+                Message message = new Message();
+                message.setStatus(MessageStatus.REGISTRATION);
+                message.setLogin(Username.getText());
+                message.setPassword(password.getText());
+                socket = new Socket(InetAddress.getLocalHost(), 5940);
+                reader = new Scanner(socket.getInputStream());
+                try {
+                    getMarshaller().marshal(message, writer);
+                } catch (JAXBException ex){
+                    System.out.println(ex);
+                }
+                System.out.println(writer.toString());
+                String responseString  = reader.next();
+
                 Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Chat.fxml"));
                 App.getStage().setTitle("Hello World");
                 App.getStage().setScene(new Scene(root, 800, 500));
@@ -47,6 +67,8 @@ public class LoginController {
         Register.setOnAction(event -> {
 
             try {
+
+
                 Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Registration.fxml"));
                 App.getStage().setTitle("Hello World");
                 App.getStage().setScene(new Scene(root, 800, 500));
