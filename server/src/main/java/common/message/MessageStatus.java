@@ -4,7 +4,8 @@ public enum MessageStatus {
     AUTH,
     REGISTRATION,
     MESSAGE,
-    USERBAN,
+    CLIENTBAN,
+    CLIENTUNBAN,
     CREATE_ROOM,
     DELETE_ROOM,
     INVITE_USER,
@@ -17,8 +18,11 @@ public enum MessageStatus {
     NEW_MESSAGE,
     NEW_ROOM_MEMBER,
     MEMBER_LEFT_ROOM,
-    CLIENT_ONLINE,
-    CLIENT_OFFLINE,
     FRIEND_LIST,
-    ROOM_LIST
+    ROOM_LIST,
+    RESTART_SERVER,
+    ROOM_MEMBERS,
+    MESSAGE_HISTORY,
+    CLIENT_INFO
+
 }

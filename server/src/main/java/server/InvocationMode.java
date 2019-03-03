@@ -4,5 +4,7 @@ public enum InvocationMode {
     START,
     STOP,
     RESTART,
-    CREATE_DEFAULT_SERVER
+    CREATE_DEFAULT_SERVER,
+    BAN,
+    UNBAN
 }

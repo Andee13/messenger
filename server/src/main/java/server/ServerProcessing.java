@@ -2,7 +2,7 @@ package server;
 
 import common.message.Message;
 import common.message.MessageStatus;
-import common.Saveable;
+import org.apache.log4j.FileAppender;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.client.ClientListener;
@@ -15,11 +15,11 @@ import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 import java.io.*;
 import java.net.*;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 /**
  *  This class contains methods which operates with an instance of {@code Server}
@@ -29,7 +29,7 @@ import java.util.Set;
  * */
 public class ServerProcessing {
 
-    private static final Logger LOGGER = Logger.getLogger("Server");
+    private static final Logger LOGGER = Logger.getLogger("ServerProcessing");
     private static Properties defaultProperties;
     public static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
 
@@ -50,7 +50,7 @@ public class ServerProcessing {
         try {
             invocationMode = getInvocationMode(args);
         } catch (IOException e) {
-            LOGGER.error(e.getLocalizedMessage());
+            printCommands();
             return;
         }
         File currentFolder;
@@ -68,6 +68,7 @@ public class ServerProcessing {
         } catch (ArrayIndexOutOfBoundsException e) {
             serverProperiesFile = new File(currentFolder, "serverConfig.xml");
         }
+        Properties serverProperties;
         switch (invocationMode) {
             case START:
                 try {
@@ -94,6 +95,28 @@ public class ServerProcessing {
                     return;
                 }
                 break;
+            case BAN:
+                try {
+                    serverProperties = new Properties();
+                    serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
+                    clientBan(serverProperties, args[2], true, Integer.parseInt(args[3]));
+                } catch (IndexOutOfBoundsException e) {
+                    System.out.println("Not all arguments are specified. Please, check the input");
+                    printCommands();
+                } catch (NumberFormatException e) {
+                    System.out.println("Wrong number of hours entered : ".concat(args[3]));
+                }
+                break;
+            case UNBAN:
+                try {
+                    serverProperties = new Properties();
+                    serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
+                    clientBan(serverProperties, args[2], false, 0);
+                } catch (IndexOutOfBoundsException e) {
+                    System.out.println("Not all arguments are specified. Please, check the input");
+                    printCommands();
+                }
+                break;
             default:
                 String errorMessage = "Unknown invocation mode: ".concat(String.valueOf(invocationMode));
                 LOGGER.error(errorMessage);
@@ -102,11 +125,81 @@ public class ServerProcessing {
     }
 
     /**
+     * This method is used to ban/unban a client having login like {@code} login. It just sends a message to server
+     * and prints a response. It does not guarantees that client has been banned/unbanned
+     *
+     * @param           ban set is {@code true}
+     *
+     * */
+    public static void clientBan(Properties serverProperties, String login, boolean ban, int hours) {
+        if (ban && hours < 1) {
+            throw new IllegalArgumentException("hours: positive integer expected, but found "
+                    .concat(String.valueOf(hours)));
+        }
+        try (Socket socket = new Socket("localhost", Integer.parseInt(serverProperties.getProperty("port")));
+             DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream())) {
+            socket.setSoTimeout(3000);
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            StringWriter stringWriter = new StringWriter();
+            Message banMessage = new Message(ban ? MessageStatus.CLIENTBAN : MessageStatus.CLIENTUNBAN)
+                    .setToId(login.hashCode())
+                    .setLogin(serverProperties.getProperty("server_login"))
+                    .setPassword(serverProperties.getProperty("server_password"));
+            if (ban) {
+                banMessage.setText(ServerProcessing.DATE_TIME_FORMATTER.format(LocalDateTime.now().plusHours(hours)));
+            }
+            marshaller.marshal(banMessage, stringWriter);
+            dataOutputStream.writeUTF(stringWriter.toString());
+            System.out.println(new StringBuilder("Server response:\n").append(dataInputStream.readUTF()));
+        } catch (JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+        } catch (SocketTimeoutException e) {
+            LOGGER.error("Server does not response");
+        } catch (IOException e) {
+            LOGGER.error(new StringBuilder(e.getClass().getName()).append(e.getLocalizedMessage()));
+        }
+    }
+
+    private static boolean isServerLaunched(int port) throws IOException {
+        try (ServerSocket serverSocket = new ServerSocket(port)) {
+            serverSocket.setSoTimeout(1000);
+            serverSocket.accept();
+            return true;
+        }catch (SocketTimeoutException e) {
+            return false;
+        } catch (BindException e) {
+            try {
+                sendAndWait(port, 3);
+            } catch (SocketTimeoutException e1) {
+                return false;
+            }
+            return false;
+        } catch (IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false;
+        }
+    }
+
+    private static void printCommands() {
+        System.out.println("            <---Avaliable commands--->");
+        System.out.println("-cds path/to/server/root/folder                 - to create a default server root structure in the specified folder");
+        System.out.println("-start path/to/serverConfig.xml                 - to start the server denoted by the configurations");
+        System.out.println("-restart path/to/serverConfig.xml               - to restart the server denoted by the configurations");
+        System.out.println("-stop path/to/serverConfig.xml                  - to stop the server denoted by the configurations");
+        System.out.println("-ban path/to/serverConfig.xml <login> <hours>   - to ban the client on the server denoted by the configurations");
+        System.out.println("-unban path/to/serverConfig.xml <login>         - to unban the client on the server denoted by the configurations");
+        System.out.println(                     "<---    --->");
+
+    }
+
+    /**
      *  The method {@code getInvocationMode} decides what the server has to do depending on passed parameters
      *
      * @param           args is the program input parameters
      * */
-    private static InvocationMode getInvocationMode(@NotNull String [] args) throws IOException{
+    private static InvocationMode getInvocationMode(@NotNull String [] args) throws IOException {
         if(args.length == 0) {
             return InvocationMode.START;
         } else {
@@ -119,6 +212,11 @@ public class ServerProcessing {
                     return InvocationMode.RESTART;
                 case "-cds" :
                     return InvocationMode.CREATE_DEFAULT_SERVER;
+                case "-ban":
+                    return InvocationMode.BAN;
+                case "-unban":
+                    return  InvocationMode.UNBAN;
+
                 default: throw new IOException(new StringBuilder("Unknown command: ").append(args[0]).toString());
             }
         }
@@ -232,6 +330,7 @@ public class ServerProcessing {
      * */
     private static void createDefaultRootStructure(File rootDir) {
         if(rootDir == null) {
+            LOGGER.warn("root folder is null");
             throw new NullPointerException("The specified folder is not expected to be null");
         }
         if (!rootDir.isDirectory()) {
@@ -241,6 +340,8 @@ public class ServerProcessing {
         File roomsDir = new File(rootDir, "rooms");
         File clientsDir = new File(rootDir, "clients");
         File serverConfig = new File(rootDir, "serverConfig.xml");
+        File commonChatDir = new File(roomsDir, "0");
+        File commonChatFile = new File(commonChatDir, "0.xml");
         if (!serverConfig.isFile()) {
             LOGGER.info(new StringBuilder("Creating the default server configuration file: ")
                     .append(serverConfig.getAbsolutePath()));
@@ -266,7 +367,6 @@ public class ServerProcessing {
                 throw new RuntimeException(e);
             }
         }
-
         if (!clientsDir.isDirectory()) {
             LOGGER.info(new StringBuilder("Creating the clients folder: ")
                     .append(clientsDir.getAbsolutePath()));
@@ -274,7 +374,6 @@ public class ServerProcessing {
                 throw new RuntimeException("Unable to create a clients folder: ".concat(clientsDir.getAbsolutePath()));
             }
         }
-
         if (!roomsDir.isDirectory()) {
             LOGGER.info(new StringBuilder("Creating the rooms folder: ")
                     .append(roomsDir.getAbsolutePath()));
@@ -282,13 +381,49 @@ public class ServerProcessing {
                 throw new RuntimeException("Unable to create a clients folder: ".concat(roomsDir.getAbsolutePath()));
             }
         }
-
         if (!logsDir.isDirectory()) {
             LOGGER.info(new StringBuilder("Creating the logs folder: ")
                     .append(logsDir.getAbsolutePath()));
             if(!logsDir.mkdir()){
                 throw new RuntimeException("Unable to create a logs folder: ".concat(logsDir.getAbsolutePath()));
             }
+        }
+        if (!commonChatDir.isDirectory()) {
+            LOGGER.info(new StringBuilder("Creating the common chat-room folder: ")
+                    .append(commonChatDir.getAbsolutePath()));
+            if(!commonChatDir.mkdir()){
+                throw new RuntimeException("Unable to create a common chat-room folder: "
+                        .concat(logsDir.getAbsolutePath()));
+            }
+        }
+        try {
+            if (!commonChatFile.isFile()) {
+                LOGGER.info(new StringBuilder("Creating the common chat-room file: ")
+                        .append(commonChatFile.getAbsolutePath()));
+                if(!commonChatFile.createNewFile()){
+                    throw new RuntimeException("Unable to create a common chat-room file: "
+                            .concat(logsDir.getAbsolutePath()));
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.error("Unknown error:".concat(e.getLocalizedMessage()));
+            throw new RuntimeException(e);
+        }
+        try (FileOutputStream fileOutputStream = new FileOutputStream(commonChatFile)) {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            Room room = new Room();
+            room.setRoomId(0);
+            room.setAdminId("God".hashCode());
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            marshaller.marshal(room, fileOutputStream);
+            fileOutputStream.flush();
+        } catch (FileNotFoundException e) {
+            LOGGER.error("Unable to find the file: ".concat(commonChatFile.getAbsolutePath()));
+            throw new RuntimeException(e);
+        } catch (JAXBException | IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
         }
     }
 
@@ -356,12 +491,16 @@ public class ServerProcessing {
      *                  has already been launched or the port set in the {@code serverPropertiesFile} is taken
      * */
     private static void startServer(@NotNull File serverPropertiesFile) throws IOException {
-        if(!arePropertiesValid(serverPropertiesFile)) {
+        if (!arePropertiesValid(serverPropertiesFile)) {
             throw new IOException("The server properties are not valid");
         }
         Server server = new Server(serverPropertiesFile);
         server.start();
         LOGGER.info(new StringBuilder("Server thread status: ").append(server.getState()).toString());
+    }
+
+    private static void startServer(Properties serverConfiguration) throws IOException {
+        startServer(new File(serverConfiguration.getProperty("serverConfig")));
     }
 
     /**
@@ -466,66 +605,46 @@ public class ServerProcessing {
     }
 
     /**
-     *  The method {@code sendAndWait} sends the specified {@code message} and waits for response
-     * for {@code timeout} seconds. If no reply was received for all the time, then {@code ConnectException}
-     * will be thrown.
-     *  This method was created to check the connection to server lcunched on the {@code socket}. It is supposed
-     * that there is an opened socket on the another end and it is listening to connections.
-     *
-     * @param           message the message to be sent
-     * @param           port the port to be listened by the target server
-     * @param           timeout the time period (in seconds) during which a response will be being waited
-     *
-     * @exception       ConnectException in case if no response has been got
-     * @exception       NullPointerException if {@code message} is {@code null}
-     * @exception       IllegalArgumentException if {@code timeout} is less than 0
-     *                  or port is less than 0 or greater than zero
-     *
-     * @throws          IOException if an I/O error occurs
-     *
-     * @return          an instance of {@code Message} that has been received from the server
-     *                  or {@code null} if {@code SocketException} has occurred (e.g. client closed the connection)
+     *  This method sends a {@code Message} of status {@code MessageStatus.AUTH} not specifying any additional parameters
+     * Thus
      * */
-    private static Message sendAndWait(Message message, int timeout, int port) throws IOException {
-        if (message == null) {
-            throw new NullPointerException("Message must not be null");
+    private static Message sendAndWait(int port, int timeout) throws SocketTimeoutException {
+        if (port <= 0 || port > 65535) {
+            throw new IllegalArgumentException("port must be between 1...65535, but found "
+                    .concat(String.valueOf(port)));
         }
         if (timeout < 0) {
-            throw new IllegalArgumentException(new StringBuilder("Timeout must be a positive number:")
-                    .append(timeout).toString());
+            throw new IllegalArgumentException("timeout must be greater than 0, but found "
+                    .concat(String.valueOf(timeout)));
         }
-        Socket socket = new Socket(Inet4Address.getLocalHost(), port);
-        socket.setSoTimeout(timeout);
-        DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
-        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
-        try {
-            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-            Marshaller marshaller = jaxbContext.createMarshaller();
-            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-            StringWriter stringWriter = new StringWriter();
-            marshaller.marshal(message, stringWriter);
-            dataOutputStream.writeUTF(stringWriter.toString());
-            dataOutputStream.flush();
-            long sendingRequestTime = System.currentTimeMillis();
-            boolean wasResponse = false;
-            String response = null;
-            while(System.currentTimeMillis() - sendingRequestTime < timeout * 1000 && !wasResponse) {
-                if(dataInputStream.available() != 0) {
-                    response = dataInputStream.readUTF();
-                    wasResponse = true;
+        try (Socket socket = new Socket("localhost", port);
+             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+             DataInputStream in = new DataInputStream(socket.getInputStream())) {
+            socket.setSoTimeout(timeout);
+            try {
+                JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+                Marshaller marshaller = jaxbContext.createMarshaller();
+                Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+                StringWriter stringWriter = new StringWriter();
+                marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+                marshaller.marshal(new Message(MessageStatus.AUTH), stringWriter);
+                out.writeUTF(stringWriter.toString());
+                Message response = (Message) unmarshaller.unmarshal(new StringReader(in.readUTF()));
+                if (MessageStatus.ERROR.equals(response.getStatus())
+                        || MessageStatus.DENIED.equals(response.getStatus())) {
+                    LOGGER.trace("Received expected answer ".concat(response.toString()));
+                } else {
+                    LOGGER.warn(new StringBuilder("Answer has been received but the status is ")
+                            .append(response.getStatus()).append(". Expected either ").append(MessageStatus.ERROR)
+                            .append(" or ").append(MessageStatus.DENIED));
                 }
+                return response;
+            } catch (JAXBException e) {
+                LOGGER.error("Unknown JAXBException: ".concat(e.getLocalizedMessage()));
+                throw new RuntimeException(e);
             }
-            if (!wasResponse) {
-                throw new ConnectException("Response timeout");
-            }
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            return (Message) unmarshaller.unmarshal(new StringReader(response));
-        } catch (JAXBException e) {
-            LOGGER.error(e.getLocalizedMessage());
+        } catch (IOException e) {
             throw new RuntimeException(e);
-        } catch (SocketException e) {
-            LOGGER.warn("The connection was closed");
-            return null;
         }
     }
 
@@ -575,33 +694,60 @@ public class ServerProcessing {
         }
     }
 
-    private static void restartServer(Server server) throws IOException, FailedLoginException {
-        restartServer(server.getConfig());
-    }
-
-    private static void restartServer(File serverConfigFile)
-            throws IOException, FailedLoginException {
-        if (!arePropertiesValid(serverConfigFile)) {
-            throw new InvalidPropertiesFormatException(new StringBuilder("The file ")
-                    .append(serverConfigFile.getAbsolutePath())
-                    .append(" does not contain valid server configurations").toString());
+    /**
+     *  This method restarts the server specified by the passe {@code serverConfiguration}.
+     * */
+    public static boolean restartServer(Properties serverConfiguration) throws InvalidPropertiesFormatException {
+        if (!arePropertiesValid(serverConfiguration)) {
+            String errorString = "The specified properties are not valid. Restart operation aborted";
+            LOGGER.warn(errorString);
+            throw new InvalidPropertiesFormatException("The specified properties are not valid. Restart operation aborted");
         }
-        Properties properties = new Properties();
-        properties.loadFromXML(new BufferedInputStream(new FileInputStream(serverConfigFile)));
-        restartServer(properties);
-    }
-
-    private static void restartServer(Properties serverProperties) throws IOException, FailedLoginException {
-        if (!arePropertiesValid(serverProperties)) {
-            throw new InvalidPropertiesFormatException(new StringBuilder("The server properties ")
-                    .append(serverProperties)
-                    .append(" does not contain valid server configurations").toString());
+        if (!isServerLaunched(serverConfiguration)) {
+            String errorString = "The server is not launched yet";
+            LOGGER.warn(errorString);
+            throw new IllegalStateException(errorString);
         }
-        if (!isServerLaunched(serverProperties)) {
-            throw new IllegalStateException("The server specified by the properties is not launched");
+        try (Socket socket = new Socket("localhost", Integer.parseInt(serverConfiguration.getProperty("port")));
+             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+             DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream())) {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            StringWriter stringWriter = new StringWriter();
+            Message stopMessage = new Message(MessageStatus.STOP_SERVER)
+                    .setLogin(serverConfiguration.getProperty("server_login"))
+                    .setPassword(serverConfiguration.getProperty("server_password"));
+            marshaller.marshal(stopMessage, stringWriter);
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            socket.setSoTimeout(15000);
+            dataOutputStream.writeUTF(stringWriter.toString());
+            try {
+                String responseXmlMessage = dataInputStream.readUTF();
+                Message response = (Message) unmarshaller.unmarshal(new StringReader(responseXmlMessage));
+                if (!MessageStatus.ACCEPTED.equals(response.getStatus())) {
+                    LOGGER.warn(new StringBuilder("Response from the server (").append(socket.getRemoteSocketAddress())
+                            .append(") has been received, but the status is not of expected (")
+                            .append(MessageStatus.ACCEPTED).append(") status. Found ").append(response.getStatus())
+                            .append(". Operation aborted"));
+                    return false;
+                } else {
+                    startServer(serverConfiguration);
+                    try {
+                        LOGGER.trace("Waiting for the server will start");
+                        Thread.sleep(10000);
+                    } catch (InterruptedException e) {
+                        LOGGER.error(new StringBuilder(e.getClass().getName())
+                                .append(" : ").append(e.getLocalizedMessage()));
+                    }
+                    return isServerLaunched(serverConfiguration);
+                }
+            } catch (SocketTimeoutException e) {
+                LOGGER.warn("Timeout exceeded. Restart operation has not been completed properly");
+                return false;
+            }
+        } catch (IOException | JAXBException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
         }
-        sendStopServerMessage(serverProperties);
-        File serverConfigFile = new File(serverProperties.getProperty("serverConfig"));
-        startServer(serverConfigFile);
     }
 }

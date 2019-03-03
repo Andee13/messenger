@@ -51,7 +51,8 @@ public class Room implements Saveable {
                 for (int clientId : members) {
                     if (server.getOnlineClients().containsKey(clientId)) {
                         for (Message message : sentMessages) {
-                            server.getOnlineClients().get(clientId).sendMessageToConnectedClient(message);
+                            server.getOnlineClients().get(clientId)
+                                    .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
                         }
                     }
                 }
@@ -71,14 +72,16 @@ public class Room implements Saveable {
             } else if (change.wasRemoved() && !change.wasAdded()) { // change.wasRemoved() == true
                 clientId = change.getElementRemoved();
                 notificationMessage = new Message(MessageStatus.MEMBER_LEFT_ROOM).setFromId(clientId).setRoomId(roomId);
-            } else { // somehow replaced ???
+            } else {
                 return;
             }
+
             for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().entrySet()) {
                 if (clientWrapper.getValue().getClient().getClientId() != clientId) {
                     clientWrapper.getValue().sendMessageToConnectedClient(notificationMessage);
                 }
             }
+
         });
     }
 

@@ -3,6 +3,9 @@ package server;
 import common.message.Message;
 import common.message.MessageStatus;
 import lombok.extern.log4j.Log4j;
+import org.apache.log4j.FileAppender;
+import org.apache.log4j.Logger;
+import org.apache.log4j.spi.LoggerFactory;
 import org.xml.sax.SAXException;
 import server.room.Room;
 import server.room.RoomProcessing;
@@ -14,6 +17,7 @@ import javax.xml.xpath.*;
 import java.io.*;
 import java.net.Socket;
 import java.net.URISyntaxException;
+import java.time.LocalDateTime;
 
 @Log4j
 public class Main {
@@ -199,7 +203,7 @@ public class Main {
         System.err.println(properties.equals(properties1));*/
 
         // REGISTRATION
-        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -213,10 +217,10 @@ public class Main {
         dataOutputStream.writeUTF(stringWriter.toString());
         dataOutputStream.flush();
 
-        System.out.println(dataInputStream.readUTF());*/
+        System.out.println(dataInputStream.readUTF());
 
         // AUTHORIZATION + ROOM CREATING
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -245,7 +249,7 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream.readUTF());
+        System.out.println(dataInputStream.readUTF());*/
 
         /*Socket socket1 = new Socket("localhost", 5940);
         DataOutputStream dataOutputStream1 = new DataOutputStream(socket1.getOutputStream());
@@ -292,6 +296,54 @@ public class Main {
         } catch (JAXBException e) {
             e.printStackTrace();
         }*/
+
+
+        // TESTING BAN
+        /*try (Socket socket = new Socket("localhost", 5940);
+            DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+            DataInputStream dataInputStream = new DataInputStream(socket.getInputStream())) {
+
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            StringWriter stringWriter = new StringWriter();
+
+            Message message = new Message(MessageStatus.CLIENTBAN).setLogin("God").setPassword("change_me").setToId(3329)
+                    .setText(ServerProcessing.DATE_TIME_FORMATTER.format(LocalDateTime.now().plusHours(1)));
+
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            marshaller.marshal(message, stringWriter);
+            System.out.println(stringWriter.toString());
+            dataOutputStream.writeUTF(stringWriter.toString());
+
+            System.out.println(dataInputStream.readUTF());
+
+        } catch (JAXBException e) {
+            e.printStackTrace();
+        }*/
+
+
+        // AUTH + UNBAN
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        StringWriter stringWriter = new StringWriter();
+
+        Message message = new Message(MessageStatus.AUTH).setLogin("Puser").setPassword("password");
+        Socket socket = new Socket("localhost", 5940);
+
+        DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream.writeUTF(stringWriter.toString());
+        System.out.println(dataInputStream.readUTF());
+
+        message = new Message(MessageStatus.CLIENTUNBAN).setToId(3329).setFromId(77480987);
+        stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream.writeUTF(stringWriter.toString());
+
+        System.out.println(dataInputStream.readUTF());*/
+
 
     }
 }

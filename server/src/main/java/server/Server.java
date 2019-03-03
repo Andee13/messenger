@@ -226,6 +226,7 @@ public class Server extends Thread implements Saveable {
                     return false;
                 }
             }
+
             return true;
         } catch (FileNotFoundException e) {
             LOGGER.error("Unable to find a server configuration file ".concat(serverConfigFile.getAbsolutePath()));

@@ -24,24 +24,32 @@ import java.util.Set;
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlRootElement(name="client")
 public class Client implements Saveable {
-    @XmlElement
     private int clientId;
     @XmlJavaTypeAdapter(RoomsWrapperAdapter.class)
     private Set<Integer> rooms;
     @XmlJavaTypeAdapter(FriendsWrapperAdapter.class)
     private Set<Integer> friends;
-    @XmlElement
     private String login;
-    @XmlElement
     private String password;
-    @XmlElement
     private boolean isAdmin;
-    @XmlElement
     private boolean baned;
     @XmlJavaTypeAdapter(value = Message.LocalDateTimeAdapter.class)
     private LocalDateTime isBannedUntill;
     @XmlTransient
     private Server server;
+    private String name;
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public static Logger getLOGGER() {
+        return LOGGER;
+    }
 
     public LocalDateTime getIsBannedUntill() {
         return isBannedUntill;
