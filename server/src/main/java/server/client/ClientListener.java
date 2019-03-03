@@ -137,7 +137,7 @@ public class ClientListener extends Thread {
             LOGGER.trace("Passed message to check before log-in: ".concat(message.toString()));
             return false;
         }
-        if (logged && (message.getFromId() == null || message.getFromId() != client.getClientId())) {
+        if (message.getFromId() == null || message.getFromId() != client.getClientId()) {
             LOGGER.info(new StringBuilder("Expected to receive clientId ").append(client.getClientId())
                     .append(" but found ").append(message.getFromId()));
             return false;
@@ -213,6 +213,15 @@ public class ClientListener extends Thread {
                         LOGGER.error(e.getClass().getName().concat(" occurred"));
                         throw new RuntimeException(e);
                     }
+                case ROOM_MEMBERS:
+                    responseMessage = getRoomMembers(message);
+                    break;
+                case MESSAGE_HISTORY:
+                    responseMessage = getRoomMessages(message);
+                    break;
+                case CLIENT_INFO:
+                    responseMessage = getClientInfo(message);
+                    break;
                 default:
                     responseMessage = new Message(MessageStatus.ERROR).setText(new StringBuilder("Unknown message status ")
                         .append(message.getStatus().toString()).toString());
@@ -226,6 +235,21 @@ public class ClientListener extends Thread {
                 interrupt();
             }
         }
+    }
+
+    private Message getClientInfo(Message message) {
+        if (!isMessageFromThisLoggedClient(message)) {
+            return new Message(MessageStatus.DENIED).setText("Log in first");
+        }
+        if (message.getToId() == null) {
+            return new Message(MessageStatus.ERROR).setText("Unspecified client id");
+        }
+        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), message.getToId())) {
+            return new Message(MessageStatus.ERROR).setText("Unable to find the specified client")
+                    .setToId(message.getToId());
+        }
+        Client client = loadClient(server.getConfig(), message.getToId());
+        return new Message(MessageStatus.ACCEPTED).setText(client.getName()).setFromId(client.getClientId());
     }
 
     private Message addFriend(Message message) {
@@ -395,7 +419,7 @@ public class ClientListener extends Thread {
     }
 
     private Message registration(Message message) {
-        if(message == null){
+        if(message == null) {
             return new Message(MessageStatus.ERROR).setText("Message came as null");
         }
         if (!MessageStatus.REGISTRATION.equals(message.getStatus())) {
@@ -424,18 +448,39 @@ public class ClientListener extends Thread {
             return new Message(MessageStatus.ERROR).setText("Internal error");
         }
         Client client = new Client();
-        client.setLogin(login);
-        client.setServer(server);
-        client.setPassword(password);
-        client.setName(message.getText() == null ? login : message.getText());
-        client.setClientId(login.hashCode());
+        try {
+            client.setLogin(login);
+            client.setServer(server);
+            client.setPassword(password);
+            client.setName(message.getText() == null ? login : message.getText());
+            client.setClientId(login.hashCode());
+            client.getRooms().add(0);
+            Room commomChat = RoomProcessing.loadRoom(server, 0);
+            commomChat = server.getOnlineRooms().get(0);
+            commomChat.getMembers().add(client.getClientId());
+            commomChat.save();
+        } catch (NullPointerException e) {
+            return new Message(MessageStatus.ERROR)
+                    .setText("Check whether you have specified all the necessary parameters");
+        } catch (InvalidPropertiesFormatException e) {
+            LOGGER.error("Wrong properties");
+            throw new RuntimeException(e);
+        }
+        if (!server.getOnlineRooms().containsKey(0)) {
+            try {
+                RoomProcessing.loadRoom(server, 0);
+            } catch (InvalidPropertiesFormatException e) {
+                LOGGER.error(new StringBuilder("Unknown server configuration error occurred").append(e.getMessage()));
+                throw new RuntimeException(e);
+            }
+        }
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
             marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(client, clientFile);
             LOGGER.info(new StringBuilder("New client id ").append(client.getClientId()).append(" has been registered"));
-        } catch (JAXBException e) {
+        } catch (JAXBException  e) {
             LOGGER.error(e.getLocalizedMessage());
         }
         return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
@@ -452,6 +497,9 @@ public class ClientListener extends Thread {
      * @return          an instance of {@code Message} that informs whether new room was created or not
      * */
     private Message createRoom(@NotNull Message message) {
+        if (!isMessageFromThisLoggedClient(message)) {
+            return new Message(MessageStatus.DENIED).setText("Please, log in first");
+        }
         if (!MessageStatus.CREATE_ROOM.equals(message.getStatus())) {
             LOGGER.error(new StringBuilder("Unexpected message status. Expected ").append(MessageStatus.CREATE_ROOM)
                     .append(". But found ").append(message.getStatus()));
@@ -790,7 +838,10 @@ public class ClientListener extends Thread {
         super.interrupt();
     }
 
-    private synchronized Message getFriends(){
+    private synchronized Message getFriends() {
+        if (!logged) {
+            return new Message(MessageStatus.DENIED).setText("Log in first");
+        }
         if (client.getFriends().size() == 0) {
             return new Message(MessageStatus.FRIEND_LIST).setText("");
         }
@@ -799,6 +850,82 @@ public class ClientListener extends Thread {
             stringBuilder.append(clientId).append(',');
         }
         return new Message(MessageStatus.FRIEND_LIST).setText(stringBuilder.substring(0,stringBuilder.length() - 1));
+    }
+
+    private synchronized Message getRoomMessages(Message message) {
+        if (message == null) {
+            return new Message(MessageStatus.ERROR).setText("Internal error occurred");
+        }
+        if (!isMessageFromThisLoggedClient(message)) {
+            return new Message(MessageStatus.DENIED).setText("Log in first");
+        }
+        if (message.getRoomId() == null) {
+            return new Message(MessageStatus.ERROR).setText("Unspecified room");
+        }
+        Room room;
+        if (!server.getOnlineRooms().containsKey(message.getRoomId())) {
+            if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), message.getRoomId()) != 0L) {
+                try {
+                    room = RoomProcessing.loadRoom(server, message.getRoomId());
+                } catch (InvalidPropertiesFormatException | RoomNotFoundException e) {
+                    return new Message(MessageStatus.ERROR).setText(e.getLocalizedMessage());
+                }
+            }
+        }
+        room = server.getOnlineRooms().get(message.getRoomId());
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            StringWriter stringWriter;
+            for (Message roomMessage : room.getMessageHistory()) {
+                stringWriter = new StringWriter();
+                marshaller.marshal(roomMessage, stringWriter);
+                out.writeUTF(stringWriter.toString());
+                out.flush();
+            }
+        } catch (JAXBException | IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+        }
+        return new Message(MessageStatus.ACCEPTED).setText("This is the end of the room message history")
+                .setRoomId(message.getRoomId());
+    }
+
+    private synchronized Message getRoomMembers(Message message) {
+        if (!logged) {
+            return new Message(MessageStatus.DENIED).setText("Log in first");
+        }
+        if (!isMessageFromThisLoggedClient(message)) {
+            return new Message(MessageStatus.DENIED).setText("Log in first");
+        }
+        if (message.getRoomId() == null) {
+            return new Message(MessageStatus.ERROR).setText("Unset room id");
+        }
+        if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), message.getRoomId()) != 0L) {
+            return new Message(MessageStatus.ERROR).setText("Unable to find a room id"
+                    .concat(String.valueOf(message.getRoomId())));
+        }
+        Room room;
+        if (!server.getOnlineRooms().containsKey(message.getRoomId())) {
+            try {
+                room = RoomProcessing.loadRoom(server, message.getRoomId());
+            } catch (InvalidPropertiesFormatException e) {
+                LOGGER.error(e.getLocalizedMessage());
+                return new Message(MessageStatus.MESSAGE).setText("Server configuration error occurred");
+            }
+        }
+        room = server.getOnlineRooms().get(message.getRoomId());
+        if (!room.getMembers().contains(client.getClientId())) {
+            return new Message(MessageStatus.DENIED).setRoomId("Not a member of the room").setRoomId(message.getRoomId());
+        }
+        StringBuilder stringBuilder = new StringBuilder();
+        for (int clientId : room.getMembers()) {
+            stringBuilder.append(clientId).append(',');
+        }
+        if (stringBuilder.length() == 0) {
+            return new Message(MessageStatus.ACCEPTED).setRoomId(message.getRoomId()).setText("");
+        }
+        return new Message(MessageStatus.ACCEPTED).setRoomId(message.getRoomId())
+                .setText(stringBuilder.substring(0,stringBuilder.length() - 1));
     }
 
     public synchronized Message getRooms() {

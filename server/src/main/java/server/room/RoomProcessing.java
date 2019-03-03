@@ -37,9 +37,9 @@ public class RoomProcessing {
      * @throws          InvalidPropertiesFormatException if {@code serverConfig} is not valid e.g. is {@code null}
      *                  or the specified in the {@code serverConfig} filepath does not points an existing file
      *
-     * @return          an instance of Room that has {@code roomId} equal to the specified parameter
-     *                  if there is not such room in the rooms directory of the server
-     *                  than the method will return {@code null}
+     * @exception       RoomNotFoundException in case if there is not such room on the server
+     *
+     * @return          an instance of {@code Room} that has {@code roomId} equal to the specified by parameter
      * */
     public static Room loadRoom(Server server, int roomId) throws InvalidPropertiesFormatException {
         if (server == null) {
@@ -59,16 +59,15 @@ public class RoomProcessing {
                 Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
                 room.setServer(server);
-                synchronized (server.getOnlineRooms()) {
-                    server.getOnlineRooms().put(roomId, room);
-                }
+                server.getOnlineRooms().put(roomId, room);
                 return room;
             } catch (JAXBException e) {
                 LOGGER.error(e.getLocalizedMessage());
                 throw new RuntimeException(e);
             }
         } else {
-            return null;
+            throw new RoomNotFoundException(new StringBuilder("There is not such room (id ")
+                    .append(roomId).append(") on the server").toString());
         }
     }
 

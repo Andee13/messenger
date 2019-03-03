@@ -2,6 +2,7 @@ package server;
 
 import common.message.Message;
 import common.message.MessageStatus;
+import org.apache.log4j.FileAppender;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.client.ClientListener;
@@ -67,8 +68,7 @@ public class ServerProcessing {
         } catch (ArrayIndexOutOfBoundsException e) {
             serverProperiesFile = new File(currentFolder, "serverConfig.xml");
         }
-        Properties serverProperties = new Properties();
-        serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
+        Properties serverProperties;
         switch (invocationMode) {
             case START:
                 try {
@@ -97,6 +97,8 @@ public class ServerProcessing {
                 break;
             case BAN:
                 try {
+                    serverProperties = new Properties();
+                    serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
                     clientBan(serverProperties, args[2], true, Integer.parseInt(args[3]));
                 } catch (IndexOutOfBoundsException e) {
                     System.out.println("Not all arguments are specified. Please, check the input");
@@ -107,6 +109,8 @@ public class ServerProcessing {
                 break;
             case UNBAN:
                 try {
+                    serverProperties = new Properties();
+                    serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
                     clientBan(serverProperties, args[2], false, 0);
                 } catch (IndexOutOfBoundsException e) {
                     System.out.println("Not all arguments are specified. Please, check the input");
@@ -326,6 +330,7 @@ public class ServerProcessing {
      * */
     private static void createDefaultRootStructure(File rootDir) {
         if(rootDir == null) {
+            LOGGER.warn("root folder is null");
             throw new NullPointerException("The specified folder is not expected to be null");
         }
         if (!rootDir.isDirectory()) {
@@ -335,6 +340,8 @@ public class ServerProcessing {
         File roomsDir = new File(rootDir, "rooms");
         File clientsDir = new File(rootDir, "clients");
         File serverConfig = new File(rootDir, "serverConfig.xml");
+        File commonChatDir = new File(roomsDir, "0");
+        File commonChatFile = new File(commonChatDir, "0.xml");
         if (!serverConfig.isFile()) {
             LOGGER.info(new StringBuilder("Creating the default server configuration file: ")
                     .append(serverConfig.getAbsolutePath()));
@@ -360,7 +367,6 @@ public class ServerProcessing {
                 throw new RuntimeException(e);
             }
         }
-
         if (!clientsDir.isDirectory()) {
             LOGGER.info(new StringBuilder("Creating the clients folder: ")
                     .append(clientsDir.getAbsolutePath()));
@@ -368,7 +374,6 @@ public class ServerProcessing {
                 throw new RuntimeException("Unable to create a clients folder: ".concat(clientsDir.getAbsolutePath()));
             }
         }
-
         if (!roomsDir.isDirectory()) {
             LOGGER.info(new StringBuilder("Creating the rooms folder: ")
                     .append(roomsDir.getAbsolutePath()));
@@ -376,13 +381,49 @@ public class ServerProcessing {
                 throw new RuntimeException("Unable to create a clients folder: ".concat(roomsDir.getAbsolutePath()));
             }
         }
-
         if (!logsDir.isDirectory()) {
             LOGGER.info(new StringBuilder("Creating the logs folder: ")
                     .append(logsDir.getAbsolutePath()));
             if(!logsDir.mkdir()){
                 throw new RuntimeException("Unable to create a logs folder: ".concat(logsDir.getAbsolutePath()));
             }
+        }
+        if (!commonChatDir.isDirectory()) {
+            LOGGER.info(new StringBuilder("Creating the common chat-room folder: ")
+                    .append(commonChatDir.getAbsolutePath()));
+            if(!commonChatDir.mkdir()){
+                throw new RuntimeException("Unable to create a common chat-room folder: "
+                        .concat(logsDir.getAbsolutePath()));
+            }
+        }
+        try {
+            if (!commonChatFile.isFile()) {
+                LOGGER.info(new StringBuilder("Creating the common chat-room file: ")
+                        .append(commonChatFile.getAbsolutePath()));
+                if(!commonChatFile.createNewFile()){
+                    throw new RuntimeException("Unable to create a common chat-room file: "
+                            .concat(logsDir.getAbsolutePath()));
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.error("Unknown error:".concat(e.getLocalizedMessage()));
+            throw new RuntimeException(e);
+        }
+        try (FileOutputStream fileOutputStream = new FileOutputStream(commonChatFile)) {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            Room room = new Room();
+            room.setRoomId(0);
+            room.setAdminId("God".hashCode());
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            marshaller.marshal(room, fileOutputStream);
+            fileOutputStream.flush();
+        } catch (FileNotFoundException e) {
+            LOGGER.error("Unable to find the file: ".concat(commonChatFile.getAbsolutePath()));
+            throw new RuntimeException(e);
+        } catch (JAXBException | IOException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
         }
     }
 

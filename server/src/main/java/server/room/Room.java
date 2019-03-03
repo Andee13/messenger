@@ -51,7 +51,8 @@ public class Room implements Saveable {
                 for (int clientId : members) {
                     if (server.getOnlineClients().containsKey(clientId)) {
                         for (Message message : sentMessages) {
-                            server.getOnlineClients().get(clientId).sendMessageToConnectedClient(message);
+                            server.getOnlineClients().get(clientId)
+                                    .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
                         }
                     }
                 }
