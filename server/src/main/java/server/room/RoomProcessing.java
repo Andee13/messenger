@@ -28,6 +28,9 @@ public class RoomProcessing {
      *  The method {@code loadRoom} returns an instance of {@code Room} - representation of a place for communication
      * of two or more clients
      *
+     *  !NOTE This method puts the room into the server online rooms map, that is why it may remove previous
+     * instance of this room from the map.
+     *
      * @param           roomId is an id of the room to be searched
      * @param           server a server containing {@code room}
      *
@@ -56,6 +59,9 @@ public class RoomProcessing {
                 Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
                 room.setServer(server);
+                synchronized (server.getOnlineRooms()) {
+                    server.getOnlineRooms().put(roomId, room);
+                }
                 return room;
             } catch (JAXBException e) {
                 LOGGER.error(e.getLocalizedMessage());
@@ -111,8 +117,10 @@ public class RoomProcessing {
         newRoom.setAdminId(adminId);
         newRoom.setRoomId(newRoomId);
         newRoom.getMembers().add(adminId);
-        for (int clientId : clientsIds) {
-            newRoom.getMembers().add(clientId);
+        synchronized (newRoom.getMembers()) {
+            for (int clientId : clientsIds) {
+                newRoom.getMembers().add(clientId);
+            }
         }
         if (!newRoom.save()) {
             String errorMessage = "Unable to create new room id: ".concat(String.valueOf(newRoomId));
@@ -186,7 +194,7 @@ public class RoomProcessing {
      * @exception       ClientNotFoundException in case if the client specified by the {@code message.getFromId()}
      *                  has not been registered on server or his/her data is unreachable
      * @exception       RoomNotFoundException in case if the room specified by the {@code message.getRoomId()}
-     *      *                  has not been created on server or it's data is unreachable
+     *                  has not been created on server or it's data is unreachable
      * */
     public static boolean sendMessage(@NotNull Server server, @NotNull Message message) throws IOException {
         // checking the message status
@@ -214,15 +222,15 @@ public class RoomProcessing {
             throw new ClientNotFoundException(fromId);
         }
         // Checking whether the specified room exists
-        // TODO handle the exceptions ?! in the ClientListener.handle() !!!
         if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), roomId) == 0) {
             throw new RoomNotFoundException("Unable to find room id: ".concat(String.valueOf(roomId)));
         }
         // Checking whether the specified room is in the server "online" rooms set
-
         if (!server.getOnlineRooms().containsKey(roomId)) {
             Map<Integer, Room> onlineRoms = server.getOnlineRooms();
-            onlineRoms.put(roomId, RoomProcessing.loadRoom(server, message.getRoomId()));
+            synchronized (onlineRoms) {
+                onlineRoms.put(roomId, RoomProcessing.loadRoom(server, message.getRoomId()));
+            }
         }
         Room room = server.getOnlineRooms().get(roomId);
         List<Message> messagesHistory = room.getMessageHistory();

@@ -60,6 +60,10 @@ public class ClientListener extends Thread {
         in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
     }
 
+    public Socket getSocket() {
+        return socket;
+    }
+
     @Override
     public void run() {
         if (server == null) {
@@ -786,7 +790,7 @@ public class ClientListener extends Thread {
         super.interrupt();
     }
 
-    private Message getFriends(){
+    private synchronized Message getFriends(){
         if (client.getFriends().size() == 0) {
             return new Message(MessageStatus.FRIEND_LIST).setText("");
         }
@@ -797,7 +801,7 @@ public class ClientListener extends Thread {
         return new Message(MessageStatus.FRIEND_LIST).setText(stringBuilder.substring(0,stringBuilder.length() - 1));
     }
 
-    public Message getRooms() {
+    public synchronized Message getRooms() {
         if (client.getRooms().size() == 0) {
             return new Message(MessageStatus.ROOM_LIST).setText("");
         }
