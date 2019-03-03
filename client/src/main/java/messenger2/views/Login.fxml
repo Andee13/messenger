@@ -7,6 +7,7 @@
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.AnchorPane?>
 <?import javafx.scene.text.Font?>
+<?import javafx.scene.text.Text?>
 
 <AnchorPane prefHeight="470.0" prefWidth="744.0" style="-fx-background-color: #2d3447; -fx-text-fill: #000000;" xmlns="http://javafx.com/javafx/10.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="messenger2.Controllers.LoginController">
    <children>
@@ -47,5 +48,7 @@
             <Font size="14.0" />
          </font>
       </JFXButton>
+      <Text fx:id="ErrorText" fill="WHITE" layoutX="279.0" layoutY="369.0" strokeType="OUTSIDE" strokeWidth="0.0" text="Some errors occured on the server" wrappingWidth="242.93670654296875" />
+      <Text fx:id="ErrorD" fill="WHITE" layoutX="334.0" layoutY="400.0" strokeType="OUTSIDE" strokeWidth="0.0" text="vv" />
    </children>
 </AnchorPane>
