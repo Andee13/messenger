@@ -8,6 +8,8 @@ import org.apache.log4j.Logger;
 
 import java.util.Map;
 
+import static common.Utils.buildMessage;
+
 /**
  * The {@code Observer} class handles with the users who are AFK too long and rooms which do not have online users
  *
@@ -49,11 +51,11 @@ public class Observer extends Thread {
                     if (toBeSavedAndReamoved) {
                         server.getOnlineRooms().remove(roomWrapper.getKey());
                         if (roomWrapper.getValue().save() && !server.getOnlineRooms().containsKey(roomWrapper.getKey())) {
-                            LOGGER.info(new StringBuilder("Room (id ").append(roomWrapper.getKey())
-                                    .append(" has been saved by observer"));
+                            LOGGER.info(buildMessage("Room (id", roomWrapper.getKey()
+                                    , "has been saved by observer"));
                         } else {
-                            LOGGER.warn(new StringBuilder("Room (id ").append(roomWrapper.getKey())
-                                    .append(") has not been saved by observer properly"));
+                            LOGGER.warn(buildMessage("Room (id", roomWrapper.getKey()
+                                    , ") has not been saved by observer properly"));
                         }
                     }
                 }
@@ -65,13 +67,12 @@ public class Observer extends Thread {
                         server.getOnlineClients().remove(clientListenerWrapper.getKey());
                         clientListener.interrupt();
                         if (!server.getOnlineClients().containsKey(clientListenerWrapper.getKey())) {
-                            LOGGER.trace(new StringBuilder("Client (id ").append(clientListenerWrapper.getKey())
-                                    .append(") has been removed from online clients by observer"));
+                            LOGGER.trace(buildMessage("Client (id", clientListenerWrapper.getKey()
+                                    , ") has been removed from online clients by observer"));
                         } else {
-                            LOGGER.warn(new StringBuilder("Attempt to remove client id(")
-                                    .append(clientListenerWrapper.getKey())
-                                    .append(") has been failed by observer. ClientListener state is ")
-                                    .append(clientListenerWrapper.getValue().getState()));
+                            LOGGER.warn(buildMessage("Attempt to remove client (id"
+                                    , clientListenerWrapper.getKey(), ") has been failed by observer."
+                                    , "ClientListener state is", clientListenerWrapper.getValue().getState()));
                         }
                     }
                 }

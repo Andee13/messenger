@@ -17,6 +17,8 @@ import java.util.*;
 import server.exceptions.ClientNotFoundException;
 import server.exceptions.RoomNotFoundException;
 
+import static common.Utils.buildMessage;
+
 /**
  * The class {@code RoomProcessing} is just a container of methods related with instances of the {@code Room} class
  * */
@@ -66,8 +68,8 @@ public class RoomProcessing {
                 throw new RuntimeException(e);
             }
         } else {
-            throw new RoomNotFoundException(new StringBuilder("There is not such room (id ")
-                    .append(roomId).append(") on the server").toString());
+            throw new RoomNotFoundException(
+                    buildMessage("There is not such room (id", roomId, ") on the server"));
         }
     }
 
@@ -198,8 +200,8 @@ public class RoomProcessing {
     public static boolean sendMessage(@NotNull Server server, @NotNull Message message) throws IOException {
         // checking the message status
         if (message.getStatus() != MessageStatus.MESSAGE) {
-            throw new IllegalArgumentException(new StringBuilder("Message status is expected to be ")
-                    .append(MessageStatus.MESSAGE).append(" but found ").append(message.getStatus()).toString());
+            throw new IllegalArgumentException(buildMessage("Message status is expected to be"
+                    , MessageStatus.MESSAGE, "but found",message.getStatus()));
         }
         // checking the properties
         if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
