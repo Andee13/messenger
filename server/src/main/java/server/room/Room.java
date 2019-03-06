@@ -1,8 +1,8 @@
 package server.room;
 
-import common.message.Message;
-import common.message.MessageStatus;
-import common.Saveable;
+import common.entities.message.Message;
+import common.entities.message.MessageStatus;
+import common.entities.Saveable;
 import javafx.collections.*;
 import org.apache.log4j.Logger;
 import server.*;

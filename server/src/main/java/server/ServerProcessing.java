@@ -1,8 +1,7 @@
 package server;
 
-import common.message.Message;
-import common.message.MessageStatus;
-import org.apache.log4j.FileAppender;
+import common.entities.message.Message;
+import common.entities.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.client.ClientListener;
@@ -20,6 +19,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Map;
 import java.util.Properties;
+
+import static common.Utils.buildMessage;
 
 /**
  *  This class contains methods which operates with an instance of {@code Server}
@@ -152,13 +153,13 @@ public class ServerProcessing {
             }
             marshaller.marshal(banMessage, stringWriter);
             dataOutputStream.writeUTF(stringWriter.toString());
-            System.out.println(new StringBuilder("Server response:\n").append(dataInputStream.readUTF()));
+            LOGGER.info(buildMessage("Server response:\n", dataInputStream.readUTF()));
         } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
         } catch (SocketTimeoutException e) {
             LOGGER.error("Server does not response");
         } catch (IOException e) {
-            LOGGER.error(new StringBuilder(e.getClass().getName()).append(e.getLocalizedMessage()));
+            LOGGER.error(buildMessage(e.getClass().getName(), e.getLocalizedMessage()));
         }
     }
 
@@ -217,7 +218,7 @@ public class ServerProcessing {
                 case "-unban":
                     return  InvocationMode.UNBAN;
 
-                default: throw new IOException(new StringBuilder("Unknown command: ").append(args[0]).toString());
+                default: throw new IOException(buildMessage("Unknown command:", args[0]));
             }
         }
     }
@@ -240,22 +241,20 @@ public class ServerProcessing {
         try {
             int port = Integer.parseInt(properties.getProperty("port"));
             if (port < 0 || port > 65536) {
-                LOGGER.error(new StringBuilder("The port value was expected to be between 0 and 65536, but found ")
-                        .append(port).toString());
+                LOGGER.error(buildMessage("The port value was expected to be between 0 and 65536"
+                        ,"but found", port));
             }
         } catch (NumberFormatException e) {
-            LOGGER.warn(new StringBuilder("Unable to extract a port number from server configuration ")
-                    .append(properties.getProperty("port")));
+            LOGGER.warn(buildMessage("Unable to extract a port number from server configuration",
+                    properties.getProperty("port")));
             return false;
         }
         if (!new File(properties.getProperty("roomsDir")).isDirectory()) {
-            LOGGER.warn(new StringBuilder("Invalid roomsDir value was set: ")
-                    .append(properties.getProperty("roomsDir")));
+            LOGGER.warn(buildMessage("Invalid roomsDir value was set:", properties.getProperty("roomsDir")));
             return false;
         }
         if (!new File(properties.getProperty("clientsDir")).isDirectory()) {
-            LOGGER.warn(new StringBuilder("Invalid clientsDir value was set: ")
-                    .append(properties.getProperty("clientsDir")));
+            LOGGER.warn(buildMessage("Invalid clientsDir value was set:", properties.getProperty("clientsDir")));
             return false;
         }
         try {
@@ -343,12 +342,12 @@ public class ServerProcessing {
         File commonChatDir = new File(roomsDir, "0");
         File commonChatFile = new File(commonChatDir, "0.xml");
         if (!serverConfig.isFile()) {
-            LOGGER.info(new StringBuilder("Creating the default server configuration file: ")
-                    .append(serverConfig.getAbsolutePath()));
+            LOGGER.info(buildMessage("Creating the default server configuration file:",
+                    serverConfig.getAbsolutePath()));
             try {
                 if(!serverConfig.createNewFile()){
-                    throw new RuntimeException(new StringBuilder("Failed default server configuration file creation: ")
-                            .append(serverConfig.getAbsolutePath()).toString());
+                    throw new RuntimeException(buildMessage("Failed default server configuration file creation:",
+                            serverConfig.getAbsolutePath()));
                 }
                 Properties defaultProperties = getDefaultProperties();
                 defaultProperties.setProperty("roomsDir", roomsDir.getAbsolutePath());
@@ -357,9 +356,8 @@ public class ServerProcessing {
                 defaultProperties.setProperty("serverConfig", serverConfig.getAbsolutePath());
                 try(FileOutputStream fos = new FileOutputStream(serverConfig)) {
                     defaultProperties.storeToXML(fos,null);
-                    LOGGER.info(new StringBuilder("The default properties have been stored in the file ")
-                            .append(serverConfig.getAbsolutePath())
-                            .append(". Please, set your server configuration there."));
+                    LOGGER.info(buildMessage("The default properties have been stored in the file",
+                            serverConfig.getAbsolutePath(), ". Please, set your server configuration there."));
                 } catch (Exception e) {
                     LOGGER.fatal(e.getLocalizedMessage());
                 }
@@ -368,40 +366,37 @@ public class ServerProcessing {
             }
         }
         if (!clientsDir.isDirectory()) {
-            LOGGER.info(new StringBuilder("Creating the clients folder: ")
-                    .append(clientsDir.getAbsolutePath()));
+            LOGGER.info(buildMessage("Creating the clients folder:", clientsDir.getAbsolutePath()));
             if(!clientsDir.mkdir()){
                 throw new RuntimeException("Unable to create a clients folder: ".concat(clientsDir.getAbsolutePath()));
             }
         }
         if (!roomsDir.isDirectory()) {
-            LOGGER.info(new StringBuilder("Creating the rooms folder: ")
-                    .append(roomsDir.getAbsolutePath()));
+            LOGGER.info(buildMessage("Creating the rooms folder:", roomsDir.getAbsolutePath()));
             if(!roomsDir.mkdir()){
-                throw new RuntimeException("Unable to create a clients folder: ".concat(roomsDir.getAbsolutePath()));
+                throw new RuntimeException(buildMessage("Unable to create a clients folder:",
+                        roomsDir.getAbsolutePath()));
             }
         }
         if (!logsDir.isDirectory()) {
-            LOGGER.info(new StringBuilder("Creating the logs folder: ")
-                    .append(logsDir.getAbsolutePath()));
+            LOGGER.info(buildMessage("Creating the logs folder:", logsDir.getAbsolutePath()));
             if(!logsDir.mkdir()){
-                throw new RuntimeException("Unable to create a logs folder: ".concat(logsDir.getAbsolutePath()));
+                throw new RuntimeException("Unable to create a logs folder:".concat(logsDir.getAbsolutePath()));
             }
         }
         if (!commonChatDir.isDirectory()) {
-            LOGGER.info(new StringBuilder("Creating the common chat-room folder: ")
-                    .append(commonChatDir.getAbsolutePath()));
+            LOGGER.info(buildMessage("Creating the common chat-room folder:", commonChatDir.getAbsolutePath()));
             if(!commonChatDir.mkdir()){
-                throw new RuntimeException("Unable to create a common chat-room folder: "
+                throw new RuntimeException("Unable to create a common chat-room folder:"
                         .concat(logsDir.getAbsolutePath()));
             }
         }
         try {
             if (!commonChatFile.isFile()) {
-                LOGGER.info(new StringBuilder("Creating the common chat-room file: ")
-                        .append(commonChatFile.getAbsolutePath()));
+                LOGGER.info(buildMessage("Creating the common chat-room file:",
+                        commonChatFile.getAbsolutePath()));
                 if(!commonChatFile.createNewFile()){
-                    throw new RuntimeException("Unable to create a common chat-room file: "
+                    throw new RuntimeException("Unable to create a common chat-room file:"
                             .concat(logsDir.getAbsolutePath()));
                 }
             }
@@ -440,38 +435,27 @@ public class ServerProcessing {
             properties.setProperty("server_login", "God");
             properties.setProperty("server_password","change_me");
             // a path to the folder where clients' data will be stored
-            properties.setProperty("clientsDir", new StringBuilder("change")
-                    .append(File.separatorChar).append("the")
-                    .append(File.separatorChar).append("clients")
-                    .append(File.separatorChar).append("folder")
-                    .append(File.separatorChar).append("path")
-                    .toString()
+            properties.setProperty("clientsDir", buildMessage("change",
+                    File.separatorChar, "the", File.separatorChar, "clients",
+                    File.separatorChar, "folder", File.separatorChar, "path")
             );
             // a path to the folder where the rooms' data will be stored
-            properties.setProperty("roomsDir", new StringBuilder("change")
-                    .append(File.separatorChar).append("the")
-                    .append(File.separatorChar).append("rooms")
-                    .append(File.separatorChar).append("folder")
-                    .append(File.separatorChar).append("path")
-                    .toString()
+            properties.setProperty("roomsDir", buildMessage("change",
+                    File.separatorChar, "the", File.separatorChar, "rooms",
+                    File.separatorChar, "folder", File.separatorChar, "path")
             );
             // default max stored messages
             properties.setProperty("messageStorageDimension","50");
             // folder for logs
-            properties.setProperty("logsDir",new StringBuilder("change")
-                    .append(File.separatorChar).append("the")
-                    .append(File.separatorChar).append("logs")
-                    .append(File.separatorChar).append("folder")
-                    .append(File.separatorChar).append("path")
-                    .toString()
+            properties.setProperty("logsDir",buildMessage("change",
+                    File.separatorChar, "the", File.separatorChar, "logs",
+                    File.separatorChar, "folder", File.separatorChar, "path")
             );
             // setting the folder where the server configuration file will be stored
-            properties.setProperty("serverConfig",new StringBuilder("change")
-                    .append(File.separatorChar).append("the")
-                    .append(File.separatorChar).append("serverConfig")
-                    .append(File.separatorChar).append("path")
-                    .append(File.separatorChar).append("serverConfig.xml")
-                    .toString()
+            properties.setProperty("serverConfig",buildMessage("change",
+                    File.separatorChar, "the", File.separatorChar, "server",
+                    File.separatorChar, "config", File.separatorChar, "path",
+                    File.separatorChar, "serverConfig.xml")
             );
             defaultProperties = properties;
         }
@@ -496,7 +480,7 @@ public class ServerProcessing {
         }
         Server server = new Server(serverPropertiesFile);
         server.start();
-        LOGGER.info(new StringBuilder("Server thread status: ").append(server.getState()).toString());
+        LOGGER.info(buildMessage("Server thread status:", server.getState()));
     }
 
     private static void startServer(Properties serverConfiguration) throws IOException {
@@ -549,7 +533,7 @@ public class ServerProcessing {
      * */
     public static void sendStopServerMessage(@NotNull Properties serverProperties) {
         if (!arePropertiesValid(serverProperties)) {
-            LOGGER.error(new StringBuilder("Invalid server properties passed ").append(serverProperties));
+            LOGGER.error(buildMessage("Invalid server properties passed", serverProperties));
             return;
         }
         try (Socket socket = new Socket("localhost", Integer.parseInt(serverProperties.getProperty("port")));
@@ -559,8 +543,8 @@ public class ServerProcessing {
                 serverSocket.accept();
                 return;
             } catch (SocketTimeoutException e) {
-                LOGGER.info(new StringBuilder("The server ").append("localhost:")
-                        .append(serverProperties.getProperty("port")).append(" is not currently active"));
+                LOGGER.info(buildMessage("The server localhost:", serverProperties.getProperty("port"),
+                        "is currently not active"));
                 return;
             } catch (SocketException e) {
                 LOGGER.info("The server is launched");
@@ -575,8 +559,9 @@ public class ServerProcessing {
             marshaller.marshal(message, stringWriter);
             dataOutputStream.writeUTF(stringWriter.toString());
             dataOutputStream.flush();
-            LOGGER.info(new StringBuilder("The Message of ").append(MessageStatus.STOP_SERVER)
-                    .append(" status has been sent to address localhost:").append(serverProperties.getProperty("port")));
+
+            LOGGER.info(buildMessage("The Message of", MessageStatus.STOP_SERVER,
+                    "status has been sent to address localhost:", serverProperties.getProperty("port")));
         } catch (IOException | JAXBException e) {
             LOGGER.fatal(e.getMessage());
             return;
@@ -634,13 +619,12 @@ public class ServerProcessing {
                         || MessageStatus.DENIED.equals(response.getStatus())) {
                     LOGGER.trace("Received expected answer ".concat(response.toString()));
                 } else {
-                    LOGGER.warn(new StringBuilder("Answer has been received but the status is ")
-                            .append(response.getStatus()).append(". Expected either ").append(MessageStatus.ERROR)
-                            .append(" or ").append(MessageStatus.DENIED));
+                    LOGGER.warn(buildMessage("Answer has been received but the status is",
+                            response.getStatus(), ". Expected either", MessageStatus.ERROR, "or", MessageStatus.DENIED));
                 }
                 return response;
             } catch (JAXBException e) {
-                LOGGER.error("Unknown JAXBException: ".concat(e.getLocalizedMessage()));
+                LOGGER.error(buildMessage("Unknown JAXBException:", e.getLocalizedMessage()));
                 throw new RuntimeException(e);
             }
         } catch (IOException e) {
@@ -674,8 +658,7 @@ public class ServerProcessing {
         }
         for (Map.Entry<Integer, Room> entry : server.getOnlineRooms().entrySet()) {
             if (entry.getValue().getServer() != null && !entry.getValue().save()) {
-                LOGGER.error(new StringBuilder("Room id ").append(entry.getValue().getRoomId())
-                        .append(" has not been saved"));
+                LOGGER.error(buildMessage("Room id", entry.getValue().getRoomId(), "has not been saved"));
             }
         }
     }
@@ -688,8 +671,8 @@ public class ServerProcessing {
         }
         for (Map.Entry<Integer, ClientListener> entry : server.getOnlineClients().entrySet()) {
             if (entry.getValue().getClient() != null && !entry.getValue().getClient().save()) {
-                LOGGER.error(new StringBuilder("Client id ").append(entry.getValue().getClient().getClientId())
-                        .append(" has not been saved"));
+                LOGGER.error(buildMessage("Client id", entry.getValue().getClient().getClientId(),
+                        "has not been saved"));
             }
         }
     }
@@ -725,10 +708,9 @@ public class ServerProcessing {
                 String responseXmlMessage = dataInputStream.readUTF();
                 Message response = (Message) unmarshaller.unmarshal(new StringReader(responseXmlMessage));
                 if (!MessageStatus.ACCEPTED.equals(response.getStatus())) {
-                    LOGGER.warn(new StringBuilder("Response from the server (").append(socket.getRemoteSocketAddress())
-                            .append(") has been received, but the status is not of expected (")
-                            .append(MessageStatus.ACCEPTED).append(") status. Found ").append(response.getStatus())
-                            .append(". Operation aborted"));
+                    LOGGER.warn(buildMessage("Response from the server (", socket.getRemoteSocketAddress(),
+                            ") has been received, but the status is not of expected (", MessageStatus.ACCEPTED ,
+                            ") status. Found" ,response.getStatus(), ".Operation aborted"));
                     return false;
                 } else {
                     startServer(serverConfiguration);
@@ -736,8 +718,7 @@ public class ServerProcessing {
                         LOGGER.trace("Waiting for the server will start");
                         Thread.sleep(10000);
                     } catch (InterruptedException e) {
-                        LOGGER.error(new StringBuilder(e.getClass().getName())
-                                .append(" : ").append(e.getLocalizedMessage()));
+                        LOGGER.error(buildMessage(e.getClass().getName(), ':', e.getLocalizedMessage()));
                     }
                     return isServerLaunched(serverConfiguration);
                 }

@@ -1,9 +1,9 @@
 package server.client;
 
-import common.message.Message;
+import common.entities.message.Message;
 import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
-import common.Saveable;
+import common.entities.Saveable;
 import server.Server;
 
 import javax.xml.bind.JAXBContext;
@@ -20,6 +20,8 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+
+import static common.Utils.buildMessage;
 
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlRootElement(name="client")
@@ -207,15 +209,16 @@ public class Client implements Saveable {
         }
         File clientsDir = server.getClientsDir();
         if (!clientsDir.isDirectory()) {
-            LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
-                    .append(clientsDir.getAbsolutePath()));
+            LOGGER.warn(buildMessage("The client saving has been failed: could not create a directory ",
+                    clientsDir.getAbsolutePath()));
             return false;
         }
         File clientDir = new File(clientsDir, String.valueOf(login.hashCode()));
         if (!clientDir.isDirectory()) {
+
             if (!clientDir.mkdir()) {
-                LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
-                        .append(clientDir.getAbsolutePath()));
+                LOGGER.warn(buildMessage("The client saving has been failed: could not create a directory ",
+                        clientDir.getAbsolutePath()));
                 return false;
             }
         }
@@ -223,8 +226,8 @@ public class Client implements Saveable {
         if (!clientDir.isDirectory()) {
             try {
                 if (!clientDir.createNewFile()) {
-                    LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
-                            .append(clientDir.getAbsolutePath()));
+                    LOGGER.warn(buildMessage("The client saving has been failed: could not create a directory ",
+                            clientDir.getAbsolutePath()));
                 }
             } catch (IOException e) {
                 LOGGER.warn(e.getLocalizedMessage());

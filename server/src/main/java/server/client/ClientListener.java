@@ -1,7 +1,7 @@
 package server.client;
 
-import common.message.Message;
-import common.message.MessageStatus;
+import common.entities.message.Message;
+import common.entities.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.w3c.dom.NodeList;
@@ -27,6 +27,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
+
+import static common.Utils.buildMessage;
 
 /**
  *  The class {@code ClientListener} handles operating incoming connections i.e. it's methods
@@ -71,10 +73,8 @@ public class ClientListener extends Thread {
             interrupt();
             return;
         } else if (!State.RUNNABLE.equals(server.getState())) {
-            LOGGER.fatal(new StringBuilder("Server must have ")
-                    .append(State.RUNNABLE)
-                    .append(" state, but currently has ")
-                    .append(server.getState()));
+            LOGGER.fatal(buildMessage("Server must have", State.RUNNABLE
+                    , "state, but currently it's state is", server.getState()));
             interrupt();
             return;
         }
@@ -89,26 +89,28 @@ public class ClientListener extends Thread {
                     handle((Message) unmarshaller.unmarshal(new StringReader(messageXml)));
                 }
             } catch (SocketTimeoutException e) { // client disconnected
-                StringBuilder stringBuilder = new StringBuilder("The client");
+                String infoMessage = "The client";
                 if (client != null) {
-                    stringBuilder.append(" (id ").append(client.getClientId()).append(")");
+                    infoMessage = buildMessage(infoMessage, "(id", client.getClientId(), ')');
                 }
-                stringBuilder.append(" disconnected (address ").append(socket.getRemoteSocketAddress()).append(')');
-                LOGGER.info(stringBuilder.toString());
+                infoMessage = buildMessage(infoMessage, "disconnected (address"
+                        , socket.getRemoteSocketAddress(), ')');
+                LOGGER.info(infoMessage);
                 if (client != null && !client.save()) {
-                    LOGGER.warn(new StringBuilder("Saving the client (id ").append(client.getClientId())
-                            .append(") has not been completed properly"));
+                    LOGGER.warn(buildMessage("Saving the client (id", client.getClientId()
+                            , ") has not been completed properly"));
                 }
             } catch (IOException e) {
-                StringBuilder stringBuilder = new StringBuilder("Client ");
+                String infoMessage = "Client";
                 if (logged) {
-                    stringBuilder.append("(id ").append(client.getClientId()).append(") ");
+                    infoMessage = buildMessage(infoMessage, "(id", client.getClientId(), ")");
                 }
-                stringBuilder.append(" disconnected (address ").append(socket.getRemoteSocketAddress()).append(')');
-                LOGGER.trace(stringBuilder);
+                infoMessage = buildMessage(infoMessage, "disconnected (address"
+                        , socket.getRemoteSocketAddress(), ')');
+                LOGGER.trace(infoMessage);
                 if (client != null && !client.save()) {
-                    LOGGER.warn(new StringBuilder("Saving the client (id ").append(client.getClientId())
-                            .append(") has not been completed properly"));
+                    LOGGER.warn(buildMessage("Saving the client (id", client.getClientId()
+                            , ") has not been completed properly"));
                 }
             }
         } catch (JAXBException e) { // unknown error
@@ -138,8 +140,8 @@ public class ClientListener extends Thread {
             return false;
         }
         if (message.getFromId() == null || message.getFromId() != client.getClientId()) {
-            LOGGER.info(new StringBuilder("Expected to receive clientId ").append(client.getClientId())
-                    .append(" but found ").append(message.getFromId()));
+            LOGGER.info(buildMessage("Expected to receive clientId", client.getClientId()
+                    , "but found", message.getFromId()));
             return false;
         }
         return true;
@@ -223,8 +225,8 @@ public class ClientListener extends Thread {
                     responseMessage = getClientInfo(message);
                     break;
                 default:
-                    responseMessage = new Message(MessageStatus.ERROR).setText(new StringBuilder("Unknown message status ")
-                        .append(message.getStatus().toString()).toString());
+                    responseMessage = new Message(MessageStatus.ERROR)
+                            .setText(buildMessage("Unknown message status", message.getStatus().toString()));
             }
         } finally {
             sendMessageToConnectedClient(responseMessage);
@@ -268,8 +270,8 @@ public class ClientListener extends Thread {
         int toId = message.getToId();
         if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
             LOGGER.trace(new StringBuilder("Unable to find a client (id ").append(toId).append(")"));
-            return new Message(MessageStatus.ERROR).setText(new StringBuilder("The client (id ").append(toId)
-                    .append(") has not been found").toString());
+            return new Message(MessageStatus.ERROR)
+                    .setText(buildMessage("The client (id", toId, ") has not been found"));
         }
         Client client;
         if (server.getOnlineClients().containsKey(toId)) {
@@ -290,8 +292,8 @@ public class ClientListener extends Thread {
 
     private Message stopServer(@NotNull Message message) {
         if (!MessageStatus.STOP_SERVER.equals(message.getStatus())) {
-            String errorMessage = new StringBuilder("Message of status ").append(MessageStatus.STOP_SERVER)
-                    .append(" was expected, but found ").append(message.getStatus()).toString();
+            String errorMessage = buildMessage("Message of status", MessageStatus.STOP_SERVER
+                    , "was expected, but found", message.getStatus());
             LOGGER.warn(errorMessage);
             return new Message(MessageStatus.ERROR).setText("Internal error: ".concat(errorMessage));
         }
@@ -338,7 +340,7 @@ public class ClientListener extends Thread {
             LOGGER.error(e.getLocalizedMessage());
             responseMessage = new Message(MessageStatus.ERROR).setText("An internal error occurred");
         } catch (RoomNotFoundException e) {
-            LOGGER.trace(new StringBuilder("Room id ").append(message.getRoomId()).append(" has not been found"));
+            LOGGER.trace(buildMessage("Room id", message.getRoomId(), "has not been found"));
             responseMessage = new Message(MessageStatus.ERROR).setText("Unable to find the room having the specified id");
         }
         return responseMessage;
@@ -369,10 +371,10 @@ public class ClientListener extends Thread {
             return new Message(MessageStatus.ERROR).setText("Internal error");
         }
         if (!MessageStatus.AUTH.equals(message.getStatus())) {
-            StringBuilder errorStringBuilder = new StringBuilder("Message of the ").append(MessageStatus.AUTH)
-                    .append(" was expected but found ").append(message.getStatus().toString());
-            LOGGER.warn(errorStringBuilder.toString());
-            return new Message(MessageStatus.ERROR).setText(errorStringBuilder.toString());
+            String errorMessage = buildMessage("Message of the", MessageStatus.AUTH, "was expected but found"
+                    , message.getStatus().toString());
+            LOGGER.warn(errorMessage);
+            return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         if (message.getLogin() == null || message.getPassword() == null) {
             return new Message(MessageStatus.ERROR)
@@ -392,21 +394,21 @@ public class ClientListener extends Thread {
             Client client = (Client) unmarshaller.unmarshal(clientFile);
             if (client.isBaned()) {
                 if (LocalDateTime.now().isBefore(client.getIsBannedUntill())) {
-                    return new Message(MessageStatus.DENIED).setText(new StringBuilder("You are banned until ")
-                            .append(ServerProcessing.DATE_TIME_FORMATTER.format(client.getIsBannedUntill())).toString());
+                    return new Message(MessageStatus.DENIED).setText(buildMessage("You are banned until"
+                            , ServerProcessing.DATE_TIME_FORMATTER.format(client.getIsBannedUntill())));
                 } else {
                     client.setBaned(false);
                     client.setIsBannedUntill(null);
                     client.save();
-                    LOGGER.trace(new StringBuilder("Client (id ").append(client.getClientId())
-                            .append(") has been unbanned automatically (ban period is over)"));
+                    LOGGER.trace(buildMessage("Client (id", client.getClientId(),
+                            ") has been unbanned automatically (ban period is over)"));
                 }
             }
             logged = client.getPassword().equals(message.getPassword());
             if (logged) {
                 this.client = client;
                 this.client.setServer(server);
-                LOGGER.trace(new StringBuilder("Client id ").append(client.getClientId()).append(" has logged in"));
+                LOGGER.trace(buildMessage("Client id", client.getClientId(), "has logged in"));
                 return new Message(MessageStatus.ACCEPTED);
             } else {
                 LOGGER.trace("Wrong password from client id ".concat(String.valueOf(client.getClientId())));
@@ -423,9 +425,8 @@ public class ClientListener extends Thread {
             return new Message(MessageStatus.ERROR).setText("Message came as null");
         }
         if (!MessageStatus.REGISTRATION.equals(message.getStatus())) {
-            return new Message(MessageStatus.ERROR).setText(new StringBuilder("Message of the ")
-                    .append(MessageStatus.REGISTRATION).append(" was expected but found ")
-                    .append(message.getStatus()).toString());
+            return new Message(MessageStatus.ERROR).setText(buildMessage("Message of the",
+                    MessageStatus.REGISTRATION, "was expected but found", message.getStatus()));
         }
         File clientsDir = new File(server.getConfig().getProperty("clientsDir"));
         String login = message.getLogin();
@@ -437,8 +438,8 @@ public class ClientListener extends Thread {
         File clientDir = new File(clientsDir, String.valueOf(login.hashCode()));
         File clientFile = new File(clientDir, clientDir.getName().concat(".xml"));
         if (clientDir.isDirectory()) {
-            return new Message(MessageStatus.DENIED).setText(new StringBuilder("The login ")
-                    .append(login).append(" is already taken").toString());
+            return new Message(MessageStatus.DENIED)
+                    .setText(buildMessage("The login", login, "is already taken"));
         }
         try {
             if (!clientDir.mkdir() || !clientFile.createNewFile()) {
@@ -470,7 +471,7 @@ public class ClientListener extends Thread {
             try {
                 RoomProcessing.loadRoom(server, 0);
             } catch (InvalidPropertiesFormatException e) {
-                LOGGER.error(new StringBuilder("Unknown server configuration error occurred").append(e.getMessage()));
+                LOGGER.error(buildMessage("Unknown server configuration error occurred", e.getMessage()));
                 throw new RuntimeException(e);
             }
         }
@@ -479,13 +480,12 @@ public class ClientListener extends Thread {
             Marshaller marshaller = jaxbContext.createMarshaller();
             marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(client, clientFile);
-            LOGGER.info(new StringBuilder("New client id ").append(client.getClientId()).append(" has been registered"));
+            LOGGER.info(buildMessage("New client id", client.getClientId(), "has been registered"));
         } catch (JAXBException  e) {
             LOGGER.error(e.getLocalizedMessage());
         }
-        return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The account ")
-                .append(login).append(" has been successfully created").toString());
-
+        return new Message(MessageStatus.ACCEPTED)
+                .setText(buildMessage("The account", login, "has been successfully created"));
     }
 
     /**
@@ -735,11 +735,11 @@ public class ClientListener extends Thread {
         clientIsBeingBanned.setBaned(true);
         clientIsBeingBanned.setIsBannedUntill(bannedUntil);
         if (clientIsBeingBanned.save()) {
-            return new Message(MessageStatus.ACCEPTED).setText(new StringBuilder("The client id ").append(toId)
-                    .append(" has been banned").toString());
+            return new Message(MessageStatus.ACCEPTED)
+                    .setText(buildMessage("The client id", toId, "has been banned"));
         } else {
-            errorMessage = new StringBuilder("Unknown error. The client (id ")
-                    .append(clientIsBeingBanned.getClientId()).append(") has not been banned").toString();
+            errorMessage = buildMessage("Unknown error. The client (id", clientIsBeingBanned.getClientId()
+                    , ") has not been banned");
             LOGGER.warn(errorMessage );
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
@@ -764,16 +764,14 @@ public class ClientListener extends Thread {
      * */
     private Message clientUnban(Message message) {
         String errorMessage;
-        StringBuilder errorMessageBuilder;
         if (message == null) {
             LOGGER.error("Passed null-message to perform client unbanning");
-            return new Message(MessageStatus.ERROR).setText("Error occurred while unbanning (null)");
+            return new Message(MessageStatus.ERROR).setText("Error occurred while unbanning (null message)");
         }
         if (message.getToId() == null) {
-            errorMessageBuilder = new StringBuilder("Attempt to unban unspecified account");
-            errorMessage = errorMessageBuilder.toString();
-            LOGGER.trace(errorMessageBuilder.append(" from ")
-                    .append(message.getFromId() != null ? message.getFromId() : "unspecified client").toString());
+            errorMessage = "Attempt to unban unspecified account";
+            LOGGER.trace(buildMessage(errorMessage ,"from"
+                    , message.getFromId() != null ? message.getFromId() : "unspecified client"));
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         int toId = message.getToId();
@@ -781,17 +779,14 @@ public class ClientListener extends Thread {
                 server.getConfig().getProperty("server_login").equals(message.getLogin())
                         && server.getConfig().getProperty("server_password").equals(message.getPassword())
         )) {
-            errorMessageBuilder = new StringBuilder("Attempt to perform an action before log-in");
-            errorMessage = errorMessageBuilder.append(": ").toString();
-            LOGGER.trace(errorMessageBuilder.append(": ").append(message).toString());
+            errorMessage = buildMessage("Attempt to perform an action before log-in :", message);
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         Integer fromId = message.getFromId();
         if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
-            errorMessageBuilder = new StringBuilder("Attempt to unban unregistered client");
-            errorMessage = errorMessageBuilder.toString();
-            LOGGER.error(errorMessageBuilder.append(" from client (admin) id ")
-                    .append(fromId == null ? "server admin" : fromId).toString());
+            errorMessage = buildMessage("Attempt to unban unregistered client from client (admin) (id"
+                    , fromId == null ? "server admin" : fromId);
+            LOGGER.error(errorMessage);
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         boolean isAdmin = true;
@@ -801,29 +796,26 @@ public class ClientListener extends Thread {
         Client clientToUnban = loadClient(server.getConfig(), toId);
         clientToUnban.setServer(server);
         if (!isAdmin) {
-            errorMessageBuilder = new StringBuilder("Not enough rights to perform this operation");
-            errorMessage = errorMessageBuilder.toString();
-            LOGGER.error(errorMessageBuilder.append(" (client id ").append(fromId == null ? "server admin" : fromId)
-                    .append(" attempts to unban client id ").append(clientToUnban.getClientId()).toString());
+            errorMessage = buildMessage("Not enough rights to perform this operation (client id"
+                    , fromId, "attempts to unban client id", clientToUnban.getClientId());
+            LOGGER.error(errorMessage);
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         if (!clientToUnban.isBaned()) {
-            errorMessageBuilder = new StringBuilder("Client is not banned");
-            errorMessage = errorMessageBuilder.toString();
-            LOGGER.error(errorMessageBuilder.append("(id ").append(clientToUnban.getClientId()).append(")").toString());
+            errorMessage = buildMessage("Client", "(id", clientToUnban.getClientId(), ')', "is not banned");
+            LOGGER.error(errorMessage);
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         clientToUnban.setBaned(false);
         clientToUnban.setIsBannedUntill(null);
         if (clientToUnban.save()) {
-            LOGGER.info(new StringBuilder("Client (id ").append(clientToUnban.getClientId())
-                    .append(") has been unbanned by the admin (id ")
-                    .append(fromId == null ? "server admin" : fromId).append(')'));
-            return new Message(MessageStatus.ACCEPTED)
-                    .setText(new StringBuilder("Client id ").append(toId).append(" is unbanned").toString());
+            String infoMessage = buildMessage("Client (id", clientToUnban.getClientId()
+                    , ") has been unbanned by the admin (id ", (fromId == null ? "server admin" : fromId), ')');
+            LOGGER.info(infoMessage);
+            return new Message(MessageStatus.ACCEPTED).setText(infoMessage);
         } else {
-            LOGGER.warn(new StringBuilder("The process of unbanning client (id").append(toId)
-                    .append(") has not been finished properly"));
+            LOGGER.warn(buildMessage("The process of unbanning client (id", toId
+                    , ") has not been finished properly"));
             return new Message(MessageStatus.ERROR).setText("Unknown error occurred while unbanning");
         }
 
@@ -832,8 +824,8 @@ public class ClientListener extends Thread {
     @Override
     public void interrupt() {
         if (client != null && !client.save()) {
-            LOGGER.error(new StringBuilder("Saving the client (id").append(client.getClientId())
-                    .append(") has not been finished properly"));
+            LOGGER.error(buildMessage("Saving the client (id", client.getClientId()
+                    , ") has not been finished properly"));
         }
         super.interrupt();
     }
@@ -960,30 +952,28 @@ public class ClientListener extends Thread {
             try {
                 server.getOnlineRooms().put(message.getRoomId(), RoomProcessing.loadRoom(server, message.getRoomId()));
             } catch (InvalidPropertiesFormatException e) {
-                LOGGER.error(new StringBuilder("Unknown error ").append(e.getClass().getName()).append(" ")
-                        .append(e.getMessage()));
+                LOGGER.error(buildMessage("Unknown error", e.getClass().getName(), ' ', e.getMessage()));
                 return new Message(MessageStatus.ERROR).setText("Internal error");
             } catch (RoomNotFoundException e) {
-                LOGGER.trace(new StringBuilder("Unable to find a room (id ").append(message.getRoomId()).append(')'));
+                LOGGER.trace(buildMessage("Unable to find a room (id", message.getRoomId(), ')'));
                 return new Message(MessageStatus.DENIED)
-                        .setText(new StringBuilder("Unable to find the specified room (id ").append(message.getRoomId())
-                                .append(')').toString());
+                        .setText(buildMessage("Unable to find the specified room (id", message.getRoomId(), ')'));
             }
         }
         Room room = server.getOnlineRooms().get(message.getRoomId());
         if (!room.getMembers().contains(message.getFromId())) {
-            LOGGER.trace(new StringBuilder("The client id ").append(message.getFromId())
-                    .append(" is not a member of the room id ").append(message.getRoomId()));
+            LOGGER.trace(buildMessage("The client id", message.getFromId()
+                    , "is not a member of the room id", message.getRoomId()));
             return new Message(MessageStatus.DENIED).setText("Not a member of the room");
         }
         if (room.getMembers().contains(message.getToId())) {
-            LOGGER.trace(new StringBuilder("Attempt to remove client (id").append(message.getToId())
-                    .append(") who is already a member of the room (id ").append(message.getRoomId()).append(')'));
+            LOGGER.trace(buildMessage("Attempt to remove client (id", message.getToId()
+                    , ") who is already a member of the room (id", message.getRoomId(), ')'));
             return new Message(MessageStatus.DENIED).setText("This client is already a member of the room");
         }
         room.getMembers().add(message.getToId());
-        String infoString = new StringBuilder("Client (id ").append(message.getToId())
-                .append(") is a member of the room (id ").append(message.getRoomId()).append(')').toString();
+        String infoString = buildMessage("Client (id", message.getToId()
+                , ") is a member of the room (id", message.getRoomId(), ')');
         LOGGER.trace(infoString);
         return new Message(MessageStatus.ACCEPTED).setText(infoString);
     }
@@ -1009,30 +999,29 @@ public class ClientListener extends Thread {
             try {
                 server.getOnlineRooms().put(message.getRoomId(), RoomProcessing.loadRoom(server, message.getRoomId()));
             } catch (InvalidPropertiesFormatException e) {
-                LOGGER.error(new StringBuilder("Unknown error ").append(e.getClass().getName()).append(" ")
-                        .append(e.getMessage()));
+                LOGGER.error(buildMessage("Unknown error", e.getClass().getName(), ' ', e.getMessage()));
                 return new Message(MessageStatus.ERROR).setText("Internal error");
             } catch (RoomNotFoundException e) {
-                LOGGER.trace(new StringBuilder("Unable to find a room (id ").append(message.getRoomId()).append(')'));
+                LOGGER.trace(buildMessage("Unable to find a room (id", message.getRoomId(), ')'));
                 return new Message(MessageStatus.DENIED)
-                        .setText(new StringBuilder("Unable to find the specified room (id ").append(message.getRoomId())
-                                .append(')').toString());
+                        .setText(buildMessage("Unable to find the specified room (id"
+                                , message.getRoomId(), ')'));
             }
         }
         Room room = server.getOnlineRooms().get(message.getRoomId());
         if (!room.getMembers().contains(message.getFromId())) {
-            LOGGER.trace(new StringBuilder("The client (id ").append(message.getFromId())
-                    .append(") is not a member of the room id ").append(message.getRoomId()));
+            LOGGER.trace(buildMessage("The client (id", message.getFromId()
+                    , ") is not a member of the room id", message.getRoomId()));
             return new Message(MessageStatus.DENIED).setText("Not a member of the room");
         }
         if (!room.getMembers().contains(message.getToId())) {
-            LOGGER.trace(new StringBuilder("Attempt to remove client (id").append(message.getToId())
-                    .append(") who is not a member of the room (id ").append(message.getRoomId()).append(')'));
+            LOGGER.trace(buildMessage("Attempt to remove client (id", message.getToId()
+                    , ") who is not a member of the room (id", message.getRoomId(), ')'));
             return new Message(MessageStatus.DENIED).setText("This client is not a member of the room");
         }
         room.getMembers().remove(message.getToId());
-        String infoString = new StringBuilder("Client (id ").append(message.getToId())
-                .append(") is not a member of the room (id ").append(message.getRoomId()).append(')').toString();
+        String infoString = buildMessage("Client (id", message.getToId()
+                , ") is not a member of the room (id", message.getRoomId(), ')');
         LOGGER.trace(infoString);
         return new Message(MessageStatus.ACCEPTED).setText(infoString);
     }

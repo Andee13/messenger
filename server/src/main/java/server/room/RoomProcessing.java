@@ -1,7 +1,7 @@
 package server.room;
 
-import common.message.Message;
-import common.message.MessageStatus;
+import common.entities.message.Message;
+import common.entities.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.Server;

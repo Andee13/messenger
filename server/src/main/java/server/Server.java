@@ -1,6 +1,6 @@
 package server;
 
-import common.Saveable;
+import common.entities.Saveable;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
