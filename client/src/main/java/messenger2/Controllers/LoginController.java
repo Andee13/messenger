@@ -7,24 +7,29 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.ImageView;
+import javafx.scene.text.Text;
 import messenger2.App;
+import messenger2.ReaderThread;
 import messenger2.message.Message;
 import messenger2.message.MessageStatus;
-
 import javax.xml.bind.JAXBException;
-
 import static messenger2.Utils.*;
-
-import java.io.IOException;
-import java.net.InetAddress;
+import java.io.*;
 import java.net.Socket;
-import java.util.Scanner;
+
 
 public class LoginController {
 
 
     @FXML
+    private Text ErrorText;
+
+    @FXML
     private JFXButton Register;
+
+    @FXML
+    private Text ErrorD;
+
 
     @FXML
     private JFXTextField Username;
@@ -40,30 +45,58 @@ public class LoginController {
 
     @FXML
     void initialize() {
+        ErrorD.setVisible(false);
+        ErrorText.setVisible(false);
+
         loginButton.setOnAction(event -> {
             try {
                 Message message = new Message();
-                message.setStatus(MessageStatus.REGISTRATION);
+                message.setStatus(MessageStatus.AUTH);
                 message.setLogin(Username.getText());
                 message.setPassword(password.getText());
-                socket = new Socket(InetAddress.getLocalHost(), 5940);
-                reader = new Scanner(socket.getInputStream());
-                try {
-                    getMarshaller().marshal(message, writer);
-                } catch (JAXBException ex){
-                    System.out.println(ex);
-                }
-                System.out.println(writer.toString());
-                String responseString  = reader.next();
+                socket = new Socket("localhost", 5940);
+                reader = new DataInputStream(socket.getInputStream());
+                writer = new DataOutputStream(socket.getOutputStream());
 
-                Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Chat.fxml"));
-                App.getStage().setTitle("Hello World");
-                App.getStage().setScene(new Scene(root, 800, 500));
-                App.getStage().show();
-            } catch (IOException ex) {
+                try {
+                    StringWriter stringWriter = new StringWriter();
+                    getMarshaller().marshal(message, stringWriter);
+                    String str = stringWriter.toString();
+                    writer.writeUTF(str);
+                } catch (JAXBException ex){
+                    System.out.println("67"+ex);
+                }
+
+                //System.out.println(writer.toString());
+                //System.out.println(reader.available());
+
+                ReaderThread thread = new ReaderThread();
+                thread.start();
+                thread.join();
+                System.out.println(thread.message);
+                if(thread.message != null) {
+                    switch (thread.message.getStatus().toString()) {
+                        case "ACCEPTED":
+                            Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Chat.fxml"));
+                            App.getStage().setTitle("Hello World");
+                            App.getStage().setScene(new Scene(root, 800, 500));
+                            App.getStage().show();
+                            break;
+                        case "DENIED":
+                            ErrorD.setText(thread.message.getText());
+                            break;
+                        default:
+                            ErrorText.setVisible(true);
+                            break;
+                    }
+                }
+
+
+            } catch (IOException | InterruptedException ex) {
                 System.out.println(ex);
             }
-        });
+            }
+        );
         Register.setOnAction(event -> {
 
             try {

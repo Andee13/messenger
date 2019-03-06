@@ -1,21 +1,19 @@
 package messenger2;
 
+
 import messenger2.message.Message;
 
-import javax.xml.bind.JAXB;
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
+
+import javax.xml.bind.*;
+import java.io.*;
 import java.net.Socket;
-import java.util.Scanner;
+
 
 public class Utils {
+    public static String name;
     public static Socket socket;
-    public static Scanner reader;
-    public static PrintWriter writer;
+    public static DataInputStream reader;
+    public static DataOutputStream writer;
     public static Marshaller getMarshaller () {
         Marshaller marshaller = null;
         try {
@@ -26,5 +24,16 @@ public class Utils {
             System.out.println(ex);
         }
         return  marshaller;
+    }
+    public static Unmarshaller getUnmarshaller () {
+        Unmarshaller unmarshaller= null;
+        try {
+            JAXBContext context = JAXBContext.newInstance(Message.class);
+            unmarshaller = context.createUnmarshaller();
+            unmarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+        } catch (JAXBException ex) {
+            System.out.println(ex);
+        }
+        return  unmarshaller;
     }
 }
