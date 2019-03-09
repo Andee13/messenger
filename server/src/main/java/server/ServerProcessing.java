@@ -33,6 +33,7 @@ public class ServerProcessing {
     private static final Logger LOGGER = Logger.getLogger("ServerProcessing");
     private static Properties defaultProperties;
     public static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
+    public static final int MESSAGE_HISTORY_DIMENSION = 100;
 
     /**
      *   If the server is being launched without parameters, it is thought
@@ -257,14 +258,6 @@ public class ServerProcessing {
             LOGGER.warn(buildMessage("Invalid clientsDir value was set:", properties.getProperty("clientsDir")));
             return false;
         }
-        try {
-            if(properties.getProperty("messageStorageDimension") == null
-                    || Integer.parseInt(properties.getProperty("messageStorageDimension")) <= 0){
-                return false;
-            }
-        } catch (NumberFormatException e) {
-            return false;
-        }
         return true;
     }
 
@@ -444,8 +437,6 @@ public class ServerProcessing {
                     File.separatorChar, "the", File.separatorChar, "rooms",
                     File.separatorChar, "folder", File.separatorChar, "path")
             );
-            // default max stored messages
-            properties.setProperty("messageStorageDimension","50");
             // folder for logs
             properties.setProperty("logsDir",buildMessage("change",
                     File.separatorChar, "the", File.separatorChar, "logs",

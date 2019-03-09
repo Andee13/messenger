@@ -8,6 +8,8 @@ import javafx.collections.*;
 import org.apache.log4j.Logger;
 import server.*;
 import server.client.ClientListener;
+import server.room.history.MessageHistory;
+import server.room.history.MessageListener;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -26,8 +28,8 @@ import static common.Utils.buildMessage;
 public class Room implements Saveable {
     private volatile int roomId;
     private volatile int adminId;
-    @XmlJavaTypeAdapter(MessageHistoryObservableListAdapter.class)
-    private volatile Shell<List<Message>> messageHistory;
+    @XmlJavaTypeAdapter(MessageHistoryAdapter.class)
+    private volatile MessageHistory messageHistory;
     @XmlJavaTypeAdapter(MembersObservableSetAdapter.class)
     private volatile Shell<Set<Integer>> members;
     @XmlTransient
@@ -36,37 +38,24 @@ public class Room implements Saveable {
     private static Logger LOGGER = Logger.getLogger("Room");
 
     public Room() {
-        ObservableList<Message> oHistory = FXCollections.synchronizedObservableList(
-                FXCollections.observableList(new LinkedList<>()));
         ObservableSet<Integer> oMembers = FXCollections.synchronizedObservableSet(
                 FXCollections.observableSet(new TreeSet<>()));
         initMembersListener(oMembers);
-        initMessageHistoryListener(oHistory);
-        messageHistory = new Shell<>(oHistory);
-        members = new Shell<>(oMembers);
-    }
-
-    private void initMessageHistoryListener(ObservableList<Message> messageHistory) {
-        messageHistory.addListener((ListChangeListener<Message>) c -> {
-            c.next();
-            if (c.wasAdded() && !c.wasRemoved()) {
-                List <Message> sentMessages = (List<Message>) c.getAddedSubList();
-                synchronized (members.safe()) {
+        messageHistory = new MessageHistory(ServerProcessing.MESSAGE_HISTORY_DIMENSION);
+        messageHistory.setMessageListener(new MessageListener() {
+            @Override
+            public void newMessage(Message message) {
+                synchronized (server.getOnlineClients().safe()) {
                     for (int clientId : members.safe()) {
                         if (server.getOnlineClients().safe().containsKey(clientId)) {
-                            for (Message message : sentMessages) {
-                                // todo remove
-                                LOGGER.info(buildMessage(c.getAddedSize(), "message(s) has been added"));
-                                server.getOnlineClients().safe().get(clientId)
-                                        .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
-                            }
+                            server.getOnlineClients().safe().get(clientId)
+                                    .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
                         }
                     }
                 }
-            } else if (c.wasRemoved() && !c.wasAdded()) {
-                // TODO methods of removing the message from chat
             }
         });
+        members = new Shell<>(oMembers);
     }
 
     public void initMembersListener(ObservableSet<Integer> members) {
@@ -82,7 +71,6 @@ public class Room implements Saveable {
             } else {
                 return;
             }
-
             synchronized (server.getOnlineClients().safe()) {
                 for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().safe().entrySet()) {
                     if (clientWrapper.getValue().getClient().getClientId() != clientId) {
@@ -105,11 +93,15 @@ public class Room implements Saveable {
         return adminId;
     }
 
+    public void setMessageHistory(MessageHistory messageHistory) {
+        this.messageHistory = messageHistory;
+    }
+
     public void setAdminId(int adminId) {
         this.adminId = adminId;
     }
 
-    public Shell<List<Message>> getMessageHistory() {
+    public MessageHistory getMessageHistory() {
         return messageHistory;
     }
 
@@ -147,7 +139,7 @@ public class Room implements Saveable {
         this.server = server;
     }
 
-    @Override
+    /*@Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
@@ -166,7 +158,7 @@ public class Room implements Saveable {
             return false;
         }
         return true;
-    }
+    }*/
 
     @Override
     public int hashCode() {
@@ -206,13 +198,22 @@ public class Room implements Saveable {
         }
     }
 
-    private static class MessageHistoryObservableListAdapter
-            extends XmlAdapter<MessageHistoryObservableListWrapper, Shell<List<Message>>> {
-        public Shell<List<Message>> unmarshal(MessageHistoryObservableListWrapper messages) {
-            return new Shell<>(FXCollections.synchronizedObservableList(FXCollections.observableList(messages.getMessages())));
+    private static class MessageHistoryAdapter
+            extends XmlAdapter<MessageHistoryObservableListWrapper, MessageHistory> {
+        public MessageHistory unmarshal(MessageHistoryObservableListWrapper messages) {
+            MessageHistory messageHistory = new MessageHistory(ServerProcessing.MESSAGE_HISTORY_DIMENSION);
+            for (Message message : messages.messages) {
+                messageHistory.addMessage(message, false);
+            }
+            return messageHistory;
         }
-        public MessageHistoryObservableListWrapper marshal(Shell<List<Message>> messages) {
-            return new MessageHistoryObservableListWrapper(messages.safe());
+        public MessageHistoryObservableListWrapper marshal(MessageHistory messageHistory) {
+            MessageHistoryObservableListWrapper m = new MessageHistoryObservableListWrapper();
+            LOGGER.fatal("Количество элементов в истории перед маршалингом = " + messageHistory.getMessageHistory().size());
+            for (Message message : messageHistory.getMessageHistory()) {
+                m.messages.add(message);
+            }
+            return m;
         }
     }
 
@@ -241,6 +242,7 @@ public class Room implements Saveable {
             Marshaller marshaller = jaxbContext.createMarshaller();
             marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(this, roomFile);
+            System.out.println("message history size" + messageHistory.getMessageHistory().size());
             return true;
         } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());

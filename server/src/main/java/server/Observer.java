@@ -39,10 +39,7 @@ public class Observer extends Thread {
             *   This loop saves the room in case if there is not longer any online member on a sever
             * */
             try {
-                LOGGER.info("Trying to clean the rooms");
                 synchronized (server.getOnlineRooms().safe()) {
-                    // todo remove
-                    System.out.println("Rooms before: ");
                     for (Map.Entry<Integer, Room> roomWrapper : server.getOnlineRooms().safe().entrySet()) {
                         System.out.print(roomWrapper.getValue().getRoomId() + " ");
                     }
@@ -73,12 +70,6 @@ public class Observer extends Thread {
                             }
                         }
                     }
-                    // todo remove
-                    System.out.println("Rooms after: ");
-                    for (Map.Entry<Integer, Room> roomWrapper : server.getOnlineRooms().safe().entrySet()) {
-                        System.out.print(roomWrapper.getValue().getRoomId() + " ");
-                    }
-                    System.out.println();
                 }
             } catch(ConcurrentModificationException e){
                 continue;

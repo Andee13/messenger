@@ -16,6 +16,7 @@ import java.util.*;
 
 import server.exceptions.ClientNotFoundException;
 import server.exceptions.RoomNotFoundException;
+import server.room.history.MessageListener;
 
 import static common.Utils.buildMessage;
 
@@ -61,6 +62,16 @@ public class RoomProcessing {
                 Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
                 room.setServer(server);
+                room.getMessageHistory().setMessageListener(message -> {
+                    for (int clientId : room.getMembers().safe()) {
+                        synchronized (server.getOnlineClients().safe()) {
+                            if (server.getOnlineClients().safe().containsKey(clientId)) {
+                                server.getOnlineClients().safe().get(clientId)
+                                        .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
+                            }
+                        }
+                    }
+                });
                 server.getOnlineRooms().safe().put(roomId, room);
                 return room;
             } catch (JAXBException e) {
@@ -229,11 +240,11 @@ public class RoomProcessing {
         // Checking whether the specified room is in the server "online" rooms set
         if (!server.getOnlineRooms().safe().containsKey(roomId)) {
             synchronized (server.getOnlineRooms().safe()) {
-                server.getOnlineRooms().safe().put(roomId, RoomProcessing.loadRoom(server, message.getRoomId()));
+                RoomProcessing.loadRoom(server, message.getRoomId());
             }
         }
         Room room = server.getOnlineRooms().safe().get(roomId);
-        // todo adding the message
-        return false; // todo return statement
+        room.getMessageHistory().addMessage(message,true);
+        return room.save();
     }
 }

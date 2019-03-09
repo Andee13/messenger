@@ -883,8 +883,8 @@ public class ClientListener extends Thread {
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
             StringWriter stringWriter;
-            synchronized (room.getMessageHistory().safe()) {
-                for (Message roomMessage : room.getMessageHistory().safe()) {
+            synchronized (room.getMessageHistory().getMessageHistory()) {
+                for (Message roomMessage : room.getMessageHistory().getMessageHistory()) {
                     stringWriter = new StringWriter();
                     marshaller.marshal(roomMessage, stringWriter);
                     out.safe().writeUTF(stringWriter.toString());

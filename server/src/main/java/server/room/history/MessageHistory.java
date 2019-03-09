@@ -3,6 +3,8 @@ package server.room.history;
 import common.entities.message.Message;
 import org.apache.commons.collections4.queue.CircularFifoQueue;
 
+import java.util.Queue;
+
 public class MessageHistory {
     private CircularFifoQueue<Message> messageHistory;
     private MessageListener messageListener;
@@ -12,10 +14,10 @@ public class MessageHistory {
     public MessageHistory() {
         this(50);
     }
-    public void addMessage(Message message) {
+    public synchronized void addMessage(Message message) {
         addMessage(message, true);
     }
-    public void addMessage(Message message, boolean notifyClients) {
+    public synchronized void addMessage(Message message, boolean notifyClients) {
         messageHistory.add(message);
         if (notifyClients) {
             if (messageListener == null) {
@@ -26,5 +28,11 @@ public class MessageHistory {
     }
     public void setMessageListener(MessageListener messageListener) {
         this.messageListener = messageListener;
+    }
+    public MessageListener getMessageListener() {
+        return messageListener;
+    }
+    public Queue<Message> getMessageHistory() {
+        return messageHistory;
     }
 }

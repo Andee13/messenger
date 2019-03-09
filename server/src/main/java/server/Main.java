@@ -245,6 +245,22 @@ public class Main {
 
         System.out.println(dataInputStream.readUTF());
 
+        message = new Message(MessageStatus.MESSAGE).setText("Привет мир :)")
+                .setFromId("Puser".hashCode()).setRoomId(264568844);
+        stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream.writeUTF(stringWriter.toString());
+
+        System.out.println(dataInputStream.readUTF());
+
+        message = new Message(MessageStatus.MESSAGE).setText("Сохраняйся :)")
+                .setFromId("Puser".hashCode()).setRoomId(264568844);
+        stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream.writeUTF(stringWriter.toString());
+
+        System.out.println(dataInputStream.readUTF());
+
         // STOP_SERVER
         /*Socket socket1 = new Socket("localhost", 5940);
         DataOutputStream dataOutputStream1 = new DataOutputStream(socket1.getOutputStream());
