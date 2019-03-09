@@ -30,18 +30,18 @@ public class Observer extends Thread {
     @Override
     public void run() {
         ObservableMap<Integer, ClientListener> onlineClients = FXCollections.synchronizedObservableMap(FXCollections
-                .observableMap(server.getOnlineClients()));
+                .observableMap(server.getOnlineClients().safe()));
         ObservableMap<Integer, Room> onlineRooms = FXCollections.synchronizedObservableMap(FXCollections
-                .observableMap(server.getOnlineRooms()));
+                .observableMap(server.getOnlineRooms().safe()));
         while (true) {
             /*
             *   This loop saves the room in case if there is not longer any online member on a sever
             * */
-            synchronized (server.getOnlineRooms()) {
+            synchronized (server.getOnlineRooms().safe()) {
                 for (Map.Entry<Integer, Room> roomWrapper : onlineRooms.entrySet()) {
                     boolean toBeSavedAndReamoved = true;
-                    for (int clientId : roomWrapper.getValue().getMembers()) {
-                        if (server.getOnlineClients().containsKey(clientId)) {
+                    for (int clientId : roomWrapper.getValue().getMembers().safe()) {
+                        if (server.getOnlineClients().safe().containsKey(clientId)) {
                             toBeSavedAndReamoved = false;
                         }
                         if (!toBeSavedAndReamoved) {
@@ -49,8 +49,9 @@ public class Observer extends Thread {
                         }
                     }
                     if (toBeSavedAndReamoved) {
-                        server.getOnlineRooms().remove(roomWrapper.getKey());
-                        if (roomWrapper.getValue().save() && !server.getOnlineRooms().containsKey(roomWrapper.getKey())) {
+                        server.getOnlineRooms().safe().remove(roomWrapper.getKey());
+                        if (roomWrapper.getValue().save() && !server.getOnlineRooms().safe()
+                                .containsKey(roomWrapper.getKey())) {
                             LOGGER.info(buildMessage("Room (id", roomWrapper.getKey()
                                     , "has been saved by observer"));
                         } else {
@@ -60,13 +61,13 @@ public class Observer extends Thread {
                     }
                 }
             }
-            synchronized (server.getOnlineClients()) {
+            synchronized (server.getOnlineClients().safe()) {
                 for (Map.Entry<Integer, ClientListener> clientListenerWrapper : onlineClients.entrySet()) {
                     ClientListener clientListener = clientListenerWrapper.getValue();
                     if (clientListener.getSocket().isClosed()) {
-                        server.getOnlineClients().remove(clientListenerWrapper.getKey());
+                        server.getOnlineClients().safe().remove(clientListenerWrapper.getKey());
                         clientListener.interrupt();
-                        if (!server.getOnlineClients().containsKey(clientListenerWrapper.getKey())) {
+                        if (!server.getOnlineClients().safe().containsKey(clientListenerWrapper.getKey())) {
                             LOGGER.trace(buildMessage("Client (id", clientListenerWrapper.getKey()
                                     , ") has been removed from online clients by observer"));
                         } else {

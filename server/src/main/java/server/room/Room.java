@@ -1,5 +1,6 @@
 package server.room;
 
+import common.entities.Shell;
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
 import common.entities.Saveable;
@@ -24,9 +25,9 @@ public class Room implements Saveable {
     private volatile int roomId;
     private volatile int adminId;
     @XmlJavaTypeAdapter(MessageHistoryObservableListAdapter.class)
-    private volatile List<Message> messageHistory;
+    private volatile Shell<List<Message>> messageHistory;
     @XmlJavaTypeAdapter(MembersObservableSetAdapter.class)
-    private volatile Set<Integer> members;
+    private volatile Shell<Set<Integer>> members;
     @XmlTransient
     private volatile Server server;
 
@@ -39,8 +40,8 @@ public class Room implements Saveable {
                 FXCollections.observableSet(new TreeSet<>()));
         initMembersListener(oMembers);
         initMessageHistoryListener(oHistory);
-        messageHistory = oHistory;
-        members = oMembers;
+        messageHistory = new Shell<>(oHistory);
+        members = new Shell<>(oMembers);
     }
 
     private void initMessageHistoryListener(ObservableList<Message> messageHistory) {
@@ -48,10 +49,10 @@ public class Room implements Saveable {
             c.next();
             if (c.wasAdded() && !c.wasRemoved()) {
                 List <Message> sentMessages = (List<Message>) c.getAddedSubList();
-                for (int clientId : members) {
-                    if (server.getOnlineClients().containsKey(clientId)) {
+                for (int clientId : members.safe()) {
+                    if (server.getOnlineClients().safe().containsKey(clientId)) {
                         for (Message message : sentMessages) {
-                            server.getOnlineClients().get(clientId)
+                            server.getOnlineClients().safe().get(clientId)
                                     .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
                         }
                     }
@@ -76,7 +77,7 @@ public class Room implements Saveable {
                 return;
             }
 
-            for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().entrySet()) {
+            for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().safe().entrySet()) {
                 if (clientWrapper.getValue().getClient().getClientId() != clientId) {
                     clientWrapper.getValue().sendMessageToConnectedClient(notificationMessage);
                 }
@@ -89,14 +90,14 @@ public class Room implements Saveable {
         ObservableList<Message> o = FXCollections.synchronizedObservableList(
                 FXCollections.observableList(messageHistory));
         initMessageHistoryListener(o);
-        this.messageHistory = o;
+        this.messageHistory.set(o);
     }
 
     public void setMembersWithListener(Set<Integer> members) {
         ObservableSet<Integer> o = FXCollections.synchronizedObservableSet(
                 FXCollections.observableSet(members));
         initMembersListener(o);
-        this.members = o;
+        this.members.set(o);
     }
 
     public void setRoomId(int roomId) {
@@ -116,11 +117,11 @@ public class Room implements Saveable {
     }
 
     public List<Message> getMessageHistory() {
-        return messageHistory;
+        return messageHistory.safe();
     }
 
     private void setMessageHistory(ObservableList<Message> messageHistory) {
-        this.messageHistory = messageHistory;
+        this.messageHistory.set(messageHistory);
     }
 
     private static final class MembersObservableSetAdapter extends XmlAdapter<MembersObservableSetWrapper, Set<Integer>>{
@@ -145,12 +146,12 @@ public class Room implements Saveable {
                 '}';
     }
 
-    public Set<Integer> getMembers() {
+    public Shell<Set<Integer>> getMembers() {
         return members;
     }
 
     public void setMembers(ObservableSet<Integer> members) {
-        this.members = members;
+        this.members.set(members);
     }
 
     public Server getServer() {
@@ -166,14 +167,14 @@ public class Room implements Saveable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Room room = (Room) o;
-        if (!room.getMembers().containsAll(members)
-                || !members.containsAll(room.getMembers())
-                || (members.toArray().length != room.getMembers().toArray().length)) {
+        if (!room.getMembers().safe().containsAll(members.safe())
+                || !members.safe().containsAll(room.getMembers().safe())
+                || (members.safe().toArray().length != room.getMembers().safe().toArray().length)) {
             return false;
         }
-        if (!room.getMessageHistory().containsAll(messageHistory)
-                || !messageHistory.containsAll(room.getMessageHistory())
-                || (messageHistory.toArray().length != room.getMessageHistory().toArray().length)) {
+        if (!room.getMessageHistory().containsAll(messageHistory.safe())
+                || !messageHistory.safe().containsAll(room.getMessageHistory())
+                || (messageHistory.safe().toArray().length != room.getMessageHistory().toArray().length)) {
             return false;
         }
         if (room.roomId != roomId) {

@@ -1,5 +1,7 @@
 package server;
 
+import common.entities.message.Message;
+import common.entities.message.MessageStatus;
 import lombok.extern.log4j.Log4j;
 import org.xml.sax.SAXException;
 
@@ -8,6 +10,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.xpath.*;
 import java.io.*;
+import java.net.Socket;
 import java.net.URISyntaxException;
 
 @Log4j
@@ -211,7 +214,7 @@ public class Main {
         System.out.println(dataInputStream.readUTF());*/
 
         // AUTHORIZATION + ROOM CREATING
-        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -240,9 +243,9 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream.readUTF());*/
+        System.out.println(dataInputStream.readUTF());
 
-        /*Socket socket1 = new Socket("localhost", 5940);
+        Socket socket1 = new Socket("localhost", 5940);
         DataOutputStream dataOutputStream1 = new DataOutputStream(socket1.getOutputStream());
         DataInputStream dataInputStream1 = new DataInputStream(socket1.getInputStream());
 
@@ -252,7 +255,7 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream1.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream1.readUTF());*/
+        System.out.println(dataInputStream1.readUTF());
 
         // TESTING MESSAGE MARSHALLING - OK
         /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
@@ -335,12 +338,12 @@ public class Main {
 
         System.out.println(dataInputStream.readUTF());*/
 
-        Object object = null;
+        /*Object object = null;
 
         StringBuilder stringBuilder = new StringBuilder();
         for (int i = 0; i < 10; i++) {
             stringBuilder.append(object).append(' ');
         }
-        System.out.println(stringBuilder);
+        System.out.println(stringBuilder);*/
     }
 }

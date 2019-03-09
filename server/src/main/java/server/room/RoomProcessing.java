@@ -61,7 +61,7 @@ public class RoomProcessing {
                 Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
                 room.setServer(server);
-                server.getOnlineRooms().put(roomId, room);
+                server.getOnlineRooms().safe().put(roomId, room);
                 return room;
             } catch (JAXBException e) {
                 LOGGER.error(e.getLocalizedMessage());
@@ -117,10 +117,10 @@ public class RoomProcessing {
         newRoom.setServer(server);
         newRoom.setAdminId(adminId);
         newRoom.setRoomId(newRoomId);
-        newRoom.getMembers().add(adminId);
+        newRoom.getMembers().safe().add(adminId);
         synchronized (newRoom.getMembers()) {
             for (int clientId : clientsIds) {
-                newRoom.getMembers().add(clientId);
+                newRoom.getMembers().safe().add(clientId);
             }
         }
         if (!newRoom.save()) {
@@ -227,18 +227,17 @@ public class RoomProcessing {
             throw new RoomNotFoundException("Unable to find room id: ".concat(String.valueOf(roomId)));
         }
         // Checking whether the specified room is in the server "online" rooms set
-        if (!server.getOnlineRooms().containsKey(roomId)) {
-            Map<Integer, Room> onlineRoms = server.getOnlineRooms();
-            synchronized (onlineRoms) {
-                onlineRoms.put(roomId, RoomProcessing.loadRoom(server, message.getRoomId()));
+        if (!server.getOnlineRooms().safe().containsKey(roomId)) {
+            synchronized (server.getOnlineRooms().safe()) {
+                server.getOnlineRooms().safe().put(roomId, RoomProcessing.loadRoom(server, message.getRoomId()));
             }
         }
-        Room room = server.getOnlineRooms().get(roomId);
+        Room room = server.getOnlineRooms().safe().get(roomId);
         List<Message> messagesHistory = room.getMessageHistory();
         if (messagesHistory.size() >= Integer.parseInt(server.getConfig().getProperty("messageStorageDimension"))) {
             messagesHistory.set(messagesHistory.size() - 1, message);
             return true;
         }
-        return server.getOnlineRooms().get(roomId).getMessageHistory().add(message);
+        return server.getOnlineRooms().safe().get(roomId).getMessageHistory().add(message);
     }
 }

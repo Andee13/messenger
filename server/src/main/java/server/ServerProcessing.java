@@ -656,9 +656,11 @@ public class ServerProcessing {
             LOGGER.error(errorMessage);
             throw new NullPointerException(errorMessage);
         }
-        for (Map.Entry<Integer, Room> entry : server.getOnlineRooms().entrySet()) {
-            if (entry.getValue().getServer() != null && !entry.getValue().save()) {
-                LOGGER.error(buildMessage("Room id", entry.getValue().getRoomId(), "has not been saved"));
+        synchronized (server.getOnlineRooms().safe()) {
+            for (Map.Entry<Integer, Room> entry : server.getOnlineRooms().safe().entrySet()) {
+                if (entry.getValue().getServer() != null && !entry.getValue().save()) {
+                    LOGGER.error(buildMessage("Room id", entry.getValue().getRoomId(), "has not been saved"));
+                }
             }
         }
     }
@@ -669,10 +671,12 @@ public class ServerProcessing {
             LOGGER.error(errorMessage);
             throw new NullPointerException(errorMessage);
         }
-        for (Map.Entry<Integer, ClientListener> entry : server.getOnlineClients().entrySet()) {
-            if (entry.getValue().getClient() != null && !entry.getValue().getClient().save()) {
-                LOGGER.error(buildMessage("Client id", entry.getValue().getClient().getClientId(),
-                        "has not been saved"));
+        synchronized (server.getOnlineClients().safe()) {
+            for (Map.Entry<Integer, ClientListener> entry : server.getOnlineClients().safe().entrySet()) {
+                if (entry.getValue().getClient() != null && !entry.getValue().getClient().save()) {
+                    LOGGER.error(buildMessage("Client id", entry.getValue().getClient().getClientId(),
+                            "has not been saved"));
+                }
             }
         }
     }

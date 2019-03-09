@@ -1,5 +1,6 @@
 package server.client;
 
+import common.entities.Shell;
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
 import org.apache.log4j.Logger;
@@ -44,8 +45,8 @@ public class ClientListener extends Thread {
 
     private volatile Socket socket;
     private volatile Server server;
-    private volatile DataOutputStream out;
-    private volatile DataInputStream in;
+    private volatile Shell<DataOutputStream> out;
+    private volatile Shell<DataInputStream> in;
     private boolean logged;
     private Client client;
 
@@ -58,8 +59,8 @@ public class ClientListener extends Thread {
     public ClientListener(Server server, Socket socket) throws IOException {
         this.server = server;
         this.socket = socket;
-        out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-        in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+        out = new Shell<>(new DataOutputStream(new BufferedOutputStream(socket.getOutputStream())));
+        in = new Shell<>(new DataInputStream(new BufferedInputStream(socket.getInputStream())));
     }
 
     public Socket getSocket() {
@@ -85,7 +86,7 @@ public class ClientListener extends Thread {
             socket.setSoTimeout(1000 /*ms*/ * 60 /*s*/ * 60 /*m*/);
             try {
                 while (!isInterrupted()) {
-                    messageXml = in.readUTF();
+                    messageXml = in.safe().readUTF();
                     handle((Message) unmarshaller.unmarshal(new StringReader(messageXml)));
                 }
             } catch (SocketTimeoutException e) { // client disconnected
@@ -274,8 +275,8 @@ public class ClientListener extends Thread {
                     .setText(buildMessage("The client (id", toId, ") has not been found"));
         }
         Client client;
-        if (server.getOnlineClients().containsKey(toId)) {
-            client = server.getOnlineClients().get(toId).getClient();
+        if (server.getOnlineClients().safe().containsKey(toId)) {
+            client = server.getOnlineClients().safe().get(toId).getClient();
         } else {
             client = loadClient(server.getConfig(), toId);
         }
@@ -456,9 +457,11 @@ public class ClientListener extends Thread {
             client.setName(message.getText() == null ? login : message.getText());
             client.setClientId(login.hashCode());
             client.getRooms().add(0);
-            Room commomChat = RoomProcessing.loadRoom(server, 0);
-            commomChat = server.getOnlineRooms().get(0);
-            commomChat.getMembers().add(client.getClientId());
+            if (!server.getOnlineClients().safe().containsKey(0)) {
+                RoomProcessing.loadRoom(server, 0);
+            }
+            Room commomChat = server.getOnlineRooms().safe().get(0);
+            commomChat.getMembers().safe().add(client.getClientId());
             commomChat.save();
         } catch (NullPointerException e) {
             return new Message(MessageStatus.ERROR)
@@ -467,7 +470,7 @@ public class ClientListener extends Thread {
             LOGGER.error("Wrong properties");
             throw new RuntimeException(e);
         }
-        if (!server.getOnlineRooms().containsKey(0)) {
+        if (!server.getOnlineRooms().safe().containsKey(0)) {
             try {
                 RoomProcessing.loadRoom(server, 0);
             } catch (InvalidPropertiesFormatException e) {
@@ -535,8 +538,8 @@ public class ClientListener extends Thread {
             marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             StringWriter stringWriter = new StringWriter();
             marshaller.marshal(message, stringWriter);
-            out.writeUTF(stringWriter.toString());
-            out.flush();
+            out.safe().writeUTF(stringWriter.toString());
+            out.safe().flush();
         } catch (IOException | JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
         }
@@ -573,7 +576,7 @@ public class ClientListener extends Thread {
         try {
             NodeList resultNodeList = (NodeList) xPathExpression.evaluate(
                     new InputSource(new BufferedReader(new FileReader(roomFile))), XPathConstants.NODESET);
-            for(int i = 0; i < resultNodeList.getLength(); i++) {
+            for (int i = 0; i < resultNodeList.getLength(); i++) {
                 if(clientId == Integer.parseInt(resultNodeList.item(i).getTextContent())) {
                     return true;
                 }
@@ -705,8 +708,8 @@ public class ClientListener extends Thread {
         }
         Client clientIsBeingBanned;
         try {
-            if (server.getOnlineClients().containsKey(toId)) {
-                clientIsBeingBanned = server.getOnlineClients().get(toId).getClient();
+            if (server.getOnlineClients().safe().containsKey(toId)) {
+                clientIsBeingBanned = server.getOnlineClients().safe().get(toId).getClient();
             } else {
                 clientIsBeingBanned = loadClient(server.getConfig(), toId);
             }
@@ -718,7 +721,7 @@ public class ClientListener extends Thread {
         clientIsBeingBanned.setServer(server);
         boolean isAdmin = true;
         if (message.getFromId() != null) {
-            isAdmin = server.getOnlineClients().get(message.getFromId()).getClient().isAdmin();
+            isAdmin = server.getOnlineClients().safe().get(message.getFromId()).getClient().isAdmin();
         }
         boolean isAlreadyBanned = clientIsBeingBanned.isBaned();
         boolean isBeingBannedAdmin = clientIsBeingBanned.isAdmin();
@@ -729,8 +732,8 @@ public class ClientListener extends Thread {
             LOGGER.trace(deniedMessage);
             return new Message(MessageStatus.DENIED).setText(deniedMessage);
         }
-        if (server.getOnlineClients().containsKey(message.getToId())) {
-            server.getOnlineClients().get(message.getToId()).interrupt();
+        if (server.getOnlineClients().safe().containsKey(message.getToId())) {
+            server.getOnlineClients().safe().get(message.getToId()).interrupt();
         }
         clientIsBeingBanned.setBaned(true);
         clientIsBeingBanned.setIsBannedUntill(bannedUntil);
@@ -855,7 +858,7 @@ public class ClientListener extends Thread {
             return new Message(MessageStatus.ERROR).setText("Unspecified room");
         }
         Room room;
-        if (!server.getOnlineRooms().containsKey(message.getRoomId())) {
+        if (!server.getOnlineRooms().safe().containsKey(message.getRoomId())) {
             if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), message.getRoomId()) != 0L) {
                 try {
                     room = RoomProcessing.loadRoom(server, message.getRoomId());
@@ -864,7 +867,7 @@ public class ClientListener extends Thread {
                 }
             }
         }
-        room = server.getOnlineRooms().get(message.getRoomId());
+        room = server.getOnlineRooms().safe().get(message.getRoomId());
         try {
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
@@ -872,8 +875,8 @@ public class ClientListener extends Thread {
             for (Message roomMessage : room.getMessageHistory()) {
                 stringWriter = new StringWriter();
                 marshaller.marshal(roomMessage, stringWriter);
-                out.writeUTF(stringWriter.toString());
-                out.flush();
+                out.safe().writeUTF(stringWriter.toString());
+                out.safe().flush();
             }
         } catch (JAXBException | IOException e) {
             LOGGER.error(e.getLocalizedMessage());
@@ -897,21 +900,23 @@ public class ClientListener extends Thread {
                     .concat(String.valueOf(message.getRoomId())));
         }
         Room room;
-        if (!server.getOnlineRooms().containsKey(message.getRoomId())) {
+        if (!server.getOnlineRooms().safe().containsKey(message.getRoomId())) {
             try {
-                room = RoomProcessing.loadRoom(server, message.getRoomId());
+                RoomProcessing.loadRoom(server, message.getRoomId());
             } catch (InvalidPropertiesFormatException e) {
                 LOGGER.error(e.getLocalizedMessage());
                 return new Message(MessageStatus.MESSAGE).setText("Server configuration error occurred");
             }
         }
-        room = server.getOnlineRooms().get(message.getRoomId());
-        if (!room.getMembers().contains(client.getClientId())) {
+        room = server.getOnlineRooms().safe().get(message.getRoomId());
+        if (!room.getMembers().safe().contains(client.getClientId())) {
             return new Message(MessageStatus.DENIED).setRoomId("Not a member of the room").setRoomId(message.getRoomId());
         }
         StringBuilder stringBuilder = new StringBuilder();
-        for (int clientId : room.getMembers()) {
-            stringBuilder.append(clientId).append(',');
+        synchronized (room.getMembers().safe()) {
+            for (int clientId : room.getMembers().safe()) {
+                stringBuilder.append(clientId).append(',');
+            }
         }
         if (stringBuilder.length() == 0) {
             return new Message(MessageStatus.ACCEPTED).setRoomId(message.getRoomId()).setText("");
@@ -948,9 +953,9 @@ public class ClientListener extends Thread {
             LOGGER.warn("null roomId");
             return new Message(MessageStatus.ERROR).setText("Missed roomId");
         }
-        if (!server.getOnlineRooms().containsKey(message.getRoomId())) {
+        if (!server.getOnlineRooms().safe().containsKey(message.getRoomId())) {
             try {
-                server.getOnlineRooms().put(message.getRoomId(), RoomProcessing.loadRoom(server, message.getRoomId()));
+                server.getOnlineRooms().safe().put(message.getRoomId(), RoomProcessing.loadRoom(server, message.getRoomId()));
             } catch (InvalidPropertiesFormatException e) {
                 LOGGER.error(buildMessage("Unknown error", e.getClass().getName(), ' ', e.getMessage()));
                 return new Message(MessageStatus.ERROR).setText("Internal error");
@@ -960,18 +965,18 @@ public class ClientListener extends Thread {
                         .setText(buildMessage("Unable to find the specified room (id", message.getRoomId(), ')'));
             }
         }
-        Room room = server.getOnlineRooms().get(message.getRoomId());
-        if (!room.getMembers().contains(message.getFromId())) {
+        Room room = server.getOnlineRooms().safe().get(message.getRoomId());
+        if (!room.getMembers().safe().contains(message.getFromId())) {
             LOGGER.trace(buildMessage("The client id", message.getFromId()
                     , "is not a member of the room id", message.getRoomId()));
             return new Message(MessageStatus.DENIED).setText("Not a member of the room");
         }
-        if (room.getMembers().contains(message.getToId())) {
+        if (room.getMembers().safe().contains(message.getToId())) {
             LOGGER.trace(buildMessage("Attempt to remove client (id", message.getToId()
                     , ") who is already a member of the room (id", message.getRoomId(), ')'));
             return new Message(MessageStatus.DENIED).setText("This client is already a member of the room");
         }
-        room.getMembers().add(message.getToId());
+        room.getMembers().safe().add(message.getToId());
         String infoString = buildMessage("Client (id", message.getToId()
                 , ") is a member of the room (id", message.getRoomId(), ')');
         LOGGER.trace(infoString);
@@ -995,9 +1000,9 @@ public class ClientListener extends Thread {
             LOGGER.warn("null roomId");
             return new Message(MessageStatus.ERROR).setText("Missed roomId");
         }
-        if (!server.getOnlineRooms().containsKey(message.getRoomId())) {
+        if (!server.getOnlineRooms().safe().containsKey(message.getRoomId())) {
             try {
-                server.getOnlineRooms().put(message.getRoomId(), RoomProcessing.loadRoom(server, message.getRoomId()));
+                server.getOnlineRooms().safe().put(message.getRoomId(), RoomProcessing.loadRoom(server, message.getRoomId()));
             } catch (InvalidPropertiesFormatException e) {
                 LOGGER.error(buildMessage("Unknown error", e.getClass().getName(), ' ', e.getMessage()));
                 return new Message(MessageStatus.ERROR).setText("Internal error");
@@ -1008,18 +1013,18 @@ public class ClientListener extends Thread {
                                 , message.getRoomId(), ')'));
             }
         }
-        Room room = server.getOnlineRooms().get(message.getRoomId());
-        if (!room.getMembers().contains(message.getFromId())) {
+        Room room = server.getOnlineRooms().safe().get(message.getRoomId());
+        if (!room.getMembers().safe().contains(message.getFromId())) {
             LOGGER.trace(buildMessage("The client (id", message.getFromId()
                     , ") is not a member of the room id", message.getRoomId()));
             return new Message(MessageStatus.DENIED).setText("Not a member of the room");
         }
-        if (!room.getMembers().contains(message.getToId())) {
+        if (!room.getMembers().safe().contains(message.getToId())) {
             LOGGER.trace(buildMessage("Attempt to remove client (id", message.getToId()
                     , ") who is not a member of the room (id", message.getRoomId(), ')'));
             return new Message(MessageStatus.DENIED).setText("This client is not a member of the room");
         }
-        room.getMembers().remove(message.getToId());
+        room.getMembers().safe().remove(message.getToId());
         String infoString = buildMessage("Client (id", message.getToId()
                 , ") is not a member of the room (id", message.getRoomId(), ')');
         LOGGER.trace(infoString);

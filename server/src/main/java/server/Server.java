@@ -1,6 +1,7 @@
 package server;
 
 import common.entities.Saveable;
+import common.entities.Shell;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
@@ -8,7 +9,6 @@ import org.jetbrains.annotations.NotNull;
 import server.client.ClientListener;
 import server.room.Room;
 
-import javax.xml.bind.annotation.XmlRootElement;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -19,10 +19,9 @@ import java.util.TreeMap;
 
 import static common.Utils.buildMessage;
 
-@XmlRootElement
 public class Server extends Thread implements Saveable {
-    private volatile Map<Integer, ClientListener> onlineClients;
-    private volatile Map<Integer, Room> onlineRooms;
+    private volatile Shell<Map<Integer, ClientListener>> onlineClients;
+    private volatile Shell<Map<Integer, Room>> onlineRooms;
     private static final Logger LOGGER = Logger.getLogger("Server");
     private volatile Properties config;
     private File clientsDir;
@@ -101,20 +100,20 @@ public class Server extends Thread implements Saveable {
         }
     }
 
-    public Map<Integer, ClientListener> getOnlineClients() {
+    public Shell<Map<Integer, ClientListener>> getOnlineClients() {
         return onlineClients;
     }
 
     public void setOnlineClients(ObservableMap<Integer, ClientListener> onlineClients) {
-        this.onlineClients = onlineClients;
+        this.onlineClients.set(onlineClients);
     }
 
-    public Map<Integer, Room> getOnlineRooms() {
+    public Shell<Map<Integer, Room>> getOnlineRooms() {
         return onlineRooms;
     }
 
     public void setOnlineRooms(@NotNull Map<Integer, Room> onlineRooms) {
-        this.onlineRooms = FXCollections.observableMap(onlineRooms);
+        this.onlineRooms.set(FXCollections.observableMap(onlineRooms));
     }
 
     /**
@@ -124,6 +123,8 @@ public class Server extends Thread implements Saveable {
      *                  e.g. is {@code null}, does not contain a property or it is not valid
      * */
     public Server(@NotNull File serverPropertiesFile) throws InvalidPropertiesFormatException {
+        onlineClients = new Shell<>();
+        onlineRooms = new Shell<>();
         initOnlineClients();
         initOnlineRooms();
         if (!ServerProcessing.arePropertiesValid(serverPropertiesFile)) {
@@ -133,8 +134,8 @@ public class Server extends Thread implements Saveable {
         try(FileInputStream fileInputStream = new FileInputStream(serverPropertiesFile)) {
             config.loadFromXML(fileInputStream);
             serverConfigFile = serverPropertiesFile;
-            onlineClients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
-            onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+            onlineClients.set(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+            onlineRooms.set(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
@@ -142,15 +143,18 @@ public class Server extends Thread implements Saveable {
     }
 
     private void initOnlineClients() {
-        onlineClients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+        onlineClients.set(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
     }
 
     private void initOnlineRooms() {
-        onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+        onlineRooms.set(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
     }
 
     @Override
     public void run() {
+        Observer observer = new Observer(this);
+        observer.start();
+        LOGGER.info(buildMessage("Observer thread status:", observer.getState()));
         if (!ServerProcessing.arePropertiesValid(config)) {
             LOGGER.fatal("Unable to start the server. Server configurations are not valid.");
             return;
@@ -196,7 +200,7 @@ public class Server extends Thread implements Saveable {
         }
         try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(serverConfigFile))) {
             config.storeToXML(bos, null);
-            for (Map.Entry<Integer, ClientListener> onlineClients : onlineClients.entrySet()) {
+            for (Map.Entry<Integer, ClientListener> onlineClients : onlineClients.safe().entrySet()) {
                 ClientListener clientListener = onlineClients.getValue();
                 if (clientListener.getClient() != null && !clientListener.getClient().save()) {
                     LOGGER.error(buildMessage("Failed to save the client (id"
@@ -204,7 +208,7 @@ public class Server extends Thread implements Saveable {
                     return false;
                 }
             }
-            for (Map.Entry<Integer, Room> onlineRooms : onlineRooms.entrySet()) {
+            for (Map.Entry<Integer, Room> onlineRooms : onlineRooms.safe().entrySet()) {
                 if (!onlineRooms.getValue().save()) {
                     LOGGER.error(buildMessage("Failed to save the room (id", onlineRooms.getValue().getRoomId()));
                     return false;
@@ -221,7 +225,7 @@ public class Server extends Thread implements Saveable {
         }
     }
     private boolean interruptOnlineClientsThreads() {
-        for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.entrySet()) {
+        for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.safe().entrySet()) {
             clientListenerEntry.getValue().interrupt();
             if (!clientListenerEntry.getValue().isInterrupted()) {
                 LOGGER.error(buildMessage("Failed to interrupt client's (id"
