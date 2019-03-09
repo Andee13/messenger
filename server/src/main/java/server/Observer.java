@@ -6,6 +6,7 @@ import server.client.ClientListener;
 import server.room.Room;
 import org.apache.log4j.Logger;
 
+import java.util.ConcurrentModificationException;
 import java.util.Map;
 
 import static common.Utils.buildMessage;
@@ -33,34 +34,56 @@ public class Observer extends Thread {
                 .observableMap(server.getOnlineClients().safe()));
         ObservableMap<Integer, Room> onlineRooms = FXCollections.synchronizedObservableMap(FXCollections
                 .observableMap(server.getOnlineRooms().safe()));
-        while (true) {
+        while (!server.isInterrupted()) {
             /*
             *   This loop saves the room in case if there is not longer any online member on a sever
             * */
-            synchronized (server.getOnlineRooms().safe()) {
-                for (Map.Entry<Integer, Room> roomWrapper : onlineRooms.entrySet()) {
-                    boolean toBeSavedAndReamoved = true;
-                    for (int clientId : roomWrapper.getValue().getMembers().safe()) {
-                        if (server.getOnlineClients().safe().containsKey(clientId)) {
-                            toBeSavedAndReamoved = false;
+            try {
+                LOGGER.info("Trying to clean the rooms");
+                synchronized (server.getOnlineRooms().safe()) {
+                    // todo remove
+                    System.out.println("Rooms before: ");
+                    for (Map.Entry<Integer, Room> roomWrapper : server.getOnlineRooms().safe().entrySet()) {
+                        System.out.print(roomWrapper.getValue().getRoomId() + " ");
+                    }
+                    System.out.println();
+                    for (Map.Entry<Integer, Room> roomWrapper : onlineRooms.entrySet()) {
+                        if (roomWrapper.getValue().getRoomId() == 0) {
+                            continue;
                         }
-                        if (!toBeSavedAndReamoved) {
-                            break;
+                        boolean toBeSavedAndReamoved = true;
+                        for (int clientId : roomWrapper.getValue().getMembers().safe()) {
+                            if (server.getOnlineClients().safe().containsKey(clientId)) {
+                                toBeSavedAndReamoved = false;
+                            }
+                            if (!toBeSavedAndReamoved) {
+                                break;
+                            }
+                        }
+                        if (toBeSavedAndReamoved) {
+                            LOGGER.trace(buildMessage("Saving the room (id", roomWrapper.getValue().getRoomId(), ')'));
+                            server.getOnlineRooms().safe().remove(roomWrapper.getKey());
+                            if (roomWrapper.getValue().save() && !server.getOnlineRooms().safe()
+                                    .containsKey(roomWrapper.getKey())) {
+                                LOGGER.info(buildMessage("Room (id", roomWrapper.getKey()
+                                        , "has been saved by observer"));
+                            } else {
+                                LOGGER.warn(buildMessage("Room (id", roomWrapper.getKey()
+                                        , ") has not been saved by observer properly"));
+                            }
                         }
                     }
-                    if (toBeSavedAndReamoved) {
-                        server.getOnlineRooms().safe().remove(roomWrapper.getKey());
-                        if (roomWrapper.getValue().save() && !server.getOnlineRooms().safe()
-                                .containsKey(roomWrapper.getKey())) {
-                            LOGGER.info(buildMessage("Room (id", roomWrapper.getKey()
-                                    , "has been saved by observer"));
-                        } else {
-                            LOGGER.warn(buildMessage("Room (id", roomWrapper.getKey()
-                                    , ") has not been saved by observer properly"));
-                        }
+                    // todo remove
+                    System.out.println("Rooms after: ");
+                    for (Map.Entry<Integer, Room> roomWrapper : server.getOnlineRooms().safe().entrySet()) {
+                        System.out.print(roomWrapper.getValue().getRoomId() + " ");
                     }
+                    System.out.println();
                 }
+            } catch(ConcurrentModificationException e){
+                continue;
             }
+            LOGGER.info("Trying to clean the clients");
             synchronized (server.getOnlineClients().safe()) {
                 for (Map.Entry<Integer, ClientListener> clientListenerWrapper : onlineClients.entrySet()) {
                     ClientListener clientListener = clientListenerWrapper.getValue();
@@ -78,7 +101,6 @@ public class Observer extends Thread {
                     }
                 }
             }
-
             try {
                 sleep(60000);
             } catch (InterruptedException e) {

@@ -10,10 +10,9 @@ public class Shell <T>{
     }
     public Shell(){
     }
-    public synchronized T safe(){
-        return item;
-    }
-    public synchronized void set(T newItem) {
-        item = newItem;
+    public T safe(){
+        synchronized (item) {
+            return item;
+        }
     }
 }

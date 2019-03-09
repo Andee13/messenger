@@ -238,14 +238,15 @@ public class Main {
         System.out.println(dataInputStream.readUTF());
 
         message = new Message(MessageStatus.MESSAGE).setText("Hello world :)")
-                .setFromId("Puser".hashCode()).setRoomId(408753972);
+                .setFromId("Puser".hashCode()).setRoomId(264568844);
         stringWriter = new StringWriter();
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
         System.out.println(dataInputStream.readUTF());
 
-        Socket socket1 = new Socket("localhost", 5940);
+        // STOP_SERVER
+        /*Socket socket1 = new Socket("localhost", 5940);
         DataOutputStream dataOutputStream1 = new DataOutputStream(socket1.getOutputStream());
         DataInputStream dataInputStream1 = new DataInputStream(socket1.getInputStream());
 
@@ -255,7 +256,7 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream1.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream1.readUTF());
+        System.out.println(dataInputStream1.readUTF());*/
 
         // TESTING MESSAGE MARSHALLING - OK
         /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);

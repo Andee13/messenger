@@ -119,6 +119,8 @@ public class ClientListener extends Thread {
         } catch (SocketException e) {
             LOGGER.error(e.getLocalizedMessage());
         } finally { // TODO tracking in which case the thread begins to execute this code (in order to prevent double-saving)
+            LOGGER.trace(buildMessage("Client ",
+                    (logged ? buildMessage("(id", client.getClientId(),')') : ("(not logged in)")), "disconnected"));
             interrupt();
         }
     }
@@ -280,12 +282,12 @@ public class ClientListener extends Thread {
         } else {
             client = loadClient(server.getConfig(), toId);
         }
-        if (client.getFriends().contains(this.client.getClientId())) {
+        if (client.getFriends().safe().contains(this.client.getClientId())) {
             return new Message(MessageStatus.DENIED).setText("You are already friends").setFromId(message.getToId())
                     .setToId(message.getFromId());
         }
-        client.getFriends().add(this.client.getClientId());
-        this.client.getFriends().add(client.getClientId());
+        client.getFriends().safe().add(this.client.getClientId());
+        this.client.getFriends().safe().add(client.getClientId());
         client.save();
         return new Message(MessageStatus.ACCEPTED).setText("Client are friends now").setFromId(message.getToId())
                 .setToId(message.getFromId());
@@ -322,7 +324,10 @@ public class ClientListener extends Thread {
     private Message sendMessage(Message message) {
         if (message == null) {
             LOGGER.error("Message is null");
-            return new Message(MessageStatus.ERROR).setText("Internal error");
+            return new Message(MessageStatus.ERROR).setText("Internal error. Message is null");
+        }
+        if (!isMessageFromThisLoggedClient(message)) {
+            return new Message(MessageStatus.DENIED).setText("Please, log in first");
         }
         if (message.getText() == null) {
             return new Message(MessageStatus.ERROR).setText("Message text has not been set");
@@ -456,7 +461,7 @@ public class ClientListener extends Thread {
             client.setPassword(password);
             client.setName(message.getText() == null ? login : message.getText());
             client.setClientId(login.hashCode());
-            client.getRooms().add(0);
+            client.getRooms().safe().add(0);
             if (!server.getOnlineClients().safe().containsKey(0)) {
                 RoomProcessing.loadRoom(server, 0);
             }
@@ -519,7 +524,7 @@ public class ClientListener extends Thread {
             if (room == null) {
                 return new Message(MessageStatus.ERROR).setText("Some error has occurred during the room creation");
             } else {
-                client.getRooms().add(room.getRoomId());
+                client.getRooms().safe().add(room.getRoomId());
                 LOGGER.trace(new StringBuilder("New room (id ").append(room.getRoomId()).append(") has been created"));
                 return new Message(MessageStatus.ACCEPTED).setRoomId(room.getRoomId())
                         .setText(new StringBuilder("The room id: ").append(room.getRoomId())
@@ -826,6 +831,10 @@ public class ClientListener extends Thread {
 
     @Override
     public void interrupt() {
+        LOGGER.trace(buildMessage("Stopping the client ",
+                buildMessage("Client ",
+                (logged ? buildMessage("(id", client.getClientId(),')') : ("(not logged in)"))
+                        , "disconnected"), " session"));
         if (client != null && !client.save()) {
             LOGGER.error(buildMessage("Saving the client (id", client.getClientId()
                     , ") has not been finished properly"));
@@ -837,12 +846,14 @@ public class ClientListener extends Thread {
         if (!logged) {
             return new Message(MessageStatus.DENIED).setText("Log in first");
         }
-        if (client.getFriends().size() == 0) {
+        if (client.getFriends().safe().size() == 0) {
             return new Message(MessageStatus.FRIEND_LIST).setText("");
         }
         StringBuilder stringBuilder = new StringBuilder();
-        for (int clientId : client.getFriends()) {
-            stringBuilder.append(clientId).append(',');
+        synchronized (client.getFriends().safe()) {
+            for (int clientId : client.getFriends().safe()) {
+                stringBuilder.append(clientId).append(',');
+            }
         }
         return new Message(MessageStatus.FRIEND_LIST).setText(stringBuilder.substring(0,stringBuilder.length() - 1));
     }
@@ -872,11 +883,13 @@ public class ClientListener extends Thread {
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
             StringWriter stringWriter;
-            for (Message roomMessage : room.getMessageHistory()) {
-                stringWriter = new StringWriter();
-                marshaller.marshal(roomMessage, stringWriter);
-                out.safe().writeUTF(stringWriter.toString());
-                out.safe().flush();
+            synchronized (room.getMessageHistory().safe()) {
+                for (Message roomMessage : room.getMessageHistory().safe()) {
+                    stringWriter = new StringWriter();
+                    marshaller.marshal(roomMessage, stringWriter);
+                    out.safe().writeUTF(stringWriter.toString());
+                    out.safe().flush();
+                }
             }
         } catch (JAXBException | IOException e) {
             LOGGER.error(e.getLocalizedMessage());
@@ -926,12 +939,14 @@ public class ClientListener extends Thread {
     }
 
     public synchronized Message getRooms() {
-        if (client.getRooms().size() == 0) {
+        if (client.getRooms().safe().size() == 0) {
             return new Message(MessageStatus.ROOM_LIST).setText("");
         }
         StringBuilder stringBuilder = new StringBuilder();
-        for (int roomId : client.getRooms()) {
-            stringBuilder.append(roomId).append(',');
+        synchronized (client.getRooms().safe()) {
+            for (int roomId : client.getRooms().safe()) {
+                stringBuilder.append(roomId).append(',');
+            }
         }
         return new Message(MessageStatus.ROOM_LIST).setText(stringBuilder.substring(0, stringBuilder.length() - 1));
     }

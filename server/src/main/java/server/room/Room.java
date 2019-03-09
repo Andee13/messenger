@@ -19,6 +19,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
+import static common.Utils.buildMessage;
+
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.FIELD)
 public class Room implements Saveable {
@@ -49,11 +51,15 @@ public class Room implements Saveable {
             c.next();
             if (c.wasAdded() && !c.wasRemoved()) {
                 List <Message> sentMessages = (List<Message>) c.getAddedSubList();
-                for (int clientId : members.safe()) {
-                    if (server.getOnlineClients().safe().containsKey(clientId)) {
-                        for (Message message : sentMessages) {
-                            server.getOnlineClients().safe().get(clientId)
-                                    .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
+                synchronized (members.safe()) {
+                    for (int clientId : members.safe()) {
+                        if (server.getOnlineClients().safe().containsKey(clientId)) {
+                            for (Message message : sentMessages) {
+                                // todo remove
+                                LOGGER.info(buildMessage(c.getAddedSize(), "message(s) has been added"));
+                                server.getOnlineClients().safe().get(clientId)
+                                        .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
+                            }
                         }
                     }
                 }
@@ -77,27 +83,14 @@ public class Room implements Saveable {
                 return;
             }
 
-            for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().safe().entrySet()) {
-                if (clientWrapper.getValue().getClient().getClientId() != clientId) {
-                    clientWrapper.getValue().sendMessageToConnectedClient(notificationMessage);
+            synchronized (server.getOnlineClients().safe()) {
+                for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().safe().entrySet()) {
+                    if (clientWrapper.getValue().getClient().getClientId() != clientId) {
+                        clientWrapper.getValue().sendMessageToConnectedClient(notificationMessage);
+                    }
                 }
             }
-
         });
-    }
-
-    public void setMessageHistoryWithListener(List<Message> messageHistory) {
-        ObservableList<Message> o = FXCollections.synchronizedObservableList(
-                FXCollections.observableList(messageHistory));
-        initMessageHistoryListener(o);
-        this.messageHistory.set(o);
-    }
-
-    public void setMembersWithListener(Set<Integer> members) {
-        ObservableSet<Integer> o = FXCollections.synchronizedObservableSet(
-                FXCollections.observableSet(members));
-        initMembersListener(o);
-        this.members.set(o);
     }
 
     public void setRoomId(int roomId) {
@@ -116,23 +109,19 @@ public class Room implements Saveable {
         this.adminId = adminId;
     }
 
-    public List<Message> getMessageHistory() {
-        return messageHistory.safe();
+    public Shell<List<Message>> getMessageHistory() {
+        return messageHistory;
     }
 
-    private void setMessageHistory(ObservableList<Message> messageHistory) {
-        this.messageHistory.set(messageHistory);
-    }
-
-    private static final class MembersObservableSetAdapter extends XmlAdapter<MembersObservableSetWrapper, Set<Integer>>{
+    private static final class MembersObservableSetAdapter extends XmlAdapter<MembersObservableSetWrapper, Shell<Set<Integer>>>{
         @Override
-        public Set<Integer> unmarshal(MembersObservableSetWrapper v) {
-            return v.getMembers();
+        public Shell<Set<Integer>> unmarshal(MembersObservableSetWrapper v) {
+            return new Shell<>(v.getMembers());
         }
         @Override
-        public MembersObservableSetWrapper marshal(Set<Integer> v) {
+        public MembersObservableSetWrapper marshal(Shell<Set<Integer>> v) {
             MembersObservableSetWrapper membersObservableSetWrapper = new MembersObservableSetWrapper();
-            membersObservableSetWrapper.setMembers(new HashSet<>(v));
+            membersObservableSetWrapper.setMembers(new HashSet<>(v.safe()));
             return membersObservableSetWrapper;
         }
     }
@@ -148,10 +137,6 @@ public class Room implements Saveable {
 
     public Shell<Set<Integer>> getMembers() {
         return members;
-    }
-
-    public void setMembers(ObservableSet<Integer> members) {
-        this.members.set(members);
     }
 
     public Server getServer() {
@@ -172,9 +157,9 @@ public class Room implements Saveable {
                 || (members.safe().toArray().length != room.getMembers().safe().toArray().length)) {
             return false;
         }
-        if (!room.getMessageHistory().containsAll(messageHistory.safe())
-                || !messageHistory.safe().containsAll(room.getMessageHistory())
-                || (messageHistory.safe().toArray().length != room.getMessageHistory().toArray().length)) {
+        if (!room.getMessageHistory().safe().containsAll(messageHistory.safe())
+                || !messageHistory.safe().containsAll(room.getMessageHistory().safe())
+                || (messageHistory.safe().toArray().length != room.getMessageHistory().safe().toArray().length)) {
             return false;
         }
         if (room.roomId != roomId) {
@@ -222,12 +207,12 @@ public class Room implements Saveable {
     }
 
     private static class MessageHistoryObservableListAdapter
-            extends XmlAdapter<MessageHistoryObservableListWrapper, List<Message>> {
-        public List<Message> unmarshal(MessageHistoryObservableListWrapper messages) {
-            return FXCollections.synchronizedObservableList(FXCollections.observableList(messages.getMessages()));
+            extends XmlAdapter<MessageHistoryObservableListWrapper, Shell<List<Message>>> {
+        public Shell<List<Message>> unmarshal(MessageHistoryObservableListWrapper messages) {
+            return new Shell<>(FXCollections.synchronizedObservableList(FXCollections.observableList(messages.getMessages())));
         }
-        public MessageHistoryObservableListWrapper marshal(List<Message> messages) {
-            return new MessageHistoryObservableListWrapper(messages);
+        public MessageHistoryObservableListWrapper marshal(Shell<List<Message>> messages) {
+            return new MessageHistoryObservableListWrapper(messages.safe());
         }
     }
 

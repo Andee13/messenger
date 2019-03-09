@@ -69,7 +69,7 @@ public class RoomProcessing {
             }
         } else {
             throw new RoomNotFoundException(
-                    buildMessage("There is not such room (id", roomId, ") on the server"));
+                    buildMessage("There is not such room on the server"), roomId);
         }
     }
 
@@ -224,7 +224,7 @@ public class RoomProcessing {
         }
         // Checking whether the specified room exists
         if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), roomId) == 0) {
-            throw new RoomNotFoundException("Unable to find room id: ".concat(String.valueOf(roomId)));
+            throw new RoomNotFoundException("Unable to find the room", roomId);
         }
         // Checking whether the specified room is in the server "online" rooms set
         if (!server.getOnlineRooms().safe().containsKey(roomId)) {
@@ -233,11 +233,7 @@ public class RoomProcessing {
             }
         }
         Room room = server.getOnlineRooms().safe().get(roomId);
-        List<Message> messagesHistory = room.getMessageHistory();
-        if (messagesHistory.size() >= Integer.parseInt(server.getConfig().getProperty("messageStorageDimension"))) {
-            messagesHistory.set(messagesHistory.size() - 1, message);
-            return true;
-        }
-        return server.getOnlineRooms().safe().get(roomId).getMessageHistory().add(message);
+        // todo adding the message
+        return false; // todo return statement
     }
 }

@@ -8,6 +8,7 @@ import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.client.ClientListener;
 import server.room.Room;
+import server.room.RoomProcessing;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -104,16 +105,8 @@ public class Server extends Thread implements Saveable {
         return onlineClients;
     }
 
-    public void setOnlineClients(ObservableMap<Integer, ClientListener> onlineClients) {
-        this.onlineClients.set(onlineClients);
-    }
-
     public Shell<Map<Integer, Room>> getOnlineRooms() {
         return onlineRooms;
-    }
-
-    public void setOnlineRooms(@NotNull Map<Integer, Room> onlineRooms) {
-        this.onlineRooms.set(FXCollections.observableMap(onlineRooms));
     }
 
     /**
@@ -134,25 +127,27 @@ public class Server extends Thread implements Saveable {
         try(FileInputStream fileInputStream = new FileInputStream(serverPropertiesFile)) {
             config.loadFromXML(fileInputStream);
             serverConfigFile = serverPropertiesFile;
-            onlineClients.set(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
-            onlineRooms.set(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+            onlineClients = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+            onlineRooms = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
+        RoomProcessing.loadRoom(this, 0);
     }
 
     private void initOnlineClients() {
-        onlineClients.set(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+        onlineClients = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
     }
 
     private void initOnlineRooms() {
-        onlineRooms.set(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+        onlineRooms = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
     }
 
     @Override
     public void run() {
         Observer observer = new Observer(this);
+        observer.setDaemon(true);
         observer.start();
         LOGGER.info(buildMessage("Observer thread status:", observer.getState()));
         if (!ServerProcessing.arePropertiesValid(config)) {
@@ -200,21 +195,24 @@ public class Server extends Thread implements Saveable {
         }
         try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(serverConfigFile))) {
             config.storeToXML(bos, null);
-            for (Map.Entry<Integer, ClientListener> onlineClients : onlineClients.safe().entrySet()) {
-                ClientListener clientListener = onlineClients.getValue();
-                if (clientListener.getClient() != null && !clientListener.getClient().save()) {
-                    LOGGER.error(buildMessage("Failed to save the client (id"
-                            , clientListener.getClient().getClientId()));
-                    return false;
+            synchronized (onlineClients.safe()) {
+                for (Map.Entry<Integer, ClientListener> onlineClients : onlineClients.safe().entrySet()) {
+                    ClientListener clientListener = onlineClients.getValue();
+                    if (clientListener.getClient() != null && !clientListener.getClient().save()) {
+                        LOGGER.error(buildMessage("Failed to save the client (id"
+                                , clientListener.getClient().getClientId()));
+                        return false;
+                    }
                 }
             }
-            for (Map.Entry<Integer, Room> onlineRooms : onlineRooms.safe().entrySet()) {
-                if (!onlineRooms.getValue().save()) {
-                    LOGGER.error(buildMessage("Failed to save the room (id", onlineRooms.getValue().getRoomId()));
-                    return false;
+            synchronized (onlineRooms.safe()) {
+                for (Map.Entry<Integer, Room> onlineRooms : onlineRooms.safe().entrySet()) {
+                    if (!onlineRooms.getValue().save()) {
+                        LOGGER.error(buildMessage("Failed to save the room (id", onlineRooms.getValue().getRoomId()));
+                        return false;
+                    }
                 }
             }
-
             return true;
         } catch (FileNotFoundException e) {
             LOGGER.error("Unable to find a server configuration file ".concat(serverConfigFile.getAbsolutePath()));
@@ -225,12 +223,14 @@ public class Server extends Thread implements Saveable {
         }
     }
     private boolean interruptOnlineClientsThreads() {
-        for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.safe().entrySet()) {
-            clientListenerEntry.getValue().interrupt();
-            if (!clientListenerEntry.getValue().isInterrupted()) {
-                LOGGER.error(buildMessage("Failed to interrupt client's (id"
-                        , clientListenerEntry.getValue().getClient().getClientId(), ") thread"));
-                return false;
+        synchronized (onlineClients.safe()) {
+            for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.safe().entrySet()) {
+                clientListenerEntry.getValue().interrupt();
+                if (!clientListenerEntry.getValue().isInterrupted()) {
+                    LOGGER.error(buildMessage("Failed to interrupt client's (id"
+                            , clientListenerEntry.getValue().getClient().getClientId(), ") thread"));
+                    return false;
+                }
             }
         }
         return true;
