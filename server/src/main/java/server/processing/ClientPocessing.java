@@ -2,6 +2,7 @@ package server.processing;
 
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
+import org.apache.log4j.Logger;
 import server.Server;
 import server.client.ClientListener;
 
@@ -19,6 +20,7 @@ import java.util.Properties;
 import static common.Utils.buildMessage;
 
 public class ClientPocessing {
+    private static final Logger LOGGER = Logger.getLogger(ClientPocessing.class.getSimpleName());
     /**
      * This method is used to ban/unban a client having login like {@code} login. It just sends a message to server
      * and prints a response. It does not guarantees that client has been banned/unbanned
@@ -47,13 +49,13 @@ public class ClientPocessing {
             }
             marshaller.marshal(banMessage, stringWriter);
             dataOutputStream.writeUTF(stringWriter.toString());
-            ServerProcessing.LOGGER.info(buildMessage("Server response:\n", dataInputStream.readUTF()));
+            LOGGER.info(buildMessage("Server response:\n", dataInputStream.readUTF()));
         } catch (JAXBException e) {
-            ServerProcessing.LOGGER.error(e.getLocalizedMessage());
+            LOGGER.error(e.getLocalizedMessage());
         } catch (SocketTimeoutException e) {
-            ServerProcessing.LOGGER.error("Server does not response");
+            LOGGER.error("Server does not response");
         } catch (IOException e) {
-            ServerProcessing.LOGGER.error(buildMessage(e.getClass().getName(), e.getLocalizedMessage()));
+            LOGGER.error(buildMessage(e.getClass().getName(), e.getLocalizedMessage()));
         }
     }
 
@@ -85,14 +87,14 @@ public class ClientPocessing {
                 Message response = (Message) unmarshaller.unmarshal(new StringReader(in.readUTF()));
                 if (MessageStatus.ERROR.equals(response.getStatus())
                         || MessageStatus.DENIED.equals(response.getStatus())) {
-                    ServerProcessing.LOGGER.trace("Received expected answer ".concat(response.toString()));
+                    LOGGER.trace("Received expected answer ".concat(response.toString()));
                 } else {
-                    ServerProcessing.LOGGER.warn(buildMessage("Answer has been received but the status is",
+                    LOGGER.warn(buildMessage("Answer has been received but the status is",
                             response.getStatus(), ". Expected either", MessageStatus.ERROR, "or", MessageStatus.DENIED));
                 }
                 return response;
             } catch (JAXBException e) {
-                ServerProcessing.LOGGER.error(buildMessage("Unknown JAXBException:", e.getLocalizedMessage()));
+                LOGGER.error(buildMessage("Unknown JAXBException:", e.getLocalizedMessage()));
                 throw new RuntimeException(e);
             }
         } catch (IOException e) {
@@ -109,7 +111,7 @@ public class ClientPocessing {
      * */
     public static boolean hasAccountBeenRegistered(Properties serverProperties, int id) {
         if (!PropertiesProcessing.arePropertiesValid(serverProperties)) {
-            ServerProcessing.LOGGER.error("Properties are not valid");
+            LOGGER.error("Properties are not valid");
             return false;
         }
         File clientsDir = new File(serverProperties.getProperty("clientsDir"));
@@ -121,13 +123,13 @@ public class ClientPocessing {
     public static void saveClients(Server server) {
         if (server == null || server.getOnlineClients() == null) {
             String errorMessage = (server == null ? "A server" : "A set of online clients").concat(" has not been set");
-            ServerProcessing.LOGGER.error(errorMessage);
+            LOGGER.error(errorMessage);
             throw new NullPointerException(errorMessage);
         }
         synchronized (server.getOnlineClients().safe()) {
             for (Map.Entry<Integer, ClientListener> entry : server.getOnlineClients().safe().entrySet()) {
                 if (entry.getValue().getClient() != null && !entry.getValue().getClient().save()) {
-                    ServerProcessing.LOGGER.error(buildMessage("Client id", entry.getValue().getClient().getClientId(),
+                    LOGGER.error(buildMessage("Client id", entry.getValue().getClient().getClientId(),
                             "has not been saved"));
                 }
             }

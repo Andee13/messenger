@@ -208,7 +208,6 @@ public class Room implements Saveable {
         }
         public MessageHistoryObservableListWrapper marshal(MessageHistory messageHistory) {
             MessageHistoryObservableListWrapper m = new MessageHistoryObservableListWrapper();
-            LOGGER.fatal("Количество элементов в истории перед маршалингом = " + messageHistory.getMessageHistory().size());
             for (Message message : messageHistory.getMessageHistory()) {
                 m.messages.add(message);
             }
@@ -241,7 +240,6 @@ public class Room implements Saveable {
             Marshaller marshaller = jaxbContext.createMarshaller();
             marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(this, roomFile);
-            System.out.println("message history size" + messageHistory.getMessageHistory().size());
             return true;
         } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
