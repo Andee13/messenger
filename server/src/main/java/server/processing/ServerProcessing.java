@@ -1,11 +1,13 @@
-package server;
+package server.processing;
 
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
-import server.client.ClientListener;
+import server.InvocationMode;
+import server.Server;
 import server.room.Room;
+import sun.rmi.runtime.Log;
 
 import javax.security.auth.login.FailedLoginException;
 import javax.xml.bind.JAXBContext;
@@ -14,10 +16,8 @@ import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 import java.io.*;
 import java.net.*;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.InvalidPropertiesFormatException;
-import java.util.Map;
 import java.util.Properties;
 
 import static common.Utils.buildMessage;
@@ -30,8 +30,8 @@ import static common.Utils.buildMessage;
  * */
 public class ServerProcessing {
 
-    private static final Logger LOGGER = Logger.getLogger("ServerProcessing");
-    private static Properties defaultProperties;
+    public static final Logger LOGGER = Logger.getLogger("ServerProcessing");
+    public static Properties defaultProperties;
     public static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
     public static final int MESSAGE_HISTORY_DIMENSION = 100;
 
@@ -101,7 +101,7 @@ public class ServerProcessing {
                 try {
                     serverProperties = new Properties();
                     serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
-                    clientBan(serverProperties, args[2], true, Integer.parseInt(args[3]));
+                    ClientPocessing.clientBan(serverProperties, args[2], true, Integer.parseInt(args[3]));
                 } catch (IndexOutOfBoundsException e) {
                     System.out.println("Not all arguments are specified. Please, check the input");
                     printCommands();
@@ -113,7 +113,7 @@ public class ServerProcessing {
                 try {
                     serverProperties = new Properties();
                     serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
-                    clientBan(serverProperties, args[2], false, 0);
+                    ClientPocessing.clientBan(serverProperties, args[2], false, 0);
                 } catch (IndexOutOfBoundsException e) {
                     System.out.println("Not all arguments are specified. Please, check the input");
                     printCommands();
@@ -123,64 +123,6 @@ public class ServerProcessing {
                 String errorMessage = "Unknown invocation mode: ".concat(String.valueOf(invocationMode));
                 LOGGER.error(errorMessage);
                 throw new IOException(errorMessage);
-        }
-    }
-
-    /**
-     * This method is used to ban/unban a client having login like {@code} login. It just sends a message to server
-     * and prints a response. It does not guarantees that client has been banned/unbanned
-     *
-     * @param           ban set is {@code true}
-     *
-     * */
-    public static void clientBan(Properties serverProperties, String login, boolean ban, int hours) {
-        if (ban && hours < 1) {
-            throw new IllegalArgumentException("hours: positive integer expected, but found "
-                    .concat(String.valueOf(hours)));
-        }
-        try (Socket socket = new Socket("localhost", Integer.parseInt(serverProperties.getProperty("port")));
-             DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
-             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream())) {
-            socket.setSoTimeout(3000);
-            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-            Marshaller marshaller = jaxbContext.createMarshaller();
-            StringWriter stringWriter = new StringWriter();
-            Message banMessage = new Message(ban ? MessageStatus.CLIENTBAN : MessageStatus.CLIENTUNBAN)
-                    .setToId(login.hashCode())
-                    .setLogin(serverProperties.getProperty("server_login"))
-                    .setPassword(serverProperties.getProperty("server_password"));
-            if (ban) {
-                banMessage.setText(ServerProcessing.DATE_TIME_FORMATTER.format(LocalDateTime.now().plusHours(hours)));
-            }
-            marshaller.marshal(banMessage, stringWriter);
-            dataOutputStream.writeUTF(stringWriter.toString());
-            LOGGER.info(buildMessage("Server response:\n", dataInputStream.readUTF()));
-        } catch (JAXBException e) {
-            LOGGER.error(e.getLocalizedMessage());
-        } catch (SocketTimeoutException e) {
-            LOGGER.error("Server does not response");
-        } catch (IOException e) {
-            LOGGER.error(buildMessage(e.getClass().getName(), e.getLocalizedMessage()));
-        }
-    }
-
-    private static boolean isServerLaunched(int port) throws IOException {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            serverSocket.setSoTimeout(1000);
-            serverSocket.accept();
-            return true;
-        }catch (SocketTimeoutException e) {
-            return false;
-        } catch (BindException e) {
-            try {
-                sendAndWait(port, 3);
-            } catch (SocketTimeoutException e1) {
-                return false;
-            }
-            return false;
-        } catch (IOException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            return false;
         }
     }
 
@@ -225,92 +167,6 @@ public class ServerProcessing {
     }
 
     /**
-     *  The method {@code arePropertiesValid} checks if the passed abstract path is a valid file.
-     * Returns {@code true} if and only if the specified by the abstract path file exists and contains
-     * properties about existing clients and rooms directories, {@code false} otherwise.
-     *
-     * @param           properties a set of properties are to be validated
-     *
-     * @return          {@code true} if and only if the specified properties set contains all the necessary
-     *                  configurations and they are valid i.e. it is possible to start a server using them,
-     *                  {@code false} otherwise
-     * */
-    public static boolean arePropertiesValid(@NotNull Properties properties) {
-        if (properties == null) {
-            return false;
-        }
-        try {
-            int port = Integer.parseInt(properties.getProperty("port"));
-            if (port < 0 || port > 65536) {
-                LOGGER.error(buildMessage("The port value was expected to be between 0 and 65536"
-                        ,"but found", port));
-            }
-        } catch (NumberFormatException e) {
-            LOGGER.warn(buildMessage("Unable to extract a port number from server configuration",
-                    properties.getProperty("port")));
-            return false;
-        }
-        if (!new File(properties.getProperty("roomsDir")).isDirectory()) {
-            LOGGER.warn(buildMessage("Invalid roomsDir value was set:", properties.getProperty("roomsDir")));
-            return false;
-        }
-        if (!new File(properties.getProperty("clientsDir")).isDirectory()) {
-            LOGGER.warn(buildMessage("Invalid clientsDir value was set:", properties.getProperty("clientsDir")));
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     *   The method creates an instance of {@code Property} and loads the properties from the specified file.
-     *  The result is the same as a result of invocation {@code arePropertiesValid()}
-     *
-     * @param           propertyFile represents an abstract path to the file in which
-     *                  properties of a server are set
-     *
-     * @return          {@code true} if and only if the specified abstract filepath  properties set contains
-     *                  all the necessary configurations and they are valid i.e. it is possible
-     *                  to start a server using them, {@code false} otherwise
-     * */
-    public static boolean arePropertiesValid(@NotNull File propertyFile) {
-        if (propertyFile == null) {
-            return false;
-        }
-        if(!propertyFile.isFile()) {
-            return false;
-        }
-        Properties properties = new Properties();
-        try {
-            properties.loadFromXML(new BufferedInputStream(new FileInputStream(propertyFile)));
-        } catch (IOException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            return false;
-        }
-        return arePropertiesValid(properties);
-    }
-
-    /**
-     * @return          @code true} if and only if there are necessary files in the specified root folder of a server
-     *
-     * @param rootDir   the root folder of a server
-     *
-     * @exception       IllegalArgumentException if {@code rootDir} is not a folder
-     * @exception       NullPointerException if the {@code rootDir} is {@code null}
-     * */
-    private static boolean isRootStructure(@NotNull File rootDir) {
-        if(rootDir == null) {
-            throw new NullPointerException("The specified folder is not expected to be null");
-        }
-        File serverConfig = new File(new StringBuffer(rootDir.getAbsolutePath())
-                .append(File.pathSeparator).append("serverConfig.xml").toString());
-        File clientsDir = new File(new StringBuffer(rootDir.getAbsolutePath())
-                .append(File.pathSeparator).append("clients").toString());
-        File roomsDir = new File(new StringBuffer(rootDir.getAbsolutePath())
-                .append(File.pathSeparator).append("rooms").toString());
-        return serverConfig.isFile() && clientsDir.isDirectory() && roomsDir.isDirectory();
-    }
-
-    /**
      *  Organizes the necessary server root folder structure described above the {@code ServerConfig.class}
      * The method creates one of more demanded element. If there is not such one, the {@code createDefaultRootStructure}
      * creates it.
@@ -342,7 +198,7 @@ public class ServerProcessing {
                     throw new RuntimeException(buildMessage("Failed default server configuration file creation:",
                             serverConfig.getAbsolutePath()));
                 }
-                Properties defaultProperties = getDefaultProperties();
+                Properties defaultProperties = PropertiesProcessing.getDefaultProperties();
                 defaultProperties.setProperty("roomsDir", roomsDir.getAbsolutePath());
                 defaultProperties.setProperty("clientsDir", clientsDir.getAbsolutePath());
                 defaultProperties.setProperty("logsDir", clientsDir.getAbsolutePath());
@@ -416,48 +272,6 @@ public class ServerProcessing {
     }
 
     /**
-     *  The method {@code getDefaultProperties} returns
-     * the default properties pattern for all servers.
-     * */
-    private static Properties getDefaultProperties() {
-        if(defaultProperties == null) {
-            Properties properties = new Properties();
-            // a port number on which the server will be started
-            properties.setProperty("port", "5940");
-            // a server
-            properties.setProperty("server_login", "God");
-            properties.setProperty("server_password","change_me");
-            // a path to the folder where clients' data will be stored
-            properties.setProperty("clientsDir", buildMessage("change",
-                    File.separatorChar, "the", File.separatorChar, "clients",
-                    File.separatorChar, "folder", File.separatorChar, "path")
-            );
-            // a path to the folder where the rooms' data will be stored
-            properties.setProperty("roomsDir", buildMessage("change",
-                    File.separatorChar, "the", File.separatorChar, "rooms",
-                    File.separatorChar, "folder", File.separatorChar, "path")
-            );
-            // folder for logs
-            properties.setProperty("logsDir",buildMessage("change",
-                    File.separatorChar, "the", File.separatorChar, "logs",
-                    File.separatorChar, "folder", File.separatorChar, "path")
-            );
-            // setting the folder where the server configuration file will be stored
-            properties.setProperty("serverConfig",buildMessage("change",
-                    File.separatorChar, "the", File.separatorChar, "server",
-                    File.separatorChar, "config", File.separatorChar, "path",
-                    File.separatorChar, "serverConfig.xml")
-            );
-            defaultProperties = properties;
-        }
-        return defaultProperties;
-    }
-
-    private static Properties copyDefaultProperties() {
-        return new Properties(getDefaultProperties());
-    }
-
-    /**
      * The method {@code startServer} starts the server denoted by the specified {@code serverPropertiesFile}
      *
      * @throws          IOException if an I/O error occurs
@@ -466,7 +280,7 @@ public class ServerProcessing {
      *                  has already been launched or the port set in the {@code serverPropertiesFile} is taken
      * */
     private static void startServer(@NotNull File serverPropertiesFile) throws IOException {
-        if (!arePropertiesValid(serverPropertiesFile)) {
+        if (!PropertiesProcessing.arePropertiesValid(serverPropertiesFile)) {
             throw new IOException("The server properties are not valid");
         }
         Server server = new Server(serverPropertiesFile);
@@ -500,30 +314,10 @@ public class ServerProcessing {
     }
 
     /**
-     *  The method {@code isServerLaunched} is no more than unpacker that returns the result of invoking the
-     * {@code isServerLaunched(Properties serverProperties)} method
-     *
-     * @param           serverPropertiesFile the file containing server configuration
-     *
-     * @return          {@code true} if and only if the server, specified by the {@code serverProperties} exists and
-     *                  is currently working i.e. the port the server is launched is not free for listening
-     *                  {@code false} otherwise
-     * */
-    private static boolean isServerLaunched(File serverPropertiesFile) {
-        Properties serverProperties = new Properties();
-        try(FileInputStream fileInputStream = new FileInputStream(serverPropertiesFile)) {
-            serverProperties.loadFromXML(fileInputStream);
-            return isServerLaunched(serverProperties);
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    /**
      *  The method {@code sendStopServerMessage} stops the server specified by the properties
      * */
     public static void sendStopServerMessage(@NotNull Properties serverProperties) {
-        if (!arePropertiesValid(serverProperties)) {
+        if (!PropertiesProcessing.arePropertiesValid(serverProperties)) {
             LOGGER.error(buildMessage("Invalid server properties passed", serverProperties));
             return;
         }
@@ -572,7 +366,7 @@ public class ServerProcessing {
      *                  e.g. a wrong server login/password has/have been entered
      * */
     public static void sendStopServerMessage(@NotNull File serverPropertiesFile) throws IOException, FailedLoginException {
-        if (!arePropertiesValid(serverPropertiesFile)) {
+        if (!PropertiesProcessing.arePropertiesValid(serverPropertiesFile)) {
             throw new InvalidPropertiesFormatException("The properties file are not valid");
         }
         Properties properties = new Properties();
@@ -581,108 +375,16 @@ public class ServerProcessing {
     }
 
     /**
-     *  This method sends a {@code Message} of status {@code MessageStatus.AUTH} not specifying any additional parameters
-     * Thus
-     * */
-    private static Message sendAndWait(int port, int timeout) throws SocketTimeoutException {
-        if (port <= 0 || port > 65535) {
-            throw new IllegalArgumentException("port must be between 1...65535, but found "
-                    .concat(String.valueOf(port)));
-        }
-        if (timeout < 0) {
-            throw new IllegalArgumentException("timeout must be greater than 0, but found "
-                    .concat(String.valueOf(timeout)));
-        }
-        try (Socket socket = new Socket("localhost", port);
-             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-             DataInputStream in = new DataInputStream(socket.getInputStream())) {
-            socket.setSoTimeout(timeout);
-            try {
-                JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-                Marshaller marshaller = jaxbContext.createMarshaller();
-                Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-                StringWriter stringWriter = new StringWriter();
-                marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-                marshaller.marshal(new Message(MessageStatus.AUTH), stringWriter);
-                out.writeUTF(stringWriter.toString());
-                Message response = (Message) unmarshaller.unmarshal(new StringReader(in.readUTF()));
-                if (MessageStatus.ERROR.equals(response.getStatus())
-                        || MessageStatus.DENIED.equals(response.getStatus())) {
-                    LOGGER.trace("Received expected answer ".concat(response.toString()));
-                } else {
-                    LOGGER.warn(buildMessage("Answer has been received but the status is",
-                            response.getStatus(), ". Expected either", MessageStatus.ERROR, "or", MessageStatus.DENIED));
-                }
-                return response;
-            } catch (JAXBException e) {
-                LOGGER.error(buildMessage("Unknown JAXBException:", e.getLocalizedMessage()));
-                throw new RuntimeException(e);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     *  The method {@code hasAccountBeenRegistered} informs whether there is an account on the server
-     * specified by the {@code serverProperties} with this {@code id}
-     *
-     * @return          {@code true} if and only if the properties being passed are valid and there is a registered
-     *                  account having such login name on the server
-     * */
-    public static boolean hasAccountBeenRegistered(Properties serverProperties, int id) {
-        if (!arePropertiesValid(serverProperties)) {
-            LOGGER.error("Properties are not valid");
-            return false;
-        }
-        File clientsDir = new File(serverProperties.getProperty("clientsDir"));
-        File clientDir = new File(clientsDir, String.valueOf(id));
-        File clientXml = new File(clientDir, String.valueOf(id).concat(".xml"));
-        return clientDir.isDirectory() && clientXml.isFile();
-    }
-
-    public static void saveRooms(Server server) {
-        if (server == null || server.getOnlineRooms() == null) {
-            String errorMessage = (server == null ? "A server" : "A set of online rooms").concat(" has not been set");
-            LOGGER.error(errorMessage);
-            throw new NullPointerException(errorMessage);
-        }
-        synchronized (server.getOnlineRooms().safe()) {
-            for (Map.Entry<Integer, Room> entry : server.getOnlineRooms().safe().entrySet()) {
-                if (entry.getValue().getServer() != null && !entry.getValue().save()) {
-                    LOGGER.error(buildMessage("Room id", entry.getValue().getRoomId(), "has not been saved"));
-                }
-            }
-        }
-    }
-
-    public static void saveClients(Server server) {
-        if (server == null || server.getOnlineClients() == null) {
-            String errorMessage = (server == null ? "A server" : "A set of online clients").concat(" has not been set");
-            LOGGER.error(errorMessage);
-            throw new NullPointerException(errorMessage);
-        }
-        synchronized (server.getOnlineClients().safe()) {
-            for (Map.Entry<Integer, ClientListener> entry : server.getOnlineClients().safe().entrySet()) {
-                if (entry.getValue().getClient() != null && !entry.getValue().getClient().save()) {
-                    LOGGER.error(buildMessage("Client id", entry.getValue().getClient().getClientId(),
-                            "has not been saved"));
-                }
-            }
-        }
-    }
-
-    /**
      *  This method restarts the server specified by the passe {@code serverConfiguration}.
      * */
-    public static boolean restartServer(Properties serverConfiguration) throws InvalidPropertiesFormatException {
-        if (!arePropertiesValid(serverConfiguration)) {
+    public static void restartServer(Properties serverConfiguration) throws IOException {
+        if (!PropertiesProcessing.arePropertiesValid(serverConfiguration)) {
             String errorString = "The specified properties are not valid. Restart operation aborted";
             LOGGER.warn(errorString);
             throw new InvalidPropertiesFormatException("The specified properties are not valid. Restart operation aborted");
         }
         if (!isServerLaunched(serverConfiguration)) {
-            String errorString = "The server is not launched yet";
+            String errorString = "The server is not launched";
             LOGGER.warn(errorString);
             throw new IllegalStateException(errorString);
         }
@@ -706,24 +408,42 @@ public class ServerProcessing {
                     LOGGER.warn(buildMessage("Response from the server (", socket.getRemoteSocketAddress(),
                             ") has been received, but the status is not of expected (", MessageStatus.ACCEPTED ,
                             ") status. Found" ,response.getStatus(), ".Operation aborted"));
-                    return false;
                 } else {
-                    startServer(serverConfiguration);
                     try {
-                        LOGGER.trace("Waiting for the server will start");
-                        Thread.sleep(10000);
+                        LOGGER.trace("Waiting the server has stopped");
+                        Thread.sleep(4000);
                     } catch (InterruptedException e) {
                         LOGGER.error(buildMessage(e.getClass().getName(), ':', e.getLocalizedMessage()));
                     }
-                    return isServerLaunched(serverConfiguration);
+                    startServer(serverConfiguration);
+                    try {
+                        LOGGER.trace("Waiting for the server will start");
+                        Thread.sleep(3000);
+                    } catch (InterruptedException e) {
+                        LOGGER.error(buildMessage(e.getClass().getName(), ':', e.getLocalizedMessage()));
+                    }
+                    LOGGER.info(buildMessage("Attempt to connect the server",
+                            isServerLaunched(serverConfiguration) ? "succeed" : "failed"));
                 }
             } catch (SocketTimeoutException e) {
-                LOGGER.warn("Timeout exceeded. Restart operation has not been completed properly");
-                return false;
+                LOGGER.warn(buildMessage("Timeout exceeded (response from the server has not been received)",
+                        "Restart operation has not been completed properly"));
+                return;
             }
         } catch (IOException | JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
+        }
+    }
+
+    public static void restartServer(File serverConfiguration) throws IOException {
+        Properties serverProperties = new Properties();
+        try (FileInputStream fis = new FileInputStream(serverConfiguration)) {
+            serverProperties.loadFromXML(fis);
+            restartServer(serverProperties);
+        } catch (IOException e) {
+            LOGGER.error(buildMessage(e.getClass().getName(), "occurred", e.getLocalizedMessage()));
+            throw e;
         }
     }
 }

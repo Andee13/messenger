@@ -3,10 +3,10 @@ package server;
 import common.entities.Saveable;
 import common.entities.Shell;
 import javafx.collections.FXCollections;
-import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.client.ClientListener;
+import server.processing.PropertiesProcessing;
 import server.room.Room;
 import server.room.RoomProcessing;
 
@@ -120,7 +120,7 @@ public class Server extends Thread implements Saveable {
         onlineRooms = new Shell<>();
         initOnlineClients();
         initOnlineRooms();
-        if (!ServerProcessing.arePropertiesValid(serverPropertiesFile)) {
+        if (!PropertiesProcessing.arePropertiesValid(serverPropertiesFile)) {
             throw new InvalidPropertiesFormatException("Either the specified properties or file are/is invalid");
         }
         config = new Properties();
@@ -150,7 +150,7 @@ public class Server extends Thread implements Saveable {
         observer.setDaemon(true);
         observer.start();
         LOGGER.info(buildMessage("Observer thread status:", observer.getState()));
-        if (!ServerProcessing.arePropertiesValid(config)) {
+        if (!PropertiesProcessing.arePropertiesValid(config)) {
             LOGGER.fatal("Unable to start the server. Server configurations are not valid.");
             return;
         }
@@ -185,7 +185,7 @@ public class Server extends Thread implements Saveable {
         if (config == null) {
             LOGGER.warn("Saving the server has been failed: undefined server configurations.");
         }
-        if (!ServerProcessing.arePropertiesValid(config)) {
+        if (!PropertiesProcessing.arePropertiesValid(config)) {
             LOGGER.warn("Saving the server has been failed: invalid server properties.");
             return false;
         }

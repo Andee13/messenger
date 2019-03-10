@@ -8,6 +8,7 @@ import javafx.collections.*;
 import org.apache.log4j.Logger;
 import server.*;
 import server.client.ClientListener;
+import server.processing.ServerProcessing;
 import server.room.history.MessageHistory;
 import server.room.history.MessageListener;
 
@@ -20,8 +21,6 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-
-import static common.Utils.buildMessage;
 
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.FIELD)

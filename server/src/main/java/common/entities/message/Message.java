@@ -1,7 +1,7 @@
 package common.entities.message;
 
 import org.jetbrains.annotations.NotNull;
-import server.ServerProcessing;
+import server.processing.ServerProcessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;

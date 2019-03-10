@@ -5,7 +5,7 @@ import common.entities.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.Server;
-import server.ServerProcessing;
+import server.processing.ClientPocessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -16,16 +16,16 @@ import java.util.*;
 
 import server.exceptions.ClientNotFoundException;
 import server.exceptions.RoomNotFoundException;
-import server.room.history.MessageListener;
+import server.processing.PropertiesProcessing;
 
 import static common.Utils.buildMessage;
 
 /**
- * The class {@code RoomProcessing} is just a container of methods related with instances of the {@code Room} class
+ * The class {@code PropertiesProcessing} is just a container of methods related with instances of the {@code Room} class
  * */
 public class RoomProcessing {
 
-    private static final Logger LOGGER = Logger.getLogger("RoomProcessing");
+    private static final Logger LOGGER = Logger.getLogger("PropertiesProcessing");
 
     /**
      *  The method {@code loadRoom} returns an instance of {@code Room} - representation of a place for communication
@@ -49,7 +49,7 @@ public class RoomProcessing {
             LOGGER.error("Passed null server value");
             throw new NullPointerException("Server must not be null");
         }
-        if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
+        if (!PropertiesProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("Server configurations are not valid");
         }
         File roomsDir = new File(server.getConfig().getProperty("roomsDir"));
@@ -100,14 +100,14 @@ public class RoomProcessing {
      * */
     public static Room createRoom(Server server, int adminId, int... clientsIds)
             throws InvalidPropertiesFormatException {
-        if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
+        if (!PropertiesProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("The specified server configurations are not valid");
         }
-        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), adminId)) {
+        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), adminId)) {
             throw new ClientNotFoundException(adminId);
         }
         for (int id : clientsIds) {
-            if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), id)) {
+            if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), id)) {
                 throw new ClientNotFoundException(id);
             }
         }
@@ -166,7 +166,7 @@ public class RoomProcessing {
      * */
     public static long hasRoomBeenCreated(Properties serverProperties, int roomId) {
         try{
-            if (!ServerProcessing.arePropertiesValid(serverProperties)) {
+            if (!PropertiesProcessing.arePropertiesValid(serverProperties)) {
                 LOGGER.warn("The passed properties are not valid");
                 throw new InvalidPropertiesFormatException("Properties are not valid");
             }
@@ -215,7 +215,7 @@ public class RoomProcessing {
                     , MessageStatus.MESSAGE, "but found",message.getStatus()));
         }
         // checking the properties
-        if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
+        if (!PropertiesProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("The specified server has invalid configurations");
         }
         if (message.getFromId() == null) {
@@ -230,7 +230,7 @@ public class RoomProcessing {
         int fromId = message.getFromId();
         int roomId = message.getRoomId();
         // Checking whether the specified user exists
-        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
+        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
             throw new ClientNotFoundException(fromId);
         }
         // Checking whether the specified room exists

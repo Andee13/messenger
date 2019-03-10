@@ -3,6 +3,7 @@ package server;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 import server.client.ClientListener;
+import server.processing.ServerProcessing;
 import server.room.Room;
 import org.apache.log4j.Logger;
 

@@ -8,7 +8,9 @@ import org.jetbrains.annotations.NotNull;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import server.Server;
-import server.ServerProcessing;
+import server.processing.ClientPocessing;
+import server.processing.PropertiesProcessing;
+import server.processing.ServerProcessing;
 import server.exceptions.ClientNotFoundException;
 import server.exceptions.IllegalPasswordException;
 import server.exceptions.RoomNotFoundException;
@@ -249,7 +251,7 @@ public class ClientListener extends Thread {
         if (message.getToId() == null) {
             return new Message(MessageStatus.ERROR).setText("Unspecified client id");
         }
-        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), message.getToId())) {
+        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), message.getToId())) {
             return new Message(MessageStatus.ERROR).setText("Unable to find the specified client")
                     .setToId(message.getToId());
         }
@@ -271,7 +273,7 @@ public class ClientListener extends Thread {
             return new Message(MessageStatus.ERROR).setText("Wrong addressee");
         }
         int toId = message.getToId();
-        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
+        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
             LOGGER.trace(new StringBuilder("Unable to find a client (id ").append(toId).append(")"));
             return new Message(MessageStatus.ERROR)
                     .setText(buildMessage("The client (id", toId, ") has not been found"));
@@ -562,9 +564,9 @@ public class ClientListener extends Thread {
      *                  and there is a room id {@code roomId} with specified client id {@code clientId}
      * */
     public static boolean isMember(@NotNull Properties serverProperties, int clientId, int roomId) {
-        if (!ServerProcessing.arePropertiesValid(serverProperties)
+        if (!PropertiesProcessing.arePropertiesValid(serverProperties)
                 || RoomProcessing.hasRoomBeenCreated(serverProperties, roomId) == 0L
-                || ServerProcessing.hasAccountBeenRegistered(serverProperties,clientId)) {
+                || ClientPocessing.hasAccountBeenRegistered(serverProperties,clientId)) {
             return false;
         }
         XPath xPath = XPathFactory.newInstance().newXPath();
@@ -608,7 +610,7 @@ public class ClientListener extends Thread {
      * */
     public static boolean clientExists(Properties serverProperties, int clientId) {
         try {
-            if (!ServerProcessing.arePropertiesValid(serverProperties)) {
+            if (!PropertiesProcessing.arePropertiesValid(serverProperties)) {
                 return false;
             }
             File clientsFolder = new File(serverProperties.getProperty("clientsDir"));
@@ -791,7 +793,7 @@ public class ClientListener extends Thread {
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         Integer fromId = message.getFromId();
-        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
+        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
             errorMessage = buildMessage("Attempt to unban unregistered client from client (admin) (id"
                     , fromId == null ? "server admin" : fromId);
             LOGGER.error(errorMessage);
