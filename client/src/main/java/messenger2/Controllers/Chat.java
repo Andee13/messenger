@@ -12,8 +12,10 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
+import javafx.util.Callback;
 
 import javax.imageio.ImageIO;
 
@@ -23,7 +25,7 @@ public class Chat {
     private BorderPane borderPane;
 
     @FXML
-    private ListView<?> chatPane;
+    private ListView<String> chatPane;
 
     @FXML
     private TextArea messageBox;
@@ -46,34 +48,50 @@ public class Chat {
     @FXML
     private Label usernameLabel;
 
+
+
+
+
     @FXML
     void initialize() {
-        String name = "HEllo";
+        //Set image
+        Image avatar = new Image("messenger2/res/user.png",50,50,false,false);
+        userList.setItems(FXCollections.observableArrayList( "salmon", "gold"));
+        userList.setCellFactory(param ->  new ListCell<String>() {
+            ImageView img = new ImageView();
+            public void  updateItem(String name, boolean empty){
+                super.updateItem(name, empty);
+                if(name != null) {
+                    setText(name);
+                    img.setImage(avatar);
+                    setGraphic(img);
+                }else {
+                    setGraphic(null);
+                }
+            }
+        });
 
-        userList.setItems(FXCollections.observableArrayList("heg", "dgd"));
-//            userList.setCellFactory(listView -> new ListCell<String>() {
-//                private ImageView imageView = new ImageView();
-//
-//
-//                @Override
-//                public void updateItem(String friend, boolean empty) {
-//                    super.updateItem(friend, empty);
-//                    if (empty) {
-//                        setText(null);
-//                        setGraphic(null);
-//                    } else {
-//                        //try {
-//                        Image image = new Image("/messenger2/res/boy1.png");
-//                        System.out.println(image);
-//                        imageView.setImage(image);
-//                        setText("friend");
-//                        setGraphic(imageView);
-////                        } catch (IOException ex){
-////                            System.out.println(ex);
-////                        }
-//                    }
-//                }
-//            });
+        String[] messanges = new String[]{"hello", "hi"};
+        BackgroundImage myBI= new BackgroundImage(new Image("messenger2/res/blogpic.png",32,32,false,true),
+                BackgroundRepeat.NO_REPEAT, BackgroundRepeat.NO_REPEAT, BackgroundPosition.CENTER,
+                BackgroundSize.DEFAULT);
+        chatPane.setItems(FXCollections.observableArrayList(messanges));
+        chatPane.setCellFactory(p ->  new ListCell<String>() {
+            ImageView img = new ImageView();
+            public void  updateItem(String name, boolean empty){
+                super.updateItem(name, empty);
+                if(name != null) {
+                    setText(name);
+                    //positionInArea(name,0,0,0,0,0,0,0);
+                    img.setImage(avatar);
+                    setGraphic(img);
+                    setBackground(new Background(myBI));
+                }else {
+                    setGraphic(null);
+                }
+            }
+        });
+
 
     }
 }
