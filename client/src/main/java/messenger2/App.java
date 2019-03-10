@@ -27,7 +27,8 @@ public class App extends Application {
         reader = new DataInputStream(socket.getInputStream());
         writer = new DataOutputStream(socket.getOutputStream());
 
-        Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Login.fxml"));
+        //Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Login.fxml"));
+        Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Chat.fxml"));
         primaryStage.setTitle("Hello World");
         primaryStage.setScene(new Scene(root, 800, 500));
         primaryStage.show();
