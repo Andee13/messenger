@@ -1,11 +1,11 @@
 package server.room;
 
-import common.message.Message;
-import common.message.MessageStatus;
+import common.entities.message.Message;
+import common.entities.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.Server;
-import server.ServerProcessing;
+import server.processing.ClientPocessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -16,13 +16,16 @@ import java.util.*;
 
 import server.exceptions.ClientNotFoundException;
 import server.exceptions.RoomNotFoundException;
+import server.processing.PropertiesProcessing;
+
+import static common.Utils.buildMessage;
 
 /**
- * The class {@code RoomProcessing} is just a container of methods related with instances of the {@code Room} class
+ * The class {@code PropertiesProcessing} is just a container of methods related with instances of the {@code Room} class
  * */
 public class RoomProcessing {
 
-    private static final Logger LOGGER = Logger.getLogger("RoomProcessing");
+    private static final Logger LOGGER = Logger.getLogger("PropertiesProcessing");
 
     /**
      *  The method {@code loadRoom} returns an instance of {@code Room} - representation of a place for communication
@@ -46,7 +49,7 @@ public class RoomProcessing {
             LOGGER.error("Passed null server value");
             throw new NullPointerException("Server must not be null");
         }
-        if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
+        if (!PropertiesProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("Server configurations are not valid");
         }
         File roomsDir = new File(server.getConfig().getProperty("roomsDir"));
@@ -59,15 +62,25 @@ public class RoomProcessing {
                 Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
                 room.setServer(server);
-                server.getOnlineRooms().put(roomId, room);
+                room.getMessageHistory().setMessageListener(message -> {
+                    for (int clientId : room.getMembers().safe()) {
+                        synchronized (server.getOnlineClients().safe()) {
+                            if (server.getOnlineClients().safe().containsKey(clientId)) {
+                                server.getOnlineClients().safe().get(clientId)
+                                        .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
+                            }
+                        }
+                    }
+                });
+                server.getOnlineRooms().safe().put(roomId, room);
                 return room;
             } catch (JAXBException e) {
                 LOGGER.error(e.getLocalizedMessage());
                 throw new RuntimeException(e);
             }
         } else {
-            throw new RoomNotFoundException(new StringBuilder("There is not such room (id ")
-                    .append(roomId).append(") on the server").toString());
+            throw new RoomNotFoundException(
+                    buildMessage("There is not such room on the server"), roomId);
         }
     }
 
@@ -87,14 +100,14 @@ public class RoomProcessing {
      * */
     public static Room createRoom(Server server, int adminId, int... clientsIds)
             throws InvalidPropertiesFormatException {
-        if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
+        if (!PropertiesProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("The specified server configurations are not valid");
         }
-        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), adminId)) {
+        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), adminId)) {
             throw new ClientNotFoundException(adminId);
         }
         for (int id : clientsIds) {
-            if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), id)) {
+            if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), id)) {
                 throw new ClientNotFoundException(id);
             }
         }
@@ -115,10 +128,10 @@ public class RoomProcessing {
         newRoom.setServer(server);
         newRoom.setAdminId(adminId);
         newRoom.setRoomId(newRoomId);
-        newRoom.getMembers().add(adminId);
+        newRoom.getMembers().safe().add(adminId);
         synchronized (newRoom.getMembers()) {
             for (int clientId : clientsIds) {
-                newRoom.getMembers().add(clientId);
+                newRoom.getMembers().safe().add(clientId);
             }
         }
         if (!newRoom.save()) {
@@ -153,7 +166,7 @@ public class RoomProcessing {
      * */
     public static long hasRoomBeenCreated(Properties serverProperties, int roomId) {
         try{
-            if (!ServerProcessing.arePropertiesValid(serverProperties)) {
+            if (!PropertiesProcessing.arePropertiesValid(serverProperties)) {
                 LOGGER.warn("The passed properties are not valid");
                 throw new InvalidPropertiesFormatException("Properties are not valid");
             }
@@ -198,11 +211,11 @@ public class RoomProcessing {
     public static boolean sendMessage(@NotNull Server server, @NotNull Message message) throws IOException {
         // checking the message status
         if (message.getStatus() != MessageStatus.MESSAGE) {
-            throw new IllegalArgumentException(new StringBuilder("Message status is expected to be ")
-                    .append(MessageStatus.MESSAGE).append(" but found ").append(message.getStatus()).toString());
+            throw new IllegalArgumentException(buildMessage("Message status is expected to be"
+                    , MessageStatus.MESSAGE, "but found",message.getStatus()));
         }
         // checking the properties
-        if (!ServerProcessing.arePropertiesValid(server.getConfig())) {
+        if (!PropertiesProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("The specified server has invalid configurations");
         }
         if (message.getFromId() == null) {
@@ -217,26 +230,21 @@ public class RoomProcessing {
         int fromId = message.getFromId();
         int roomId = message.getRoomId();
         // Checking whether the specified user exists
-        if (!ServerProcessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
+        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
             throw new ClientNotFoundException(fromId);
         }
         // Checking whether the specified room exists
         if (RoomProcessing.hasRoomBeenCreated(server.getConfig(), roomId) == 0) {
-            throw new RoomNotFoundException("Unable to find room id: ".concat(String.valueOf(roomId)));
+            throw new RoomNotFoundException("Unable to find the room", roomId);
         }
         // Checking whether the specified room is in the server "online" rooms set
-        if (!server.getOnlineRooms().containsKey(roomId)) {
-            Map<Integer, Room> onlineRoms = server.getOnlineRooms();
-            synchronized (onlineRoms) {
-                onlineRoms.put(roomId, RoomProcessing.loadRoom(server, message.getRoomId()));
+        if (!server.getOnlineRooms().safe().containsKey(roomId)) {
+            synchronized (server.getOnlineRooms().safe()) {
+                RoomProcessing.loadRoom(server, message.getRoomId());
             }
         }
-        Room room = server.getOnlineRooms().get(roomId);
-        List<Message> messagesHistory = room.getMessageHistory();
-        if (messagesHistory.size() >= Integer.parseInt(server.getConfig().getProperty("messageStorageDimension"))) {
-            messagesHistory.set(messagesHistory.size() - 1, message);
-            return true;
-        }
-        return server.getOnlineRooms().get(roomId).getMessageHistory().add(message);
+        Room room = server.getOnlineRooms().safe().get(roomId);
+        room.getMessageHistory().addMessage(message,true);
+        return room.save();
     }
 }

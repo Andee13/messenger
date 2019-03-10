@@ -1,4 +1,4 @@
-package common;
+package common.entities;
 
 /**
  *  This interface marks entities that are able to be saved to place depending on their specific

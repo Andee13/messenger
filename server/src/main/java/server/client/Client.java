@@ -1,9 +1,10 @@
 package server.client;
 
-import common.message.Message;
+import common.entities.Shell;
+import common.entities.message.Message;
 import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
-import common.Saveable;
+import common.entities.Saveable;
 import server.Server;
 
 import javax.xml.bind.JAXBContext;
@@ -21,14 +22,16 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
+import static common.Utils.buildMessage;
+
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlRootElement(name="client")
 public class Client implements Saveable {
     private int clientId;
     @XmlJavaTypeAdapter(RoomsWrapperAdapter.class)
-    private Set<Integer> rooms;
+    private Shell<Set<Integer>> rooms;
     @XmlJavaTypeAdapter(FriendsWrapperAdapter.class)
-    private Set<Integer> friends;
+    private Shell<Set<Integer>> friends;
     private String login;
     private String password;
     private boolean isAdmin;
@@ -80,8 +83,8 @@ public class Client implements Saveable {
     }
 
     public Client() {
-        friends = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>()));
-        rooms = FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>()));
+        friends = new Shell<>(FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>())));
+        rooms = new Shell<>(FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>())));
     }
 
     public boolean isAdmin() {
@@ -100,20 +103,12 @@ public class Client implements Saveable {
         this.clientId = clientId;
     }
 
-    public Set<Integer> getRooms() {
+    public Shell<Set<Integer>> getRooms() {
         return rooms;
     }
 
-    public void setRooms(Set<Integer> rooms) {
-        this.rooms = rooms;
-    }
-
-    public Set<Integer> getFriends() {
+    public Shell<Set<Integer>> getFriends() {
         return friends;
-    }
-
-    public void setFriends(Set<Integer> friends) {
-        this.friends = friends;
     }
 
     public String getLogin() {
@@ -190,8 +185,7 @@ public class Client implements Saveable {
     @Override
     public synchronized boolean save() {
         if (server == null) {
-            LOGGER.warn("The client saving has been failed: a server has not been set");
-            return false;
+            throw new IllegalStateException("The server has not been set");
         }
         if (login == null) {
             LOGGER.warn("The client saving has been failed: a login has not been set");
@@ -207,15 +201,15 @@ public class Client implements Saveable {
         }
         File clientsDir = server.getClientsDir();
         if (!clientsDir.isDirectory()) {
-            LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
-                    .append(clientsDir.getAbsolutePath()));
+            LOGGER.warn(buildMessage("The client saving has been failed: could not create a directory ",
+                    clientsDir.getAbsolutePath()));
             return false;
         }
         File clientDir = new File(clientsDir, String.valueOf(login.hashCode()));
         if (!clientDir.isDirectory()) {
             if (!clientDir.mkdir()) {
-                LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
-                        .append(clientDir.getAbsolutePath()));
+                LOGGER.warn(buildMessage("The client saving has been failed: could not create a directory ",
+                        clientDir.getAbsolutePath()));
                 return false;
             }
         }
@@ -223,8 +217,8 @@ public class Client implements Saveable {
         if (!clientDir.isDirectory()) {
             try {
                 if (!clientDir.createNewFile()) {
-                    LOGGER.warn(new StringBuilder("The client saving has been failed: could not create a directory ")
-                            .append(clientDir.getAbsolutePath()));
+                    LOGGER.warn(buildMessage("The client saving has been failed: could not create a directory ",
+                            clientDir.getAbsolutePath()));
                 }
             } catch (IOException e) {
                 LOGGER.warn(e.getLocalizedMessage());
@@ -236,9 +230,7 @@ public class Client implements Saveable {
             Marshaller marshaller = jaxbContext.createMarshaller();
             marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(this, clientFile);
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            Client clientToCheck = (Client) unmarshaller.unmarshal(clientFile);
-            return equals(clientToCheck);
+            return true;
         } catch (JAXBException e) {
             e.printStackTrace();
             LOGGER.error(e.getLocalizedMessage());
@@ -277,14 +269,14 @@ public class Client implements Saveable {
         }
     }
 
-    private static final class RoomsWrapperAdapter extends XmlAdapter<RoomsWrapper, Set<Integer>> {
+    private static final class RoomsWrapperAdapter extends XmlAdapter<RoomsWrapper, Shell<Set<Integer>>> {
         @Override
-        public Set<Integer> unmarshal(RoomsWrapper v) {
-            return v.getRooms();
+        public Shell<Set<Integer>> unmarshal(RoomsWrapper v) {
+            return new Shell<>(v.getRooms());
         }
         @Override
-        public RoomsWrapper marshal(Set<Integer> v) {
-            return new RoomsWrapper(v);
+        public RoomsWrapper marshal(Shell<Set<Integer>> v) {
+            return new RoomsWrapper(v.safe());
         }
     }
 
@@ -310,14 +302,14 @@ public class Client implements Saveable {
         }
     }
 
-    private static final class FriendsWrapperAdapter extends XmlAdapter<FriendsWrapper, Set<Integer>> {
+    private static final class FriendsWrapperAdapter extends XmlAdapter<FriendsWrapper, Shell<Set<Integer>>> {
         @Override
-        public Set<Integer> unmarshal(FriendsWrapper v) {
-            return v.getRooms();
+        public Shell<Set<Integer>> unmarshal(FriendsWrapper v) {
+            return new Shell<>(v.getRooms());
         }
         @Override
-        public FriendsWrapper marshal(Set<Integer> v) {
-            return new FriendsWrapper(v);
+        public FriendsWrapper marshal(Shell<Set<Integer>> v) {
+            return new FriendsWrapper(v.safe());
         }
     }
 }

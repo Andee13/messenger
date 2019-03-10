@@ -1,13 +1,10 @@
-package common.message;
+package common.entities.message;
 
-import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
-import server.Server;
-import server.ServerProcessing;
+import server.processing.ServerProcessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
-import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;

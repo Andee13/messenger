@@ -1,14 +1,15 @@
 package server;
 
-import common.Saveable;
+import common.entities.Saveable;
+import common.entities.Shell;
 import javafx.collections.FXCollections;
-import javafx.collections.ObservableMap;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.client.ClientListener;
+import server.processing.PropertiesProcessing;
 import server.room.Room;
+import server.room.RoomProcessing;
 
-import javax.xml.bind.annotation.XmlRootElement;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -17,10 +18,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
 
-@XmlRootElement
+import static common.Utils.buildMessage;
+
 public class Server extends Thread implements Saveable {
-    private volatile Map<Integer, ClientListener> onlineClients;
-    private volatile Map<Integer, Room> onlineRooms;
+    private volatile Shell<Map<Integer, ClientListener>> onlineClients;
+    private volatile Shell<Map<Integer, Room>> onlineRooms;
     private static final Logger LOGGER = Logger.getLogger("Server");
     private volatile Properties config;
     private File clientsDir;
@@ -47,21 +49,21 @@ public class Server extends Thread implements Saveable {
         if (clientsDir == null) {
             String clientsDirPath = config.getProperty("clientsDir");
             if (clientsDirPath == null) {
-                throw new RuntimeException(new StringBuilder("Unable to get property \"clientsDir\" from the configuration")
-                        .append(config.toString()).toString());
+                throw new RuntimeException(
+                        buildMessage("Unable to get property \"clientsDir\" from the configuration", config.toString()));
             }
             File clientsDir = new File(clientsDirPath);
             if (!clientsDir.isDirectory()) {
-                throw new RuntimeException(new StringBuilder("Unable to find a folder: ")
-                        .append(clientsDir.getAbsolutePath()).toString());
+                throw new RuntimeException(
+                        buildMessage("Unable to find a folder:", clientsDir.getAbsolutePath()));
             }
             this.clientsDir = clientsDir;
         }
         if (clientsDir.isDirectory()) {
             return clientsDir;
         } else {
-            throw new RuntimeException(new StringBuilder("Unable to find a onlineClients folder ")
-                    .append(clientsDir.getAbsolutePath()).toString());
+            throw new RuntimeException(
+                    buildMessage("Unable to find a onlineClients folder", clientsDir.getAbsolutePath()));
         }
     }
 
@@ -81,38 +83,30 @@ public class Server extends Thread implements Saveable {
         if (roomsDir == null) {
             String roomsDirPath = config.getProperty("roomsDir");
             if (roomsDir == null) {
-                throw new RuntimeException(new StringBuilder("Unable to get property \"roomsDir\" from the configuration")
-                        .append(config.toString()).toString());
+                throw new RuntimeException(
+                        buildMessage("Unable to get property \"roomsDir\" from the configuration"
+                                , config.toString())
+                );
             }
             File roomsDir = new File(roomsDirPath);
             if (!roomsDir.isDirectory()) {
-                throw new RuntimeException(new StringBuilder("Unable to find a folder: ")
-                        .append(roomsDir.getAbsolutePath()).toString());
+                throw new RuntimeException(buildMessage("Unable to find a folder:", roomsDir.getAbsolutePath()));
             }
             this.roomsDir = roomsDir;
         }
         if (roomsDir.isDirectory()) {
             return roomsDir;
         } else {
-            throw new RuntimeException(new StringBuilder("Unable to find a rooms folder ")
-                    .append(roomsDir.getAbsolutePath()).toString());
+            throw new RuntimeException(buildMessage("Unable to find a rooms folder", roomsDir.getAbsolutePath()));
         }
     }
 
-    public Map<Integer, ClientListener> getOnlineClients() {
+    public Shell<Map<Integer, ClientListener>> getOnlineClients() {
         return onlineClients;
     }
 
-    public void setOnlineClients(ObservableMap<Integer, ClientListener> onlineClients) {
-        this.onlineClients = onlineClients;
-    }
-
-    public Map<Integer, Room> getOnlineRooms() {
+    public Shell<Map<Integer, Room>> getOnlineRooms() {
         return onlineRooms;
-    }
-
-    public void setOnlineRooms(@NotNull Map<Integer, Room> onlineRooms) {
-        this.onlineRooms = FXCollections.observableMap(onlineRooms);
     }
 
     /**
@@ -122,34 +116,41 @@ public class Server extends Thread implements Saveable {
      *                  e.g. is {@code null}, does not contain a property or it is not valid
      * */
     public Server(@NotNull File serverPropertiesFile) throws InvalidPropertiesFormatException {
+        onlineClients = new Shell<>();
+        onlineRooms = new Shell<>();
         initOnlineClients();
         initOnlineRooms();
-        if (!ServerProcessing.arePropertiesValid(serverPropertiesFile)) {
+        if (!PropertiesProcessing.arePropertiesValid(serverPropertiesFile)) {
             throw new InvalidPropertiesFormatException("Either the specified properties or file are/is invalid");
         }
         config = new Properties();
         try(FileInputStream fileInputStream = new FileInputStream(serverPropertiesFile)) {
             config.loadFromXML(fileInputStream);
             serverConfigFile = serverPropertiesFile;
-            onlineClients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
-            onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+            onlineClients = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+            onlineRooms = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
         }
+        RoomProcessing.loadRoom(this, 0);
     }
 
     private void initOnlineClients() {
-        onlineClients = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+        onlineClients = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
     }
 
     private void initOnlineRooms() {
-        onlineRooms = FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>()));
+        onlineRooms = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
     }
 
     @Override
     public void run() {
-        if (!ServerProcessing.arePropertiesValid(config)) {
+        Observer observer = new Observer(this);
+        observer.setDaemon(true);
+        observer.start();
+        LOGGER.info(buildMessage("Observer thread status:", observer.getState()));
+        if (!PropertiesProcessing.arePropertiesValid(config)) {
             LOGGER.fatal("Unable to start the server. Server configurations are not valid.");
             return;
         }
@@ -158,8 +159,7 @@ public class Server extends Thread implements Saveable {
             while (!isInterrupted()) {
                 try {
                     socket = serverSocket.accept();
-                    LOGGER.info(new StringBuilder("Incoming connection from: ")
-                            .append(socket.getInetAddress()).toString());
+                    LOGGER.info(buildMessage("Incoming connection from:", socket.getInetAddress()));
                     ClientListener clientListener = new ClientListener(this, socket);
                     clientListener.start();
                 } catch (IOException e) {
@@ -174,22 +174,6 @@ public class Server extends Thread implements Saveable {
     }
 
     /**
-     *  The method {@code clientExists} informs whether a client with the specified {@code clientId} has been registered
-     *
-     * @param           clientId is the id to be searched for
-     *
-     * @return          {@code true} if and only if the client denoted by this {@code clientId} has been registered
-     *                  and the file with his data is a normal file {@code false} otherwise
-     * */
-    public boolean clientExists(int clientId) {
-        File file = new File(
-                new StringBuilder((new File(config.getProperty("clientsDir")))
-                        .getAbsolutePath()).append(clientId).append(".xml").toString()
-        );
-        return file.isFile();
-    }
-
-    /**
      *  The method {@code save} stores the XML representation of the {@code config} to the {@code serverConfigFile}
      *
      * @return          {@code true} if and only if the {@code config} has been stored to the corresponding file
@@ -201,7 +185,7 @@ public class Server extends Thread implements Saveable {
         if (config == null) {
             LOGGER.warn("Saving the server has been failed: undefined server configurations.");
         }
-        if (!ServerProcessing.arePropertiesValid(config)) {
+        if (!PropertiesProcessing.arePropertiesValid(config)) {
             LOGGER.warn("Saving the server has been failed: invalid server properties.");
             return false;
         }
@@ -211,22 +195,24 @@ public class Server extends Thread implements Saveable {
         }
         try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(serverConfigFile))) {
             config.storeToXML(bos, null);
-            for (Map.Entry<Integer, ClientListener> onlineClients : onlineClients.entrySet()) {
-                ClientListener clientListener = onlineClients.getValue();
-                if (clientListener.getClient() != null && !clientListener.getClient().save()) {
-                    LOGGER.error(new StringBuilder("Failed to save the client id ")
-                            .append(clientListener.getClient().getClientId()));
-                    return false;
+            synchronized (onlineClients.safe()) {
+                for (Map.Entry<Integer, ClientListener> onlineClients : onlineClients.safe().entrySet()) {
+                    ClientListener clientListener = onlineClients.getValue();
+                    if (clientListener.getClient() != null && !clientListener.getClient().save()) {
+                        LOGGER.error(buildMessage("Failed to save the client (id"
+                                , clientListener.getClient().getClientId()));
+                        return false;
+                    }
                 }
             }
-            for (Map.Entry<Integer, Room> onlineRooms : onlineRooms.entrySet()) {
-                if (!onlineRooms.getValue().save()) {
-                    LOGGER.error(new StringBuilder("Failed to save the room id ")
-                            .append(onlineRooms.getValue().getRoomId()).toString());
-                    return false;
+            synchronized (onlineRooms.safe()) {
+                for (Map.Entry<Integer, Room> onlineRooms : onlineRooms.safe().entrySet()) {
+                    if (!onlineRooms.getValue().save()) {
+                        LOGGER.error(buildMessage("Failed to save the room (id", onlineRooms.getValue().getRoomId()));
+                        return false;
+                    }
                 }
             }
-
             return true;
         } catch (FileNotFoundException e) {
             LOGGER.error("Unable to find a server configuration file ".concat(serverConfigFile.getAbsolutePath()));
@@ -237,12 +223,14 @@ public class Server extends Thread implements Saveable {
         }
     }
     private boolean interruptOnlineClientsThreads() {
-        for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.entrySet()) {
-            clientListenerEntry.getValue().interrupt();
-            if (!clientListenerEntry.getValue().isInterrupted()) {
-                LOGGER.error(new StringBuilder("Failed to interrupt client's (id ")
-                        .append(clientListenerEntry.getValue().getClient().getClientId()).append(") thread"));
-                return false;
+        synchronized (onlineClients.safe()) {
+            for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.safe().entrySet()) {
+                clientListenerEntry.getValue().interrupt();
+                if (!clientListenerEntry.getValue().isInterrupted()) {
+                    LOGGER.error(buildMessage("Failed to interrupt client's (id"
+                            , clientListenerEntry.getValue().getClient().getClientId(), ") thread"));
+                    return false;
+                }
             }
         }
         return true;

@@ -1,14 +1,9 @@
 package server;
 
-import common.message.Message;
-import common.message.MessageStatus;
+import common.entities.message.Message;
+import common.entities.message.MessageStatus;
 import lombok.extern.log4j.Log4j;
-import org.apache.log4j.FileAppender;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.LoggerFactory;
 import org.xml.sax.SAXException;
-import server.room.Room;
-import server.room.RoomProcessing;
 
 import javax.xml.bind.*;
 import javax.xml.parsers.ParserConfigurationException;
@@ -17,7 +12,6 @@ import javax.xml.xpath.*;
 import java.io.*;
 import java.net.Socket;
 import java.net.URISyntaxException;
-import java.time.LocalDateTime;
 
 @Log4j
 public class Main {
@@ -203,7 +197,7 @@ public class Main {
         System.err.println(properties.equals(properties1));*/
 
         // REGISTRATION
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -217,10 +211,10 @@ public class Main {
         dataOutputStream.writeUTF(stringWriter.toString());
         dataOutputStream.flush();
 
-        System.out.println(dataInputStream.readUTF());
+        System.out.println(dataInputStream.readUTF());*/
 
         // AUTHORIZATION + ROOM CREATING
-        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -244,13 +238,30 @@ public class Main {
         System.out.println(dataInputStream.readUTF());
 
         message = new Message(MessageStatus.MESSAGE).setText("Hello world :)")
-                .setFromId("Puser".hashCode()).setRoomId(408753972);
+                .setFromId("Puser".hashCode()).setRoomId(264568844);
         stringWriter = new StringWriter();
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream.readUTF());*/
+        System.out.println(dataInputStream.readUTF());
 
+        message = new Message(MessageStatus.MESSAGE).setText("Привет мир :)")
+                .setFromId("Puser".hashCode()).setRoomId(264568844);
+        stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream.writeUTF(stringWriter.toString());
+
+        System.out.println(dataInputStream.readUTF());
+
+        message = new Message(MessageStatus.MESSAGE).setText("Сохраняйся :)")
+                .setFromId("Puser".hashCode()).setRoomId(264568844);
+        stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream.writeUTF(stringWriter.toString());
+
+        System.out.println(dataInputStream.readUTF());
+
+        // STOP_SERVER
         /*Socket socket1 = new Socket("localhost", 5940);
         DataOutputStream dataOutputStream1 = new DataOutputStream(socket1.getOutputStream());
         DataInputStream dataInputStream1 = new DataInputStream(socket1.getInputStream());
@@ -344,6 +355,12 @@ public class Main {
 
         System.out.println(dataInputStream.readUTF());*/
 
+        /*Object object = null;
 
+        StringBuilder stringBuilder = new StringBuilder();
+        for (int i = 0; i < 10; i++) {
+            stringBuilder.append(object).append(' ');
+        }
+        System.out.println(stringBuilder);*/
     }
 }

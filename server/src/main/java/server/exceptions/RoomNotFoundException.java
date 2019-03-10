@@ -3,10 +3,13 @@ package server.exceptions;
 import java.util.NoSuchElementException;
 
 public class RoomNotFoundException extends NoSuchElementException {
-    public RoomNotFoundException(String message) {
+    private final int roomId;
+    public RoomNotFoundException(String message, int roomId) {
         super(message);
+        this.roomId = roomId;
     }
 
-    public RoomNotFoundException() {
+    public RoomNotFoundException(int roomId) {
+        this.roomId = roomId;
     }
 }

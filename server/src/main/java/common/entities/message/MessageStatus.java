@@ -1,4 +1,4 @@
-package common.message;
+package common.entities.message;
 
 public enum MessageStatus {
     AUTH,

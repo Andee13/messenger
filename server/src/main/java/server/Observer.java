@@ -2,17 +2,15 @@ package server;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
-import server.client.Client;
 import server.client.ClientListener;
+import server.processing.ServerProcessing;
 import server.room.Room;
-import common.message.Message;
-import common.message.MessageStatus;
 import org.apache.log4j.Logger;
-import server.room.RoomProcessing;
 
-import java.io.IOException;
-import java.time.LocalDateTime;
+import java.util.ConcurrentModificationException;
 import java.util.Map;
+
+import static common.Utils.buildMessage;
 
 /**
  * The {@code Observer} class handles with the users who are AFK too long and rooms which do not have online users
@@ -34,55 +32,67 @@ public class Observer extends Thread {
     @Override
     public void run() {
         ObservableMap<Integer, ClientListener> onlineClients = FXCollections.synchronizedObservableMap(FXCollections
-                .observableMap(server.getOnlineClients()));
+                .observableMap(server.getOnlineClients().safe()));
         ObservableMap<Integer, Room> onlineRooms = FXCollections.synchronizedObservableMap(FXCollections
-                .observableMap(server.getOnlineRooms()));
-        while (true) {
+                .observableMap(server.getOnlineRooms().safe()));
+        while (!server.isInterrupted()) {
             /*
             *   This loop saves the room in case if there is not longer any online member on a sever
             * */
-            synchronized (server.getOnlineRooms()) {
-                for (Map.Entry<Integer, Room> roomWrapper : onlineRooms.entrySet()) {
-                    boolean toBeSavedAndReamoved = true;
-                    for (int clientId : roomWrapper.getValue().getMembers()) {
-                        if (server.getOnlineClients().containsKey(clientId)) {
-                            toBeSavedAndReamoved = false;
-                        }
-                        if (!toBeSavedAndReamoved) {
-                            break;
-                        }
+            try {
+                synchronized (server.getOnlineRooms().safe()) {
+                    for (Map.Entry<Integer, Room> roomWrapper : server.getOnlineRooms().safe().entrySet()) {
+                        System.out.print(roomWrapper.getValue().getRoomId() + " ");
                     }
-                    if (toBeSavedAndReamoved) {
-                        server.getOnlineRooms().remove(roomWrapper.getKey());
-                        if (roomWrapper.getValue().save() && !server.getOnlineRooms().containsKey(roomWrapper.getKey())) {
-                            LOGGER.info(new StringBuilder("Room (id ").append(roomWrapper.getKey())
-                                    .append(" has been saved by observer"));
-                        } else {
-                            LOGGER.warn(new StringBuilder("Room (id ").append(roomWrapper.getKey())
-                                    .append(") has not been saved by observer properly"));
+                    System.out.println();
+                    for (Map.Entry<Integer, Room> roomWrapper : onlineRooms.entrySet()) {
+                        if (roomWrapper.getValue().getRoomId() == 0) {
+                            continue;
+                        }
+                        boolean toBeSavedAndReamoved = true;
+                        for (int clientId : roomWrapper.getValue().getMembers().safe()) {
+                            if (server.getOnlineClients().safe().containsKey(clientId)) {
+                                toBeSavedAndReamoved = false;
+                            }
+                            if (!toBeSavedAndReamoved) {
+                                break;
+                            }
+                        }
+                        if (toBeSavedAndReamoved) {
+                            LOGGER.trace(buildMessage("Saving the room (id", roomWrapper.getValue().getRoomId(), ')'));
+                            server.getOnlineRooms().safe().remove(roomWrapper.getKey());
+                            if (roomWrapper.getValue().save() && !server.getOnlineRooms().safe()
+                                    .containsKey(roomWrapper.getKey())) {
+                                LOGGER.info(buildMessage("Room (id", roomWrapper.getKey()
+                                        , "has been saved by observer"));
+                            } else {
+                                LOGGER.warn(buildMessage("Room (id", roomWrapper.getKey()
+                                        , ") has not been saved by observer properly"));
+                            }
                         }
                     }
                 }
+            } catch(ConcurrentModificationException e){
+                continue;
             }
-            synchronized (server.getOnlineClients()) {
+            LOGGER.info("Trying to clean the clients");
+            synchronized (server.getOnlineClients().safe()) {
                 for (Map.Entry<Integer, ClientListener> clientListenerWrapper : onlineClients.entrySet()) {
                     ClientListener clientListener = clientListenerWrapper.getValue();
                     if (clientListener.getSocket().isClosed()) {
-                        server.getOnlineClients().remove(clientListenerWrapper.getKey());
+                        server.getOnlineClients().safe().remove(clientListenerWrapper.getKey());
                         clientListener.interrupt();
-                        if (!server.getOnlineClients().containsKey(clientListenerWrapper.getKey())) {
-                            LOGGER.trace(new StringBuilder("Client (id ").append(clientListenerWrapper.getKey())
-                                    .append(") has been removed from online clients by observer"));
+                        if (!server.getOnlineClients().safe().containsKey(clientListenerWrapper.getKey())) {
+                            LOGGER.trace(buildMessage("Client (id", clientListenerWrapper.getKey()
+                                    , ") has been removed from online clients by observer"));
                         } else {
-                            LOGGER.warn(new StringBuilder("Attempt to remove client id(")
-                                    .append(clientListenerWrapper.getKey())
-                                    .append(") has been failed by observer. ClientListener state is ")
-                                    .append(clientListenerWrapper.getValue().getState()));
+                            LOGGER.warn(buildMessage("Attempt to remove client (id"
+                                    , clientListenerWrapper.getKey(), ") has been failed by observer."
+                                    , "ClientListener state is", clientListenerWrapper.getValue().getState()));
                         }
                     }
                 }
             }
-
             try {
                 sleep(60000);
             } catch (InterruptedException e) {

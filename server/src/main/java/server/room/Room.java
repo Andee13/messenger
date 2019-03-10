@@ -1,12 +1,16 @@
 package server.room;
 
-import common.message.Message;
-import common.message.MessageStatus;
-import common.Saveable;
+import common.entities.Shell;
+import common.entities.message.Message;
+import common.entities.message.MessageStatus;
+import common.entities.Saveable;
 import javafx.collections.*;
 import org.apache.log4j.Logger;
 import server.*;
 import server.client.ClientListener;
+import server.processing.ServerProcessing;
+import server.room.history.MessageHistory;
+import server.room.history.MessageListener;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -23,43 +27,34 @@ import java.util.*;
 public class Room implements Saveable {
     private volatile int roomId;
     private volatile int adminId;
-    @XmlJavaTypeAdapter(MessageHistoryObservableListAdapter.class)
-    private volatile List<Message> messageHistory;
+    @XmlJavaTypeAdapter(MessageHistoryAdapter.class)
+    private volatile MessageHistory messageHistory;
     @XmlJavaTypeAdapter(MembersObservableSetAdapter.class)
-    private volatile Set<Integer> members;
+    private volatile Shell<Set<Integer>> members;
     @XmlTransient
     private volatile Server server;
 
     private static Logger LOGGER = Logger.getLogger("Room");
 
     public Room() {
-        ObservableList<Message> oHistory = FXCollections.synchronizedObservableList(
-                FXCollections.observableList(new LinkedList<>()));
         ObservableSet<Integer> oMembers = FXCollections.synchronizedObservableSet(
                 FXCollections.observableSet(new TreeSet<>()));
         initMembersListener(oMembers);
-        initMessageHistoryListener(oHistory);
-        messageHistory = oHistory;
-        members = oMembers;
-    }
-
-    private void initMessageHistoryListener(ObservableList<Message> messageHistory) {
-        messageHistory.addListener((ListChangeListener<Message>) c -> {
-            c.next();
-            if (c.wasAdded() && !c.wasRemoved()) {
-                List <Message> sentMessages = (List<Message>) c.getAddedSubList();
-                for (int clientId : members) {
-                    if (server.getOnlineClients().containsKey(clientId)) {
-                        for (Message message : sentMessages) {
-                            server.getOnlineClients().get(clientId)
+        messageHistory = new MessageHistory(ServerProcessing.MESSAGE_HISTORY_DIMENSION);
+        messageHistory.setMessageListener(new MessageListener() {
+            @Override
+            public void newMessage(Message message) {
+                synchronized (server.getOnlineClients().safe()) {
+                    for (int clientId : members.safe()) {
+                        if (server.getOnlineClients().safe().containsKey(clientId)) {
+                            server.getOnlineClients().safe().get(clientId)
                                     .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
                         }
                     }
                 }
-            } else if (c.wasRemoved() && !c.wasAdded()) {
-                // TODO methods of removing the message from chat
             }
         });
+        members = new Shell<>(oMembers);
     }
 
     public void initMembersListener(ObservableSet<Integer> members) {
@@ -75,28 +70,14 @@ public class Room implements Saveable {
             } else {
                 return;
             }
-
-            for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().entrySet()) {
-                if (clientWrapper.getValue().getClient().getClientId() != clientId) {
-                    clientWrapper.getValue().sendMessageToConnectedClient(notificationMessage);
+            synchronized (server.getOnlineClients().safe()) {
+                for (Map.Entry<Integer, ClientListener> clientWrapper : server.getOnlineClients().safe().entrySet()) {
+                    if (clientWrapper.getValue().getClient().getClientId() != clientId) {
+                        clientWrapper.getValue().sendMessageToConnectedClient(notificationMessage);
+                    }
                 }
             }
-
         });
-    }
-
-    public void setMessageHistoryWithListener(List<Message> messageHistory) {
-        ObservableList<Message> o = FXCollections.synchronizedObservableList(
-                FXCollections.observableList(messageHistory));
-        initMessageHistoryListener(o);
-        this.messageHistory = o;
-    }
-
-    public void setMembersWithListener(Set<Integer> members) {
-        ObservableSet<Integer> o = FXCollections.synchronizedObservableSet(
-                FXCollections.observableSet(members));
-        initMembersListener(o);
-        this.members = o;
     }
 
     public void setRoomId(int roomId) {
@@ -111,27 +92,27 @@ public class Room implements Saveable {
         return adminId;
     }
 
+    public void setMessageHistory(MessageHistory messageHistory) {
+        this.messageHistory = messageHistory;
+    }
+
     public void setAdminId(int adminId) {
         this.adminId = adminId;
     }
 
-    public List<Message> getMessageHistory() {
+    public MessageHistory getMessageHistory() {
         return messageHistory;
     }
 
-    private void setMessageHistory(ObservableList<Message> messageHistory) {
-        this.messageHistory = messageHistory;
-    }
-
-    private static final class MembersObservableSetAdapter extends XmlAdapter<MembersObservableSetWrapper, Set<Integer>>{
+    private static final class MembersObservableSetAdapter extends XmlAdapter<MembersObservableSetWrapper, Shell<Set<Integer>>>{
         @Override
-        public Set<Integer> unmarshal(MembersObservableSetWrapper v) {
-            return v.getMembers();
+        public Shell<Set<Integer>> unmarshal(MembersObservableSetWrapper v) {
+            return new Shell<>(v.getMembers());
         }
         @Override
-        public MembersObservableSetWrapper marshal(Set<Integer> v) {
+        public MembersObservableSetWrapper marshal(Shell<Set<Integer>> v) {
             MembersObservableSetWrapper membersObservableSetWrapper = new MembersObservableSetWrapper();
-            membersObservableSetWrapper.setMembers(new HashSet<>(v));
+            membersObservableSetWrapper.setMembers(new HashSet<>(v.safe()));
             return membersObservableSetWrapper;
         }
     }
@@ -145,12 +126,8 @@ public class Room implements Saveable {
                 '}';
     }
 
-    public Set<Integer> getMembers() {
+    public Shell<Set<Integer>> getMembers() {
         return members;
-    }
-
-    public void setMembers(ObservableSet<Integer> members) {
-        this.members = members;
     }
 
     public Server getServer() {
@@ -161,26 +138,26 @@ public class Room implements Saveable {
         this.server = server;
     }
 
-    @Override
+    /*@Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Room room = (Room) o;
-        if (!room.getMembers().containsAll(members)
-                || !members.containsAll(room.getMembers())
-                || (members.toArray().length != room.getMembers().toArray().length)) {
+        if (!room.getMembers().safe().containsAll(members.safe())
+                || !members.safe().containsAll(room.getMembers().safe())
+                || (members.safe().toArray().length != room.getMembers().safe().toArray().length)) {
             return false;
         }
-        if (!room.getMessageHistory().containsAll(messageHistory)
-                || !messageHistory.containsAll(room.getMessageHistory())
-                || (messageHistory.toArray().length != room.getMessageHistory().toArray().length)) {
+        if (!room.getMessageHistory().safe().containsAll(messageHistory.safe())
+                || !messageHistory.safe().containsAll(room.getMessageHistory().safe())
+                || (messageHistory.safe().toArray().length != room.getMessageHistory().safe().toArray().length)) {
             return false;
         }
         if (room.roomId != roomId) {
             return false;
         }
         return true;
-    }
+    }*/
 
     @Override
     public int hashCode() {
@@ -220,13 +197,22 @@ public class Room implements Saveable {
         }
     }
 
-    private static class MessageHistoryObservableListAdapter
-            extends XmlAdapter<MessageHistoryObservableListWrapper, List<Message>> {
-        public List<Message> unmarshal(MessageHistoryObservableListWrapper messages) {
-            return FXCollections.synchronizedObservableList(FXCollections.observableList(messages.getMessages()));
+    private static class MessageHistoryAdapter
+            extends XmlAdapter<MessageHistoryObservableListWrapper, MessageHistory> {
+        public MessageHistory unmarshal(MessageHistoryObservableListWrapper messages) {
+            MessageHistory messageHistory = new MessageHistory(ServerProcessing.MESSAGE_HISTORY_DIMENSION);
+            for (Message message : messages.messages) {
+                messageHistory.addMessage(message, false);
+            }
+            return messageHistory;
         }
-        public MessageHistoryObservableListWrapper marshal(List<Message> messages) {
-            return new MessageHistoryObservableListWrapper(messages);
+        public MessageHistoryObservableListWrapper marshal(MessageHistory messageHistory) {
+            MessageHistoryObservableListWrapper m = new MessageHistoryObservableListWrapper();
+            LOGGER.fatal("Количество элементов в истории перед маршалингом = " + messageHistory.getMessageHistory().size());
+            for (Message message : messageHistory.getMessageHistory()) {
+                m.messages.add(message);
+            }
+            return m;
         }
     }
 
@@ -255,6 +241,7 @@ public class Room implements Saveable {
             Marshaller marshaller = jaxbContext.createMarshaller();
             marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
             marshaller.marshal(this, roomFile);
+            System.out.println("message history size" + messageHistory.getMessageHistory().size());
             return true;
         } catch (JAXBException e) {
             LOGGER.error(e.getLocalizedMessage());
