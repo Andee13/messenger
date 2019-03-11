@@ -2,10 +2,8 @@ package server.processing;
 
 import org.apache.log4j.Logger;
 import server.Server;
-import sun.rmi.runtime.Log;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.Properties;
 
 import static common.Utils.buildMessage;
@@ -21,7 +19,7 @@ public class RestartingEnvironment extends Thread {
         Properties properties = server.getConfig();
         server.interrupt();
         //LocalDateTime timeout = LocalDateTime.now().plusSeconds(10);
-        while (!server.isInterrupted()) {
+        while (!State.TERMINATED.equals(server.getState())) {
             LOGGER.trace("Waiting the server has shut down");
             try {
                 sleep(2000);

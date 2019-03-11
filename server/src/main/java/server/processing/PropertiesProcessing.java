@@ -60,7 +60,7 @@ public class PropertiesProcessing {
      *                  all the necessary configurations and they are valid i.e. it is possible
      *                  to start a server using them, {@code false} otherwise
      * */
-    public static boolean arePropertiesValid(@NotNull File propertyFile) {
+    public static synchronized boolean arePropertiesValid(@NotNull File propertyFile) {
         if (propertyFile == null) {
             return false;
         }
@@ -82,7 +82,7 @@ public class PropertiesProcessing {
             }
             return arePropertiesValid(properties);
         } catch (IOException e) {
-            LOGGER.error(e.getLocalizedMessage());
+            LOGGER.error(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
             return false;
         }
     }

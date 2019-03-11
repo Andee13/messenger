@@ -257,13 +257,10 @@ public class ClientListener extends Thread {
     }
 
     private Message restartServer(Message message) {
-        if (!isMessageFromThisLoggedClient(message)) {
+        if ((!isMessageFromThisLoggedClient(message)) && !message.getLogin().equals(server.getConfig().getProperty("server_login"))
+                && !message.getPassword().equals(server.getConfig().getProperty("server_password"))) { // todo
             return new Message(MessageStatus.DENIED).setText("Log in first");
         }
-        /*if (message.getLogin().equals(server.getConfig().getProperty("server_login"))
-                && message.getPassword().equals(server.getConfig().getProperty("server_password"))) {
-            return new Message(MessageStatus.DENIED).setText("Log in first");
-        }*/
         if (logged && !client.isAdmin()) {
             return new Message(MessageStatus.DENIED).setText("Not enough rights to perform the restart");
         }
