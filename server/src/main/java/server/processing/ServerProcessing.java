@@ -2,6 +2,7 @@ package server.processing;
 
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
+import jdk.internal.util.xml.PropertiesDefaultHandler;
 import jdk.internal.util.xml.impl.Input;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -73,13 +74,11 @@ public class ServerProcessing {
             serverProperiesFile = new File(currentFolder, "serverConfig.xml");
         }
         LOGGER.trace(buildMessage("Current serverConfig.xml is:", serverProperiesFile.getAbsolutePath()));
-        Properties serverProperties = new Properties();
-        try (InputStream is = new BufferedInputStream(new FileInputStream(serverProperiesFile))) {
-            serverProperties.loadFromXML(is);
-        }
+        Properties serverProperties;
         switch (invocationMode) {
             case START:
                 try {
+                    serverProperties = PropertiesProcessing.loadPropertiesFromFile(serverProperiesFile, true);
                     startServer(serverProperties);
                 } catch (IOException e) {
                     LOGGER.error(e.getLocalizedMessage());
@@ -94,6 +93,7 @@ public class ServerProcessing {
                 }
                 break;
             case RESTART:
+                serverProperties = PropertiesProcessing.loadPropertiesFromFile(serverProperiesFile, true);
                 sendRestartMessage(serverProperties);
                 break;
             case CREATE_DEFAULT_SERVER:

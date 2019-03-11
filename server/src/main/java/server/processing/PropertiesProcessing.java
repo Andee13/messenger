@@ -124,4 +124,18 @@ public class PropertiesProcessing {
         }
         return ServerProcessing.defaultProperties;
     }
+
+    public static Properties loadPropertiesFromFile (File propertiesFile, boolean xml) {
+        Properties properties = new Properties();
+        try (InputStream is = new BufferedInputStream(new FileInputStream(propertiesFile))) {
+            if (xml) {
+                properties.loadFromXML(is);
+            } else {
+                properties.load(is);
+            }
+        } catch (IOException e) {
+            LOGGER.error(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
+        }
+        return properties;
+    }
 }
