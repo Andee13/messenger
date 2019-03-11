@@ -11,6 +11,7 @@ import server.Server;
 import server.room.Room;
 import sun.nio.cs.ext.MacArabic;
 
+import javax.rmi.ssl.SslRMIClientSocketFactory;
 import javax.security.auth.login.FailedLoginException;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -20,6 +21,7 @@ import java.net.*;
 import java.time.format.DateTimeFormatter;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
+import java.util.Scanner;
 
 import static common.Utils.buildMessage;
 import static server.processing.PropertiesProcessing.arePropertiesValid;
@@ -50,6 +52,9 @@ public class ServerProcessing {
      * @throws          IOException in case if user entered wrong parameters
      * */
     public static void main(String[] args) throws IOException {
+        System.out.println("Hello, please, enter one of the following commands:");
+        printCommands();
+        args = new Scanner(System.in).nextLine().split(" ");
         InvocationMode invocationMode;
         try {
             invocationMode = getInvocationMode(args);
@@ -62,7 +67,8 @@ public class ServerProcessing {
         // setting the default server root folder
         try {
             currentFolder = new File(ServerProcessing.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI());
+                    .getCodeSource().getLocation().toURI()).getParentFile();
+
             LOGGER.trace(buildMessage("Current folder detected:", currentFolder.getAbsolutePath()));
         } catch (URISyntaxException e) {
             LOGGER.error(e.getLocalizedMessage());
@@ -100,8 +106,10 @@ public class ServerProcessing {
                 try {
                     createDefaultRootStructure(new File(args[1]));
                 } catch (ArrayIndexOutOfBoundsException e) {
-                    LOGGER.error("Unspecified root folder path");
+                    createDefaultRootStructure(currentFolder);
                     return;
+                } catch (IllegalArgumentException e) {
+                    LOGGER.error(buildMessage("Invalid folder", new File(args[1]).getAbsolutePath()));
                 }
                 break;
             case BAN:
@@ -110,10 +118,10 @@ public class ServerProcessing {
                     serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
                     ClientPocessing.clientBan(serverProperties, args[2], true, Integer.parseInt(args[3]));
                 } catch (IndexOutOfBoundsException e) {
-                    System.out.println("Not all arguments are specified. Please, check the input");
+                    LOGGER.info("Not all arguments are specified. Please, check the input");
                     printCommands();
                 } catch (NumberFormatException e) {
-                    System.out.println("Wrong number of hours entered : ".concat(args[3]));
+                    LOGGER.error("Wrong number of hours entered : ".concat(args[3]));
                 }
                 break;
             case UNBAN:
@@ -122,7 +130,7 @@ public class ServerProcessing {
                     serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
                     ClientPocessing.clientBan(serverProperties, args[2], false, 0);
                 } catch (IndexOutOfBoundsException e) {
-                    System.out.println("Not all arguments are specified. Please, check the input");
+                    LOGGER.error("Not all arguments are specified. Please, check the input");
                     printCommands();
                 }
                 break;
@@ -151,14 +159,13 @@ public class ServerProcessing {
     }
 
     private static void printCommands() {
-        System.out.println("            <---Avaliable commands--->");
+        System.out.println("                                    <---Avaliable commands--->");
         System.out.println("-cds path/to/server/root/folder                 - to create a default server root structure in the specified folder");
         System.out.println("-start path/to/serverConfig.xml                 - to start the server denoted by the configurations");
         System.out.println("-restart path/to/serverConfig.xml               - to restart the server denoted by the configurations");
         System.out.println("-stop path/to/serverConfig.xml                  - to stop the server denoted by the configurations");
         System.out.println("-ban path/to/serverConfig.xml <login> <hours>   - to ban the client on the server denoted by the configurations");
         System.out.println("-unban path/to/serverConfig.xml <login>         - to unban the client on the server denoted by the configurations");
-        System.out.println(                     "<---    --->");
 
     }
 
@@ -374,8 +381,10 @@ public class ServerProcessing {
 
             LOGGER.info(buildMessage("The Message of", MessageStatus.STOP_SERVER,
                     "status has been sent to address localhost:", serverProperties.getProperty("port")));
+        } catch (SocketException e) {
+            LOGGER.info("The server is not launched");
         } catch (IOException | JAXBException e) {
-            LOGGER.fatal(e.getMessage());
+            LOGGER.error(e.getMessage());
             return;
         }
     }
