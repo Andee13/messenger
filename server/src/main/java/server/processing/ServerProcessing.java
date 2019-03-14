@@ -2,25 +2,29 @@ package server.processing;
 
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
+import jdk.internal.util.xml.PropertiesDefaultHandler;
+import jdk.internal.util.xml.impl.Input;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.InvocationMode;
 import server.Server;
 import server.room.Room;
-import sun.rmi.runtime.Log;
+import sun.nio.cs.ext.MacArabic;
 
+import javax.rmi.ssl.SslRMIClientSocketFactory;
 import javax.security.auth.login.FailedLoginException;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
 import java.io.*;
 import java.net.*;
 import java.time.format.DateTimeFormatter;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
+import java.util.Scanner;
 
 import static common.Utils.buildMessage;
+import static server.processing.PropertiesProcessing.arePropertiesValid;
 
 /**
  *  This class contains methods which operates with an instance of {@code Server}
@@ -48,6 +52,9 @@ public class ServerProcessing {
      * @throws          IOException in case if user entered wrong parameters
      * */
     public static void main(String[] args) throws IOException {
+        System.out.println("Hello, please, enter one of the following commands:");
+        printCommands();
+        args = new Scanner(System.in).nextLine().split(" ");
         InvocationMode invocationMode;
         try {
             invocationMode = getInvocationMode(args);
@@ -60,7 +67,9 @@ public class ServerProcessing {
         // setting the default server root folder
         try {
             currentFolder = new File(ServerProcessing.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI());
+                    .getCodeSource().getLocation().toURI()).getParentFile();
+
+            LOGGER.trace(buildMessage("Current folder detected:", currentFolder.getAbsolutePath()));
         } catch (URISyntaxException e) {
             LOGGER.error(e.getLocalizedMessage());
             return;
@@ -70,11 +79,13 @@ public class ServerProcessing {
         } catch (ArrayIndexOutOfBoundsException e) {
             serverProperiesFile = new File(currentFolder, "serverConfig.xml");
         }
+        LOGGER.trace(buildMessage("Current serverConfig.xml is:", serverProperiesFile.getAbsolutePath()));
         Properties serverProperties;
         switch (invocationMode) {
             case START:
                 try {
-                    startServer(serverProperiesFile);
+                    serverProperties = PropertiesProcessing.loadPropertiesFromFile(serverProperiesFile, true);
+                    startServer(serverProperties);
                 } catch (IOException e) {
                     LOGGER.error(e.getLocalizedMessage());
                     return;
@@ -88,13 +99,17 @@ public class ServerProcessing {
                 }
                 break;
             case RESTART:
+                serverProperties = PropertiesProcessing.loadPropertiesFromFile(serverProperiesFile, true);
+                sendRestartMessage(serverProperties);
                 break;
             case CREATE_DEFAULT_SERVER:
                 try {
                     createDefaultRootStructure(new File(args[1]));
                 } catch (ArrayIndexOutOfBoundsException e) {
-                    LOGGER.error("Unspecified root folder path");
+                    createDefaultRootStructure(currentFolder);
                     return;
+                } catch (IllegalArgumentException e) {
+                    LOGGER.error(buildMessage("Invalid folder", new File(args[1]).getAbsolutePath()));
                 }
                 break;
             case BAN:
@@ -103,10 +118,10 @@ public class ServerProcessing {
                     serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
                     ClientPocessing.clientBan(serverProperties, args[2], true, Integer.parseInt(args[3]));
                 } catch (IndexOutOfBoundsException e) {
-                    System.out.println("Not all arguments are specified. Please, check the input");
+                    LOGGER.info("Not all arguments are specified. Please, check the input");
                     printCommands();
                 } catch (NumberFormatException e) {
-                    System.out.println("Wrong number of hours entered : ".concat(args[3]));
+                    LOGGER.error("Wrong number of hours entered : ".concat(args[3]));
                 }
                 break;
             case UNBAN:
@@ -115,7 +130,7 @@ public class ServerProcessing {
                     serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
                     ClientPocessing.clientBan(serverProperties, args[2], false, 0);
                 } catch (IndexOutOfBoundsException e) {
-                    System.out.println("Not all arguments are specified. Please, check the input");
+                    LOGGER.error("Not all arguments are specified. Please, check the input");
                     printCommands();
                 }
                 break;
@@ -126,15 +141,31 @@ public class ServerProcessing {
         }
     }
 
+    private static void sendRestartMessage(Properties serverConfig) {
+        try (Socket socket = new Socket("localhost", Integer.parseInt(serverConfig.getProperty("port")));
+             DataOutputStream out = new DataOutputStream(socket.getOutputStream())) {
+            Message message = new Message(MessageStatus.RESTART_SERVER)
+                    .setLogin(serverConfig.getProperty("server_login"))
+                    .setPassword(serverConfig.getProperty("server_password"));
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            Marshaller marshaller = jaxbContext.createMarshaller();
+            StringWriter stringWriter = new StringWriter();
+            marshaller.marshal(message,stringWriter);
+            out.writeUTF(stringWriter.toString());
+            out.flush();
+        } catch (JAXBException | IOException e) {
+            LOGGER.error(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
+        }
+    }
+
     private static void printCommands() {
-        System.out.println("            <---Avaliable commands--->");
+        System.out.println("                                    <---Avaliable commands--->");
         System.out.println("-cds path/to/server/root/folder                 - to create a default server root structure in the specified folder");
         System.out.println("-start path/to/serverConfig.xml                 - to start the server denoted by the configurations");
         System.out.println("-restart path/to/serverConfig.xml               - to restart the server denoted by the configurations");
         System.out.println("-stop path/to/serverConfig.xml                  - to stop the server denoted by the configurations");
         System.out.println("-ban path/to/serverConfig.xml <login> <hours>   - to ban the client on the server denoted by the configurations");
         System.out.println("-unban path/to/serverConfig.xml <login>         - to unban the client on the server denoted by the configurations");
-        System.out.println(                     "<---    --->");
 
     }
 
@@ -280,7 +311,7 @@ public class ServerProcessing {
      *                  has already been launched or the port set in the {@code serverPropertiesFile} is taken
      * */
     private static void startServer(@NotNull File serverPropertiesFile) throws IOException {
-        if (!PropertiesProcessing.arePropertiesValid(serverPropertiesFile)) {
+        if (!arePropertiesValid(serverPropertiesFile)) {
             throw new IOException("The server properties are not valid");
         }
         Server server = new Server(serverPropertiesFile);
@@ -288,13 +319,13 @@ public class ServerProcessing {
         LOGGER.info(buildMessage("Server thread status:", server.getState()));
     }
 
-    private static void startServer(Properties serverConfiguration) throws IOException {
+    public static void startServer(Properties serverConfiguration) throws IOException {
         startServer(new File(serverConfiguration.getProperty("serverConfig")));
     }
 
     /**
      *  The method {@code isServerLaunched} provides with information whether the server, specified by the
-     * {@code serverProperties} is currently being launchd on localhost
+     * {@code serverProperties} is currently being launched on localhost
      *
      * @param           serverProperties the configuration of a server
      *
@@ -302,9 +333,12 @@ public class ServerProcessing {
      *                  is currently working i.e. the port the server is launched is not free for listening
      *                  {@code false} otherwise
      * */
-    private static boolean isServerLaunched(Properties serverProperties) {
+    public static boolean isServerLaunched(Properties serverProperties) throws InvalidPropertiesFormatException {
+        if (!arePropertiesValid(serverProperties)) {
+            throw new InvalidPropertiesFormatException("Properties are not valid");
+        }
         int port = Integer.parseInt(serverProperties.getProperty("port"));
-        try(ServerSocket serverSocket = new ServerSocket(port)) {
+        try (ServerSocket serverSocket = new ServerSocket(port)) {
             return false;
         } catch (BindException e) {
             return true;
@@ -317,7 +351,7 @@ public class ServerProcessing {
      *  The method {@code sendStopServerMessage} stops the server specified by the properties
      * */
     public static void sendStopServerMessage(@NotNull Properties serverProperties) {
-        if (!PropertiesProcessing.arePropertiesValid(serverProperties)) {
+        if (!arePropertiesValid(serverProperties)) {
             LOGGER.error(buildMessage("Invalid server properties passed", serverProperties));
             return;
         }
@@ -347,8 +381,10 @@ public class ServerProcessing {
 
             LOGGER.info(buildMessage("The Message of", MessageStatus.STOP_SERVER,
                     "status has been sent to address localhost:", serverProperties.getProperty("port")));
+        } catch (SocketException e) {
+            LOGGER.info("The server is not launched");
         } catch (IOException | JAXBException e) {
-            LOGGER.fatal(e.getMessage());
+            LOGGER.error(e.getMessage());
             return;
         }
     }
@@ -366,7 +402,7 @@ public class ServerProcessing {
      *                  e.g. a wrong server login/password has/have been entered
      * */
     public static void sendStopServerMessage(@NotNull File serverPropertiesFile) throws IOException, FailedLoginException {
-        if (!PropertiesProcessing.arePropertiesValid(serverPropertiesFile)) {
+        if (!arePropertiesValid(serverPropertiesFile)) {
             throw new InvalidPropertiesFormatException("The properties file are not valid");
         }
         Properties properties = new Properties();
@@ -374,76 +410,4 @@ public class ServerProcessing {
         sendStopServerMessage(properties);
     }
 
-    /**
-     *  This method restarts the server specified by the passe {@code serverConfiguration}.
-     * */
-    public static void restartServer(Properties serverConfiguration) throws IOException {
-        if (!PropertiesProcessing.arePropertiesValid(serverConfiguration)) {
-            String errorString = "The specified properties are not valid. Restart operation aborted";
-            LOGGER.warn(errorString);
-            throw new InvalidPropertiesFormatException("The specified properties are not valid. Restart operation aborted");
-        }
-        if (!isServerLaunched(serverConfiguration)) {
-            String errorString = "The server is not launched";
-            LOGGER.warn(errorString);
-            throw new IllegalStateException(errorString);
-        }
-        try (Socket socket = new Socket("localhost", Integer.parseInt(serverConfiguration.getProperty("port")));
-             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
-             DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream())) {
-            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-            Marshaller marshaller = jaxbContext.createMarshaller();
-            StringWriter stringWriter = new StringWriter();
-            Message stopMessage = new Message(MessageStatus.STOP_SERVER)
-                    .setLogin(serverConfiguration.getProperty("server_login"))
-                    .setPassword(serverConfiguration.getProperty("server_password"));
-            marshaller.marshal(stopMessage, stringWriter);
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            socket.setSoTimeout(15000);
-            dataOutputStream.writeUTF(stringWriter.toString());
-            try {
-                String responseXmlMessage = dataInputStream.readUTF();
-                Message response = (Message) unmarshaller.unmarshal(new StringReader(responseXmlMessage));
-                if (!MessageStatus.ACCEPTED.equals(response.getStatus())) {
-                    LOGGER.warn(buildMessage("Response from the server (", socket.getRemoteSocketAddress(),
-                            ") has been received, but the status is not of expected (", MessageStatus.ACCEPTED ,
-                            ") status. Found" ,response.getStatus(), ".Operation aborted"));
-                } else {
-                    try {
-                        LOGGER.trace("Waiting the server has stopped");
-                        Thread.sleep(4000);
-                    } catch (InterruptedException e) {
-                        LOGGER.error(buildMessage(e.getClass().getName(), ':', e.getLocalizedMessage()));
-                    }
-                    startServer(serverConfiguration);
-                    try {
-                        LOGGER.trace("Waiting for the server will start");
-                        Thread.sleep(3000);
-                    } catch (InterruptedException e) {
-                        LOGGER.error(buildMessage(e.getClass().getName(), ':', e.getLocalizedMessage()));
-                    }
-                    LOGGER.info(buildMessage("Attempt to connect the server",
-                            isServerLaunched(serverConfiguration) ? "succeed" : "failed"));
-                }
-            } catch (SocketTimeoutException e) {
-                LOGGER.warn(buildMessage("Timeout exceeded (response from the server has not been received)",
-                        "Restart operation has not been completed properly"));
-                return;
-            }
-        } catch (IOException | JAXBException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static void restartServer(File serverConfiguration) throws IOException {
-        Properties serverProperties = new Properties();
-        try (FileInputStream fis = new FileInputStream(serverConfiguration)) {
-            serverProperties.loadFromXML(fis);
-            restartServer(serverProperties);
-        } catch (IOException e) {
-            LOGGER.error(buildMessage(e.getClass().getName(), "occurred", e.getLocalizedMessage()));
-            throw e;
-        }
-    }
 }

@@ -41,10 +41,7 @@ public class Observer extends Thread {
             * */
             try {
                 synchronized (server.getOnlineRooms().safe()) {
-                    for (Map.Entry<Integer, Room> roomWrapper : server.getOnlineRooms().safe().entrySet()) {
-                        System.out.print(roomWrapper.getValue().getRoomId() + " ");
-                    }
-                    System.out.println();
+                    LOGGER.trace("Removing rooms");
                     for (Map.Entry<Integer, Room> roomWrapper : onlineRooms.entrySet()) {
                         if (roomWrapper.getValue().getRoomId() == 0) {
                             continue;
@@ -75,8 +72,8 @@ public class Observer extends Thread {
             } catch(ConcurrentModificationException e){
                 continue;
             }
-            LOGGER.info("Trying to clean the clients");
             synchronized (server.getOnlineClients().safe()) {
+                LOGGER.trace("Removing clients");
                 for (Map.Entry<Integer, ClientListener> clientListenerWrapper : onlineClients.entrySet()) {
                     ClientListener clientListener = clientListenerWrapper.getValue();
                     if (clientListener.getSocket().isClosed()) {

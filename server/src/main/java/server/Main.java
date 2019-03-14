@@ -214,7 +214,7 @@ public class Main {
         System.out.println(dataInputStream.readUTF());*/
 
         // AUTHORIZATION + ROOM CREATING
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -238,7 +238,7 @@ public class Main {
         System.out.println(dataInputStream.readUTF());
 
         message = new Message(MessageStatus.MESSAGE).setText("Hello world :)")
-                .setFromId("Puser".hashCode()).setRoomId(264568844);
+                .setFromId("Puser".hashCode()).setRoomId(1394006532);
         stringWriter = new StringWriter();
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
@@ -246,7 +246,7 @@ public class Main {
         System.out.println(dataInputStream.readUTF());
 
         message = new Message(MessageStatus.MESSAGE).setText("Привет мир :)")
-                .setFromId("Puser".hashCode()).setRoomId(264568844);
+                .setFromId("Puser".hashCode()).setRoomId(1394006532);
         stringWriter = new StringWriter();
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
@@ -254,12 +254,12 @@ public class Main {
         System.out.println(dataInputStream.readUTF());
 
         message = new Message(MessageStatus.MESSAGE).setText("Сохраняйся :)")
-                .setFromId("Puser".hashCode()).setRoomId(264568844);
+                .setFromId("Puser".hashCode()).setRoomId(1394006532);
         stringWriter = new StringWriter();
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream.readUTF());
+        System.out.println(dataInputStream.readUTF());*/
 
         // STOP_SERVER
         /*Socket socket1 = new Socket("localhost", 5940);
@@ -362,5 +362,29 @@ public class Main {
             stringBuilder.append(object).append(' ');
         }
         System.out.println(stringBuilder);*/
+
+        //AUTH + RESTARTING
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        Marshaller marshaller = jaxbContext.createMarshaller();
+        StringWriter stringWriter = new StringWriter();
+
+        Message message = new Message(MessageStatus.AUTH).setLogin("Puser").setPassword("password");
+        Socket socket = new Socket("localhost", 5940);
+
+        DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+        marshaller.marshal(message, stringWriter);
+
+        dataOutputStream.writeUTF(stringWriter.toString());
+        dataOutputStream.flush();
+        DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
+
+        System.out.println(dataInputStream.readUTF());
+
+        message = new Message(MessageStatus.RESTART_SERVER).setFromId("Puser".hashCode());
+        stringWriter = new StringWriter();
+        marshaller.marshal(message, stringWriter);
+        dataOutputStream.writeUTF(stringWriter.toString());
+
+        System.out.println(dataInputStream.readUTF());
     }
 }

@@ -1,16 +1,17 @@
 package server.processing;
 
+import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.util.Properties;
+import java.util.Random;
+import java.util.RandomAccess;
 
 import static common.Utils.buildMessage;
 
 public class PropertiesProcessing {
+    private static final Logger LOGGER = Logger.getLogger(PropertiesProcessing.class.getSimpleName());
     /**
      *  The method {@code arePropertiesValid} checks if the passed abstract path is a valid file.
      * Returns {@code true} if and only if the specified by the abstract path file exists and contains
@@ -29,20 +30,20 @@ public class PropertiesProcessing {
         try {
             int port = Integer.parseInt(properties.getProperty("port"));
             if (port < 0 || port > 65536) {
-                ServerProcessing.LOGGER.error(buildMessage("The port value was expected to be between 0 and 65536"
+                LOGGER.error(buildMessage("The port value was expected to be between 0 and 65536"
                         ,"but found", port));
             }
         } catch (NumberFormatException e) {
-            ServerProcessing.LOGGER.warn(buildMessage("Unable to extract a port number from server configuration",
+            LOGGER.warn(buildMessage("Unable to extract a port number from server configuration",
                     properties.getProperty("port")));
             return false;
         }
         if (!new File(properties.getProperty("roomsDir")).isDirectory()) {
-            ServerProcessing.LOGGER.warn(buildMessage("Invalid roomsDir value was set:", properties.getProperty("roomsDir")));
+            LOGGER.warn(buildMessage("Invalid roomsDir value was set:", properties.getProperty("roomsDir")));
             return false;
         }
         if (!new File(properties.getProperty("clientsDir")).isDirectory()) {
-            ServerProcessing.LOGGER.warn(buildMessage("Invalid clientsDir value was set:", properties.getProperty("clientsDir")));
+            LOGGER.warn(buildMessage("Invalid clientsDir value was set:", properties.getProperty("clientsDir")));
             return false;
         }
         return true;
@@ -59,7 +60,7 @@ public class PropertiesProcessing {
      *                  all the necessary configurations and they are valid i.e. it is possible
      *                  to start a server using them, {@code false} otherwise
      * */
-    public static boolean arePropertiesValid(@NotNull File propertyFile) {
+    public static synchronized boolean arePropertiesValid(@NotNull File propertyFile) {
         if (propertyFile == null) {
             return false;
         }
@@ -67,13 +68,23 @@ public class PropertiesProcessing {
             return false;
         }
         Properties properties = new Properties();
-        try {
-            properties.loadFromXML(new BufferedInputStream(new FileInputStream(propertyFile)));
+        try (RandomAccessFile randomAccessFile = new RandomAccessFile(propertyFile,"r")) {
+            randomAccessFile.seek(0);
+            long fileLength = randomAccessFile.length();
+            if (fileLength > Integer.MAX_VALUE) {
+                throw new UnsupportedOperationException("The properties file is too big");
+            }
+            byte [] buffer = new byte[(int)fileLength];
+            randomAccessFile.read(buffer);
+            String prop = new String(buffer);
+            try (InputStream is = new ByteArrayInputStream(prop.getBytes())) {
+                properties.loadFromXML(is);
+            }
+            return arePropertiesValid(properties);
         } catch (IOException e) {
-            ServerProcessing.LOGGER.error(e.getLocalizedMessage());
+            LOGGER.error(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
             return false;
         }
-        return arePropertiesValid(properties);
     }
 
     /**
@@ -112,5 +123,19 @@ public class PropertiesProcessing {
             ServerProcessing.defaultProperties = properties;
         }
         return ServerProcessing.defaultProperties;
+    }
+
+    public static Properties loadPropertiesFromFile (File propertiesFile, boolean xml) {
+        Properties properties = new Properties();
+        try (InputStream is = new BufferedInputStream(new FileInputStream(propertiesFile))) {
+            if (xml) {
+                properties.loadFromXML(is);
+            } else {
+                properties.load(is);
+            }
+        } catch (IOException e) {
+            LOGGER.error(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
+        }
+        return properties;
     }
 }

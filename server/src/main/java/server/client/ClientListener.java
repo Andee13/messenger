@@ -10,6 +10,7 @@ import org.xml.sax.InputSource;
 import server.Server;
 import server.processing.ClientPocessing;
 import server.processing.PropertiesProcessing;
+import server.processing.RestartingEnvironment;
 import server.processing.ServerProcessing;
 import server.exceptions.ClientNotFoundException;
 import server.exceptions.IllegalPasswordException;
@@ -214,12 +215,8 @@ public class ClientListener extends Thread {
                     responseMessage = clientUnban(message);
                     break;
                 case RESTART_SERVER:
-                    try {
-                        ServerProcessing.restartServer(server.getConfig());
-                    } catch (InvalidPropertiesFormatException e) {
-                        LOGGER.error(e.getClass().getName().concat(" occurred"));
-                        throw new RuntimeException(e);
-                    }
+                    responseMessage = restartServer(message);
+                    break;
                 case ROOM_MEMBERS:
                     responseMessage = getRoomMembers(message);
                     break;
@@ -257,6 +254,19 @@ public class ClientListener extends Thread {
         }
         Client client = loadClient(server.getConfig(), message.getToId());
         return new Message(MessageStatus.ACCEPTED).setText(client.getName()).setFromId(client.getClientId());
+    }
+
+    private Message restartServer(Message message) {
+        if ((!isMessageFromThisLoggedClient(message)) && !message.getLogin().equals(server.getConfig().getProperty("server_login"))
+                && !message.getPassword().equals(server.getConfig().getProperty("server_password"))) { // todo
+            return new Message(MessageStatus.DENIED).setText("Log in first");
+        }
+        if (logged && !client.isAdmin()) {
+            return new Message(MessageStatus.DENIED).setText("Not enough rights to perform the restart");
+        }
+        RestartingEnvironment restartingEnvironment = new RestartingEnvironment(server);
+        restartingEnvironment.start();
+        return new Message(MessageStatus.ACCEPTED).setText("The server is going to stop the work");
     }
 
     private Message addFriend(Message message) {

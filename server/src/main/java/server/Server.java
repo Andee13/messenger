@@ -13,6 +13,7 @@ import server.room.RoomProcessing;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.LocalDateTime;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Map;
 import java.util.Properties;
@@ -28,6 +29,7 @@ public class Server extends Thread implements Saveable {
     private File clientsDir;
     private File roomsDir;
     private File serverConfigFile;
+    private volatile ServerSocket serverSocket;
 
     public Properties getConfig() {
         return config;
@@ -155,20 +157,28 @@ public class Server extends Thread implements Saveable {
             return;
         }
         Socket socket;
-        try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(config.getProperty("port")))) {
-            while (!isInterrupted()) {
+        try {
+            serverSocket = new ServerSocket(Integer.parseInt(config.getProperty("port")));
+            while (!isInterrupted() && !serverSocket.isClosed()) {
                 try {
                     socket = serverSocket.accept();
                     LOGGER.info(buildMessage("Incoming connection from:", socket.getInetAddress()));
                     ClientListener clientListener = new ClientListener(this, socket);
                     clientListener.start();
                 } catch (IOException e) {
-                    LOGGER.error(e.getLocalizedMessage());
+                    LOGGER.error(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
                 }
             }
         } catch (IOException e) {
-            LOGGER.fatal("Error occurred while starting the server: ".concat(e.getLocalizedMessage()));
+            LOGGER.fatal(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
         } finally {
+            try {
+                if (serverSocket != null) {
+                    serverSocket.close();
+                }
+            } catch (IOException e) {
+                LOGGER.fatal(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
+            }
             interrupt();
         }
     }
@@ -226,6 +236,10 @@ public class Server extends Thread implements Saveable {
         synchronized (onlineClients.safe()) {
             for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.safe().entrySet()) {
                 clientListenerEntry.getValue().interrupt();
+                LocalDateTime timeOut = LocalDateTime.now().plusSeconds(3);
+                while (clientListenerEntry.getValue().getState().equals(State.RUNNABLE) || LocalDateTime.now().isBefore(timeOut)) {
+
+                }
                 if (!clientListenerEntry.getValue().isInterrupted()) {
                     LOGGER.error(buildMessage("Failed to interrupt client's (id"
                             , clientListenerEntry.getValue().getClient().getClientId(), ") thread"));
@@ -237,9 +251,23 @@ public class Server extends Thread implements Saveable {
     }
     @Override
     public void interrupt() {
+        if (serverSocket != null && !serverSocket.isClosed()) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
         save();
         interruptOnlineClientsThreads();
         super.interrupt();
-        System.exit(1);
+        while (!isInterrupted()){
+            try {
+                sleep(100);
+            } catch (InterruptedException e) {
+                LOGGER.info(buildMessage("The server has stopped. Thread state is", getState()));
+                break;
+            }
+        }
     }
 }
