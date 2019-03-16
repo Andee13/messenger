@@ -66,6 +66,8 @@ public class LoggersProcessing {
                 .getAbsolutePath());
         System.setProperty("restarterLogFile", new File(logsDir, serverConfig.getProperty("restarterLogFile"))
                 .getAbsolutePath());
+        System.setProperty("requestHandlerLogFile", new File(logsDir, serverConfig.getProperty("requestHandlerLogFile"))
+                .getAbsolutePath());
     }
 
     static void setDefaultLoggersFiles() {
@@ -95,6 +97,8 @@ public class LoggersProcessing {
                 , "clientProcessing.log")
                 .getAbsolutePath());
         System.setProperty("restarterLogFile", new File(ServerProcessing.currentFolder, "restarter.log")
+                .getAbsolutePath());
+        System.setProperty("requestHandlerLogFile", new File(ServerProcessing.currentFolder, "requestHandler.log")
                 .getAbsolutePath());
     }
 }

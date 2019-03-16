@@ -100,10 +100,6 @@ public class Client implements Saveable {
         return rooms;
     }
 
-    Shell<Set<Integer>> getFriends() {
-        return friends;
-    }
-
     private String getLogin() {
         return login;
     }
@@ -119,22 +115,6 @@ public class Client implements Saveable {
     void setPassword(String password) {
         this.password = password;
     }
-
-    /*private static class SetAdapter extends XmlAdapter<Integer[], Set<Integer>> {
-        @Override
-        public Set<Integer> unmarshal(Integer[] v) {
-            return FXCollections.synchronizedObservableSet(FXCollections.observableSet(v));
-        }
-        @Override
-        public Integer[] marshal(Set<Integer> v)  {
-            Integer [] result = new Integer[v.size()];
-            int index = 0;
-            for (int i : v) {
-                result[index++] = i;
-            }
-            return result;
-        }
-    }*/
 
     /**
      *  The {@code clientId} of a client is considered as it's {@code hashCode} value
@@ -167,8 +147,8 @@ public class Client implements Saveable {
         thatProperties.setProperty("isAdmin", String.valueOf(that.isAdmin));
 
         return thisProperties.equals(thatProperties)
-                && rooms.equals(that.getRooms())
-                && friends.equals(that.getFriends());
+                && rooms.safe().equals(that.getRooms().safe())
+                && friends.safe().equals(that.friends.safe());
 
     }
 

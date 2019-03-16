@@ -2,16 +2,18 @@ package server.room;
 
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
+import jdk.internal.org.xml.sax.InputSource;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.w3c.dom.NodeList;
 import server.Server;
 import server.processing.ClientProcessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
-import java.io.File;
-import java.io.IOException;
+import javax.xml.xpath.*;
+import java.io.*;
 import java.util.*;
 
 import server.exceptions.ClientNotFoundException;
@@ -21,7 +23,8 @@ import server.processing.PropertiesProcessing;
 import static common.Utils.buildMessage;
 
 /**
- * The class {@code PropertiesProcessing} is just a container of methods related with instances of the {@code Room} class
+ * The class {@code PropertiesProcessing} is just a container for methods
+ * related with instances of the {@code Room} class
  * */
 public class RoomProcessing {
     private static volatile Logger LOGGER = Logger.getLogger("PropertiesProcessing");
@@ -35,7 +38,7 @@ public class RoomProcessing {
      * of two or more clients
      *
      *  !NOTE This method puts the room into the server online rooms map, that is why it may remove previous
-     * instance of this room from the map.
+     * instance of this room from the map. It is recommended to check whether the room is now in the map before call.
      *
      * @param           roomId is an id of the room to be searched
      * @param           server a server containing {@code room}
@@ -66,16 +69,16 @@ public class RoomProcessing {
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
                 room.setServer(server);
                 room.getMessageHistory().setMessageListener(message -> {
+                synchronized (server.getOnlineClients().safe()) {
                     for (int clientId : room.getMembers().safe()) {
-                        synchronized (server.getOnlineClients().safe()) {
-                            if (server.getOnlineClients().safe().containsKey(clientId)) {
-                                server.getOnlineClients().safe().get(clientId)
-                                        .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
-                            }
+                        if (server.getOnlineClients().safe().containsKey(clientId)) {
+                            server.getOnlineClients().safe().get(clientId)
+                                    .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
                         }
                     }
+                    server.getOnlineRooms().safe().put(roomId, room);
+                }
                 });
-                server.getOnlineRooms().safe().put(roomId, room);
                 return room;
             } catch (JAXBException e) {
                 LOGGER.error(e.getLocalizedMessage());
@@ -247,5 +250,48 @@ public class RoomProcessing {
         Room room = server.getOnlineRooms().safe().get(roomId);
         room.getMessageHistory().addMessage(message,true);
         room.save();
+    }
+
+    /**
+     *  The method that informs if there is a member {@code clientId} in the room {@code roomId}
+     * on server denoted by {@code serverProperties}
+     *
+     * @param           serverProperties a set of the server configurations
+     * @param           clientId The client's clientId to be searched for
+     * @param           roomId The room clientId where {@code clientId} will be searched
+     *
+     * @return          {@code true} if and only if the server denoted by this {@code serverProperties} exists
+     *                  and there is a room id {@code roomId} with specified client id {@code clientId}
+     * */
+    public static boolean isMember(@NotNull Properties serverProperties, int clientId, int roomId) {
+        if (!PropertiesProcessing.arePropertiesValid(serverProperties)
+                || RoomProcessing.hasRoomBeenCreated(serverProperties, roomId) == 0L
+                || !ClientProcessing.hasNotAccountBeenRegistered(serverProperties,clientId)) {
+            return false;
+        }
+        XPath xPath = XPathFactory.newInstance().newXPath();
+        XPathExpression xPathExpression;
+        try {
+            xPathExpression = xPath.compile("room/members/clientId");
+        } catch (XPathExpressionException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            throw new RuntimeException(e);
+        }
+        File roomsDir = new File(serverProperties.getProperty("roomsDir"));
+        File roomDir = new File(roomsDir, String.valueOf(roomId));
+        File roomFile = new File(roomDir, String.valueOf(roomId).concat(".xml"));
+        try {
+            NodeList resultNodeList = (NodeList) xPathExpression.evaluate(
+                    new InputSource(new BufferedReader(new FileReader(roomFile))), XPathConstants.NODESET);
+            for (int i = 0; i < resultNodeList.getLength(); i++) {
+                if(clientId == Integer.parseInt(resultNodeList.item(i).getTextContent())) {
+                    return true;
+                }
+            }
+        } catch (FileNotFoundException | XPathExpressionException e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false; // return false OR throw new RuntimeException(e); ?
+        }
+        return false;
     }
 }

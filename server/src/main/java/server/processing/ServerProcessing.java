@@ -71,7 +71,7 @@ public class ServerProcessing {
      *
      * @throws          IOException in case if user entered wrong parameters
      * */
-    public static void main(String[] args) throws IOException {
+    public static void main(@SuppressWarnings("ParameterCanBeLocal") String[] args) throws IOException {
 
         File serverProperiesFile;
         System.out.println("Hello, please, enter one of the following commands:");
@@ -169,8 +169,8 @@ public class ServerProcessing {
                     .setLogin(serverConfig.getProperty("serverLogin"))
                     .setPassword(serverConfig.getProperty("serverPassword"));
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-            Marshaller marshaller = jaxbContext.createMarshaller();
             StringWriter stringWriter = new StringWriter();
+            Marshaller marshaller = jaxbContext.createMarshaller();
             marshaller.marshal(message,stringWriter);
             out.writeUTF(stringWriter.toString());
             out.flush();
@@ -180,7 +180,7 @@ public class ServerProcessing {
     }
 
     private static void printCommands() {
-        System.out.println("                                    <---Avaliable commands--->");
+        System.out.println("                                    <---Available commands--->");
         System.out.println("-cds path/to/server/root/folder                 - to create a default server root structure in the specified folder");
         System.out.println("-start path/to/serverConfig.xml                 - to start the server denoted by the configurations");
         System.out.println("-restart path/to/serverConfig.xml               - to restart the server denoted by the configurations");

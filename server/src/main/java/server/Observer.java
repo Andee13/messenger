@@ -13,7 +13,7 @@ import java.util.Map;
 import static common.Utils.buildMessage;
 
 /**
- * The {@code Observer} class handles with the users who are AFK too long and rooms which do not have online users
+ *  The {@code Observer} class handles with the users who are AFK too long and rooms any member of which is not online
  *
  * @see             Server
  * @see             ServerProcessing
@@ -23,15 +23,18 @@ import static common.Utils.buildMessage;
 public class Observer extends Thread {
     private Server server;
     private static volatile Logger LOGGER = Logger.getLogger(Observer.class.getSimpleName());
+
     public static void setLogger(Logger logger) {
         LOGGER = logger;
     }
+
     protected Observer (Server server) {
         if (server == null) {
             throw new NullPointerException("The server must not be null");
         }
         this.server = server;
     }
+
     @Override
     public void run() {
         ObservableMap<Integer, ClientListener> onlineClients = FXCollections.synchronizedObservableMap(FXCollections
@@ -39,9 +42,7 @@ public class Observer extends Thread {
         ObservableMap<Integer, Room> onlineRooms = FXCollections.synchronizedObservableMap(FXCollections
                 .observableMap(server.getOnlineRooms().safe()));
         while (!server.isInterrupted()) {
-            /*
-            *   This loop saves the room in case if there is not longer any online member on a sever
-            * */
+            // This loop saves the room in case if there is not longer any online member on a sever
             try {
                 synchronized (server.getOnlineRooms().safe()) {
                     LOGGER.trace("Removing rooms");
