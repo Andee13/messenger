@@ -11,6 +11,8 @@ import java.net.Socket;
 
 public class Utils {
     public static String name;
+    public static String password;
+    public static int id;
     public static Socket socket;
     public static DataInputStream reader;
     public static DataOutputStream writer;
@@ -36,4 +38,16 @@ public class Utils {
         }
         return  unmarshaller;
     }
+    public static void sendMessenge(Message m) {
+        Marshaller marshaller = getMarshaller();
+        StringWriter stringWriter = new StringWriter();
+        try {
+            marshaller.marshal(m, stringWriter);
+            String str = stringWriter.toString();
+            writer.writeUTF(str);
+        } catch(IOException | JAXBException ex) {
+            System.out.println(ex);
+        }
+    }
+
 }

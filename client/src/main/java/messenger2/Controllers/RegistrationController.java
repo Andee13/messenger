@@ -76,7 +76,7 @@ public class RegistrationController {
                 if(thread.message != null) {
                     switch (thread.message.getStatus().toString()) {
                         case "ACCEPTED":
-                            Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Chat.fxml"));
+                            Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Login.fxml"));
                             App.getStage().setTitle("Hello World");
                             App.getStage().setScene(new Scene(root, 800, 500));
                             App.getStage().show();
@@ -95,10 +95,10 @@ public class RegistrationController {
                     errrorMessange.setVisible(true);
                 }
 
-                Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Chat.fxml"));
-                App.getStage().setTitle("Login");
-                App.getStage().setScene(new Scene(root, 800, 500));
-                App.getStage().show();
+//                Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Chat.fxml"));
+//                App.getStage().setTitle("Login");
+//                App.getStage().setScene(new Scene(root, 800, 500));
+//                App.getStage().show();
             } catch (IOException | InterruptedException ex) {
                 System.out.println(ex);
             }
