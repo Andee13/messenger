@@ -3,10 +3,13 @@ package server.processing;
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
 import org.apache.log4j.Logger;
+import server.client.Client;
+import server.exceptions.ClientNotFoundException;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
+import javax.xml.bind.Unmarshaller;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
@@ -76,5 +79,58 @@ public class ClientProcessing {
         File clientDir = new File(clientsDir, String.valueOf(id));
         File clientXml = new File(clientDir, String.valueOf(id).concat(".xml"));
         return !clientDir.isDirectory() || !clientXml.isFile();
+    }
+
+    /**
+     *  The method {@code loadClient} unmarshalls a client parameters from the corresponding file of a server.
+     *
+     * @param           serverProperties a set of server configuration
+     *
+     * @param           clientId an id of the client to be unmarhalled
+     * */
+    public static Client loadClient(Properties serverProperties, int clientId) {
+        if (!clientExists(serverProperties, clientId)) {
+            throw new ClientNotFoundException(clientId);
+        }
+        try {
+            JAXBContext jaxbContext = JAXBContext.newInstance(Client.class);
+            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+            File clientFile = getClientFile(serverProperties, clientId);
+            return (Client) unmarshaller.unmarshal(clientFile);
+        } catch (JAXBException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * The method {@code clientExists} informs whether there is such client registered on the server
+     *
+     *  NOTE! This method will not inform you in case if you enter invalid properties, {@code null} or
+     * some kind of exception has occurred. It will just return {@code false} if it failed to
+     * get the client's parameters.
+     *
+     * @param           serverProperties a set of server configurations
+     * @param           clientId client's id to be searched
+     *
+     * @return          {@code true} if and only if the server denoted by {@code serverProperties} exists
+     *                  a client with such {@code clientId} has been registered on the server
+     * */
+    private static boolean clientExists(Properties serverProperties, int clientId) {
+        try {
+            if (!PropertiesProcessing.arePropertiesValid(serverProperties)) {
+                return false;
+            }
+            File clientFile = getClientFile(serverProperties, clientId);
+            return clientFile.isFile();
+        } catch (Throwable e) {
+            LOGGER.error(e.getLocalizedMessage());
+            return false;
+        }
+    }
+
+    private static File getClientFile(Properties serverConfig, int clientId) {
+        File clientsFolder = new File(serverConfig.getProperty("clientsDir"));
+        File clientFolder = new File(clientsFolder, String.valueOf(clientId));
+        return new File(clientFolder, clientFolder.getName().concat(".xml"));
     }
 }
