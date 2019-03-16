@@ -6,5 +6,6 @@ public enum InvocationMode {
     RESTART,
     CREATE_DEFAULT_SERVER,
     BAN,
-    UNBAN
+    UNBAN,
+    EXIT
 }

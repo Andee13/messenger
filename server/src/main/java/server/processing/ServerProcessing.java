@@ -2,16 +2,14 @@ package server.processing;
 
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
-import jdk.internal.util.xml.PropertiesDefaultHandler;
-import jdk.internal.util.xml.impl.Input;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.apache.log4j.PropertyConfigurator;
 import org.jetbrains.annotations.NotNull;
 import server.InvocationMode;
 import server.Server;
 import server.room.Room;
-import sun.nio.cs.ext.MacArabic;
 
-import javax.rmi.ssl.SslRMIClientSocketFactory;
 import javax.security.auth.login.FailedLoginException;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -33,11 +31,34 @@ import static server.processing.PropertiesProcessing.arePropertiesValid;
  * @see Server
  * */
 public class ServerProcessing {
-
-    public static final Logger LOGGER = Logger.getLogger("ServerProcessing");
+    public static volatile Logger LOGGER;
     public static Properties defaultProperties;
     public static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
     public static final int MESSAGE_HISTORY_DIMENSION = 100;
+    private static final File currentFolder;
+
+    public static void setLogger(Logger logger) {
+        LOGGER = logger;
+    }
+    /*
+    *   Detecting the current folder
+    * */
+    static {
+        try {
+            currentFolder = new File(ServerProcessing.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI()).getParentFile();
+            LoggersProcessing.setDefaultLoggersFiles(currentFolder);
+            PropertyConfigurator.configure(ServerProcessing.class.getResourceAsStream("../../log4j.properties"));
+            LOGGER = Logger.getLogger("ServerProcessing");
+            PropertiesProcessing.setLogger(Logger.getLogger(PropertiesProcessing.class.getSimpleName()));
+            if (LOGGER.isEnabledFor(Level.TRACE)) {
+                LOGGER.trace(buildMessage("Current folder detected:", currentFolder.getAbsolutePath()));
+            }
+        } catch (URISyntaxException e) {
+            System.err.println(buildMessage(e.getClass().getName(), "occurred:", e.getMessage()));
+            throw new RuntimeException(e.getLocalizedMessage());
+        }
+    }
 
     /**
      *   If the server is being launched without parameters, it is thought
@@ -52,6 +73,8 @@ public class ServerProcessing {
      * @throws          IOException in case if user entered wrong parameters
      * */
     public static void main(String[] args) throws IOException {
+
+        File serverProperiesFile;
         System.out.println("Hello, please, enter one of the following commands:");
         printCommands();
         args = new Scanner(System.in).nextLine().split(" ");
@@ -62,24 +85,14 @@ public class ServerProcessing {
             printCommands();
             return;
         }
-        File currentFolder;
-        File serverProperiesFile;
-        // setting the default server root folder
-        try {
-            currentFolder = new File(ServerProcessing.class.getProtectionDomain()
-                    .getCodeSource().getLocation().toURI()).getParentFile();
-
-            LOGGER.trace(buildMessage("Current folder detected:", currentFolder.getAbsolutePath()));
-        } catch (URISyntaxException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            return;
-        }
         try {
             serverProperiesFile = new File(args[1]);
         } catch (ArrayIndexOutOfBoundsException e) {
             serverProperiesFile = new File(currentFolder, "serverConfig.xml");
         }
-        LOGGER.trace(buildMessage("Current serverConfig.xml is:", serverProperiesFile.getAbsolutePath()));
+        if (LOGGER.isEnabledFor(Level.TRACE)) {
+            LOGGER.trace(buildMessage("Current serverConfig.xml is:", serverProperiesFile.getAbsolutePath()));
+        }
         Properties serverProperties;
         switch (invocationMode) {
             case START:
@@ -87,7 +100,9 @@ public class ServerProcessing {
                     serverProperties = PropertiesProcessing.loadPropertiesFromFile(serverProperiesFile, true);
                     startServer(serverProperties);
                 } catch (IOException e) {
-                    LOGGER.error(e.getLocalizedMessage());
+                    if (LOGGER.isEnabledFor(Level.ERROR)) {
+                        LOGGER.error(e.getLocalizedMessage());
+                    }
                     return;
                 }
                 break;
@@ -95,7 +110,9 @@ public class ServerProcessing {
                 try {
                     sendStopServerMessage(serverProperiesFile);
                 } catch (Exception e) {
-                    LOGGER.error(e.getLocalizedMessage());
+                    if (LOGGER.isEnabledFor(Level.ERROR)) {
+                        LOGGER.error(e.getLocalizedMessage());
+                    }
                 }
                 break;
             case RESTART:
@@ -109,14 +126,17 @@ public class ServerProcessing {
                     createDefaultRootStructure(currentFolder);
                     return;
                 } catch (IllegalArgumentException e) {
-                    LOGGER.error(buildMessage("Invalid folder", new File(args[1]).getAbsolutePath()));
+                    if (LOGGER.isEnabledFor(Level.ERROR)) {
+                        LOGGER.error(buildMessage("Invalid folder path as root directory for the server"
+                                , new File(args[1]).getAbsolutePath()));
+                    }
                 }
                 break;
             case BAN:
                 try {
                     serverProperties = new Properties();
                     serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
-                    ClientPocessing.clientBan(serverProperties, args[2], true, Integer.parseInt(args[3]));
+                    ClientProcessing.clientBan(serverProperties, args[2], true, Integer.parseInt(args[3]));
                 } catch (IndexOutOfBoundsException e) {
                     LOGGER.info("Not all arguments are specified. Please, check the input");
                     printCommands();
@@ -128,12 +148,14 @@ public class ServerProcessing {
                 try {
                     serverProperties = new Properties();
                     serverProperties.loadFromXML(new FileInputStream(serverProperiesFile));
-                    ClientPocessing.clientBan(serverProperties, args[2], false, 0);
+                    ClientProcessing.clientBan(serverProperties, args[2], false, 0);
                 } catch (IndexOutOfBoundsException e) {
                     LOGGER.error("Not all arguments are specified. Please, check the input");
                     printCommands();
                 }
                 break;
+            case EXIT:
+                return;
             default:
                 String errorMessage = "Unknown invocation mode: ".concat(String.valueOf(invocationMode));
                 LOGGER.error(errorMessage);
@@ -166,6 +188,7 @@ public class ServerProcessing {
         System.out.println("-stop path/to/serverConfig.xml                  - to stop the server denoted by the configurations");
         System.out.println("-ban path/to/serverConfig.xml <login> <hours>   - to ban the client on the server denoted by the configurations");
         System.out.println("-unban path/to/serverConfig.xml <login>         - to unban the client on the server denoted by the configurations");
+        System.out.println("-exit                                           - to exit the program");
 
     }
 
@@ -191,8 +214,14 @@ public class ServerProcessing {
                     return InvocationMode.BAN;
                 case "-unban":
                     return  InvocationMode.UNBAN;
-
-                default: throw new IOException(buildMessage("Unknown command:", args[0]));
+                case "-exit":
+                    return InvocationMode.EXIT;
+                default:
+                    String errorMessage = buildMessage("Unknown command:", args[0]);
+                    if (LOGGER.isEnabledFor(Level.ERROR)) {
+                        LOGGER.error(errorMessage);
+                    }
+                    throw new IOException(errorMessage);
             }
         }
     }
@@ -232,7 +261,7 @@ public class ServerProcessing {
                 Properties defaultProperties = PropertiesProcessing.getDefaultProperties();
                 defaultProperties.setProperty("roomsDir", roomsDir.getAbsolutePath());
                 defaultProperties.setProperty("clientsDir", clientsDir.getAbsolutePath());
-                defaultProperties.setProperty("logsDir", clientsDir.getAbsolutePath());
+                defaultProperties.setProperty("logsDir", logsDir.getAbsolutePath());
                 defaultProperties.setProperty("serverConfig", serverConfig.getAbsolutePath());
                 try(FileOutputStream fos = new FileOutputStream(serverConfig)) {
                     defaultProperties.storeToXML(fos,null);
@@ -320,6 +349,13 @@ public class ServerProcessing {
     }
 
     public static void startServer(Properties serverConfiguration) throws IOException {
+        if (!arePropertiesValid(serverConfiguration)) {
+            String errorMessage = buildMessage("The passed server configuration file/path is not valid");
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error(errorMessage);
+            }
+            throw new InvalidPropertiesFormatException(errorMessage);
+        }
         startServer(new File(serverConfiguration.getProperty("serverConfig")));
     }
 
@@ -409,5 +445,4 @@ public class ServerProcessing {
         properties.loadFromXML(new BufferedInputStream(new FileInputStream(serverPropertiesFile)));
         sendStopServerMessage(properties);
     }
-
 }

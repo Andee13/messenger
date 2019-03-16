@@ -22,7 +22,10 @@ import static common.Utils.buildMessage;
  * */
 public class Observer extends Thread {
     private Server server;
-    private static final Logger LOGGER = Logger.getLogger("Observer");
+    private static volatile Logger LOGGER = Logger.getLogger("Observer");
+    public static void setLogger(Logger logger) {
+        LOGGER = logger;
+    }
     protected Observer (Server server) {
         if (server == null) {
             throw new NullPointerException("The server must not be null");

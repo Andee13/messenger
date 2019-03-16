@@ -1,17 +1,17 @@
 package server.processing;
 
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
 import java.util.Properties;
-import java.util.Random;
-import java.util.RandomAccess;
 
 import static common.Utils.buildMessage;
 
 public class PropertiesProcessing {
-    private static final Logger LOGGER = Logger.getLogger(PropertiesProcessing.class.getSimpleName());
+    private static volatile Logger LOGGER;
+
     /**
      *  The method {@code arePropertiesValid} checks if the passed abstract path is a valid file.
      * Returns {@code true} if and only if the specified by the abstract path file exists and contains
@@ -44,6 +44,66 @@ public class PropertiesProcessing {
         }
         if (!new File(properties.getProperty("clientsDir")).isDirectory()) {
             LOGGER.warn(buildMessage("Invalid clientsDir value was set:", properties.getProperty("clientsDir")));
+            return false;
+        }
+        if (properties.getProperty("observerLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the observerLogFile has not been set");
+            }
+            return false;
+        }
+        if (properties.getProperty("serverLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the serverLogFile has not been set");
+            }
+            return false;
+        }
+        if (properties.getProperty("clientListenerLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the clientListenerLogFile has not been set");
+            }
+            return false;
+        }
+        if (properties.getProperty("roomLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the roomLogFile has not been set");
+            }
+            return false;
+        }
+        if (properties.getProperty("roomProcessingLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the roomProcessingLogFile has not been set");
+            }
+            return false;
+        }
+        if (properties.getProperty("serverProcessingLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the serverProcessingLogFile has not been set");
+            }
+            return false;
+        }
+        if (properties.getProperty("clientLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the clientLogFile has not been set");
+            }
+            return false;
+        }
+        if (properties.getProperty("propertiesProcessingLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the propertiesProcessingLogFile has not been set");
+            }
+            return false;
+        }
+        if (properties.getProperty("clientProcessingLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the clientProcessingLogFile has not been set");
+            }
+            return false;
+        }
+        if (properties.getProperty("restarterLogFile") == null) {
+            if (LOGGER.isEnabledFor(Level.ERROR)) {
+                LOGGER.error("Any name of the clientProcessingLogFile has not been set");
+            }
             return false;
         }
         return true;
@@ -93,36 +153,51 @@ public class PropertiesProcessing {
      * */
     static Properties getDefaultProperties() {
         if(ServerProcessing.defaultProperties == null) {
-            Properties properties = new Properties();
-            // a port number on which the server will be started
-            properties.setProperty("port", "5940");
-            // a server
-            properties.setProperty("server_login", "God");
-            properties.setProperty("server_password","change_me");
-            // a path to the folder where clients' data will be stored
-            properties.setProperty("clientsDir", buildMessage("change",
-                    File.separatorChar, "the", File.separatorChar, "clients",
-                    File.separatorChar, "folder", File.separatorChar, "path")
-            );
-            // a path to the folder where the rooms' data will be stored
-            properties.setProperty("roomsDir", buildMessage("change",
-                    File.separatorChar, "the", File.separatorChar, "rooms",
-                    File.separatorChar, "folder", File.separatorChar, "path")
-            );
-            // folder for logs
-            properties.setProperty("logsDir",buildMessage("change",
-                    File.separatorChar, "the", File.separatorChar, "logs",
-                    File.separatorChar, "folder", File.separatorChar, "path")
-            );
-            // setting the folder where the server configuration file will be stored
-            properties.setProperty("serverConfig",buildMessage("change",
-                    File.separatorChar, "the", File.separatorChar, "server",
-                    File.separatorChar, "config", File.separatorChar, "path",
-                    File.separatorChar, "serverConfig.xml")
-            );
-            ServerProcessing.defaultProperties = properties;
+            initDefaultProperties();
         }
         return ServerProcessing.defaultProperties;
+    }
+
+    private static void initDefaultProperties() {
+        Properties properties = new Properties();
+        // a port number on which the server will be started
+        properties.setProperty("port", "5940");
+        // a server
+        properties.setProperty("server_login", "God");
+        properties.setProperty("server_password","change_me");
+        // a path to the folder where clients' data will be stored
+        properties.setProperty("clientsDir", buildMessage("change",
+                File.separatorChar, "the", File.separatorChar, "clients",
+                File.separatorChar, "folder", File.separatorChar, "path")
+        );
+        // a path to the folder where the rooms' data will be stored
+        properties.setProperty("roomsDir", buildMessage("change",
+                File.separatorChar, "the", File.separatorChar, "rooms",
+                File.separatorChar, "folder", File.separatorChar, "path")
+        );
+        // folder for logs
+        properties.setProperty("logsDir",buildMessage("change",
+                File.separatorChar, "the", File.separatorChar, "logs",
+                File.separatorChar, "folder", File.separatorChar, "path")
+        );
+        // setting the folder where the server configuration file will be stored
+        properties.setProperty("serverConfig",buildMessage("change",
+                File.separatorChar, "the", File.separatorChar, "server",
+                File.separatorChar, "config", File.separatorChar, "path",
+                File.separatorChar, "serverConfig.xml")
+        );
+        // setting the files for logging
+        properties.setProperty("observerLogFile", "observer.log");
+        properties.setProperty("serverLogFile", "server.log");
+        properties.setProperty("clientListenerLogFile", "clientListener.log");
+        properties.setProperty("roomLogFile", "room.log");
+        properties.setProperty("roomProcessingLogFile", "roomProcessing.log");
+        properties.setProperty("serverProcessingLogFile", "serverProcessing.log");
+        properties.setProperty("clientLogFile", "client.log");
+        properties.setProperty("propertiesProcessingLogFile", "propertiesProcessing.log");
+        properties.setProperty("clientProcessingLogFile", "clientProcessing.log");
+        properties.setProperty("restarterLogFile", "restarter.log");
+        ServerProcessing.defaultProperties = properties;
     }
 
     public static Properties loadPropertiesFromFile (File propertiesFile, boolean xml) {
@@ -137,5 +212,13 @@ public class PropertiesProcessing {
             LOGGER.error(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
         }
         return properties;
+    }
+
+
+
+    protected static void setLogger(Logger logger) {
+        if (LOGGER == null) {
+            LOGGER = logger;
+        }
     }
 }

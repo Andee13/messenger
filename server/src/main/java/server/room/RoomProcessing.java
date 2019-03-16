@@ -5,7 +5,7 @@ import common.entities.message.MessageStatus;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.Server;
-import server.processing.ClientPocessing;
+import server.processing.ClientProcessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -25,7 +25,11 @@ import static common.Utils.buildMessage;
  * */
 public class RoomProcessing {
 
-    private static final Logger LOGGER = Logger.getLogger("PropertiesProcessing");
+    private static volatile Logger LOGGER = Logger.getLogger("PropertiesProcessing");
+
+    public static void setLogger(Logger logger) {
+        LOGGER = logger;
+    }
 
     /**
      *  The method {@code loadRoom} returns an instance of {@code Room} - representation of a place for communication
@@ -103,11 +107,11 @@ public class RoomProcessing {
         if (!PropertiesProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("The specified server configurations are not valid");
         }
-        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), adminId)) {
+        if (!ClientProcessing.hasAccountBeenRegistered(server.getConfig(), adminId)) {
             throw new ClientNotFoundException(adminId);
         }
         for (int id : clientsIds) {
-            if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), id)) {
+            if (!ClientProcessing.hasAccountBeenRegistered(server.getConfig(), id)) {
                 throw new ClientNotFoundException(id);
             }
         }
@@ -230,7 +234,7 @@ public class RoomProcessing {
         int fromId = message.getFromId();
         int roomId = message.getRoomId();
         // Checking whether the specified user exists
-        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
+        if (!ClientProcessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
             throw new ClientNotFoundException(fromId);
         }
         // Checking whether the specified room exists

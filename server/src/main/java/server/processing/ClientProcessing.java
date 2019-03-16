@@ -19,8 +19,13 @@ import java.util.Properties;
 
 import static common.Utils.buildMessage;
 
-public class ClientPocessing {
-    private static final Logger LOGGER = Logger.getLogger(ClientPocessing.class.getSimpleName());
+public class ClientProcessing {
+    private static volatile Logger LOGGER = Logger.getLogger(ClientProcessing.class.getSimpleName());
+
+    public static void setLogger(Logger logger) {
+        LOGGER = logger;
+    }
+
     /**
      * This method is used to ban/unban a client having login like {@code} login. It just sends a message to server
      * and prints a response. It does not guarantees that client has been banned/unbanned

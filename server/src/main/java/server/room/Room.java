@@ -34,7 +34,11 @@ public class Room implements Saveable {
     @XmlTransient
     private volatile Server server;
 
-    private static Logger LOGGER = Logger.getLogger("Room");
+    private static volatile Logger LOGGER = Logger.getLogger("Room");
+
+    public static void setLogger(Logger logger) {
+        LOGGER = logger;
+    }
 
     public Room() {
         ObservableSet<Integer> oMembers = FXCollections.synchronizedObservableSet(

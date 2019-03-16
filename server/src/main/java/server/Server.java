@@ -4,9 +4,12 @@ import common.entities.Saveable;
 import common.entities.Shell;
 import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
+import org.apache.log4j.PropertyConfigurator;
 import org.jetbrains.annotations.NotNull;
 import server.client.ClientListener;
+import server.processing.LoggersProcessing;
 import server.processing.PropertiesProcessing;
+import server.processing.ServerProcessing;
 import server.room.Room;
 import server.room.RoomProcessing;
 
@@ -24,12 +27,16 @@ import static common.Utils.buildMessage;
 public class Server extends Thread implements Saveable {
     private volatile Shell<Map<Integer, ClientListener>> onlineClients;
     private volatile Shell<Map<Integer, Room>> onlineRooms;
-    private static final Logger LOGGER = Logger.getLogger("Server");
+    private static volatile Logger LOGGER = Logger.getLogger("Server");
     private volatile Properties config;
     private File clientsDir;
     private File roomsDir;
     private File serverConfigFile;
     private volatile ServerSocket serverSocket;
+
+    public static void setLogger(Logger logger) {
+        LOGGER = logger;
+    }
 
     public Properties getConfig() {
         return config;
@@ -128,6 +135,8 @@ public class Server extends Thread implements Saveable {
         config = new Properties();
         try(FileInputStream fileInputStream = new FileInputStream(serverPropertiesFile)) {
             config.loadFromXML(fileInputStream);
+            LoggersProcessing.setLoggersFilesSysProperties(config);
+            LoggersProcessing.resetLoggers();
             serverConfigFile = serverPropertiesFile;
             onlineClients = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
             onlineRooms = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));

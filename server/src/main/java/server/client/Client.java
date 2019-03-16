@@ -1,16 +1,15 @@
 package server.client;
 
+import common.entities.Saveable;
 import common.entities.Shell;
 import common.entities.message.Message;
 import javafx.collections.FXCollections;
 import org.apache.log4j.Logger;
-import common.entities.Saveable;
 import server.Server;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
@@ -50,10 +49,6 @@ public class Client implements Saveable {
         this.name = name;
     }
 
-    public static Logger getLOGGER() {
-        return LOGGER;
-    }
-
     public LocalDateTime getIsBannedUntill() {
         return isBannedUntill;
     }
@@ -61,6 +56,10 @@ public class Client implements Saveable {
     public Client setIsBannedUntill(LocalDateTime isBannedUntill) {
         this.isBannedUntill = isBannedUntill;
         return this;
+    }
+
+    public static void setLogger(Logger logger) {
+        LOGGER = logger;
     }
 
     public boolean isBaned() {
@@ -72,7 +71,7 @@ public class Client implements Saveable {
         return this;
     }
 
-    private static final Logger LOGGER = Logger.getLogger("Client");
+    private static volatile Logger LOGGER = Logger.getLogger("Client");
 
     public Server getServer() {
         return server;

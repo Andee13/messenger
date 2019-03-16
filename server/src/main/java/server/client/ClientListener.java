@@ -8,7 +8,7 @@ import org.jetbrains.annotations.NotNull;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import server.Server;
-import server.processing.ClientPocessing;
+import server.processing.ClientProcessing;
 import server.processing.PropertiesProcessing;
 import server.processing.RestartingEnvironment;
 import server.processing.ServerProcessing;
@@ -57,13 +57,17 @@ public class ClientListener extends Thread {
         return client;
     }
 
-    private static final Logger LOGGER = Logger.getLogger("ClientListener");
+    private static volatile Logger LOGGER = Logger.getLogger("ClientListener");
 
     public ClientListener(Server server, Socket socket) throws IOException {
         this.server = server;
         this.socket = socket;
         out = new Shell<>(new DataOutputStream(new BufferedOutputStream(socket.getOutputStream())));
         in = new Shell<>(new DataInputStream(new BufferedInputStream(socket.getInputStream())));
+    }
+
+    public static void setLogger (Logger logger) {
+        LOGGER = logger;
     }
 
     public Socket getSocket() {
@@ -248,7 +252,7 @@ public class ClientListener extends Thread {
         if (message.getToId() == null) {
             return new Message(MessageStatus.ERROR).setText("Unspecified client id");
         }
-        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), message.getToId())) {
+        if (!ClientProcessing.hasAccountBeenRegistered(server.getConfig(), message.getToId())) {
             return new Message(MessageStatus.ERROR).setText("Unable to find the specified client")
                     .setToId(message.getToId());
         }
@@ -283,7 +287,7 @@ public class ClientListener extends Thread {
             return new Message(MessageStatus.ERROR).setText("Wrong addressee");
         }
         int toId = message.getToId();
-        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
+        if (!ClientProcessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
             LOGGER.trace(new StringBuilder("Unable to find a client (id ").append(toId).append(")"));
             return new Message(MessageStatus.ERROR)
                     .setText(buildMessage("The client (id", toId, ") has not been found"));
@@ -576,7 +580,7 @@ public class ClientListener extends Thread {
     public static boolean isMember(@NotNull Properties serverProperties, int clientId, int roomId) {
         if (!PropertiesProcessing.arePropertiesValid(serverProperties)
                 || RoomProcessing.hasRoomBeenCreated(serverProperties, roomId) == 0L
-                || ClientPocessing.hasAccountBeenRegistered(serverProperties,clientId)) {
+                || ClientProcessing.hasAccountBeenRegistered(serverProperties,clientId)) {
             return false;
         }
         XPath xPath = XPathFactory.newInstance().newXPath();
@@ -803,7 +807,7 @@ public class ClientListener extends Thread {
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         Integer fromId = message.getFromId();
-        if (!ClientPocessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
+        if (!ClientProcessing.hasAccountBeenRegistered(server.getConfig(), toId)) {
             errorMessage = buildMessage("Attempt to unban unregistered client from client (admin) (id"
                     , fromId == null ? "server admin" : fromId);
             LOGGER.error(errorMessage);

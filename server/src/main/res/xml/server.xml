@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE server [
-        <!ELEMENT server (port)>
-        <!ELEMENT port ANY>
-        ]>
-<server>
-    <port>5940</port>
-</server>
