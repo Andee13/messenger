@@ -86,6 +86,7 @@ public class Chat {
                     img.setImage(avatar);
                     setGraphic(img);
                     setBackground(new Background(myBI));
+
                 }else {
                     setGraphic(null);
                 }

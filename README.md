@@ -1,3 +1,7 @@
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/e5478ccbaf4a4485baef769243da4f68)](https://www.codacy.com/app/Andee13/messenger?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Andee13/messenger&amp;utm_campaign=Badge_Grade)
+
+[![Build Status](https://semaphoreci.com/api/v1/andee13/messenger/branches/dev/badge.svg)](https://semaphoreci.com/andee13/messenger)
+
 # messenger
 
 Общение сервера и клиента состоит из обработки пересланных объектов типа Message, представленных в XML-формате. Экземпляр данного класса может быть представлен как request (сообщение от клиента серверу, запрос на выполнение конкретного действия) либо же response (ответ сервера клиенту на request). За идентификацию типа сообщения отвечает final-поле  type : Type, инициализируемое при создании.
