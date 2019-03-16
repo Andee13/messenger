@@ -1,8 +1,7 @@
 package common.entities;
 
 /**
- *  This interface marks entities that are able to be saved to place depending on their specific
- *
+ *  This interface marks entities that are able to be saved to place depending on their specific *
  *
  *  An entity before ane after saving must be equal to itself
  * */

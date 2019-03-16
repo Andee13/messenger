@@ -3,13 +3,12 @@ package server;
 import common.entities.Saveable;
 import common.entities.Shell;
 import javafx.collections.FXCollections;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.apache.log4j.PropertyConfigurator;
 import org.jetbrains.annotations.NotNull;
 import server.client.ClientListener;
 import server.processing.LoggersProcessing;
 import server.processing.PropertiesProcessing;
-import server.processing.ServerProcessing;
 import server.room.Room;
 import server.room.RoomProcessing;
 
@@ -30,17 +29,8 @@ public class Server extends Thread implements Saveable {
     private static volatile Logger LOGGER = Logger.getLogger("Server");
     private volatile Properties config;
     private File clientsDir;
-    private File roomsDir;
     private File serverConfigFile;
     private volatile ServerSocket serverSocket;
-
-    public static void setLogger(Logger logger) {
-        LOGGER = logger;
-    }
-
-    public Properties getConfig() {
-        return config;
-    }
 
     /**
      *  This method returns an instance of {@code File} that represents
@@ -76,40 +66,6 @@ public class Server extends Thread implements Saveable {
         }
     }
 
-    /**
-     *  This method returns an instance of {@code File} that represents an abstract path
-     * to the folder where data of the server chat rooms is stored.
-     *  Every time it is invoked it checks whether the folder still exists,
-     * thus once it has returned an instance of {@code File} it is guaranteed
-     * that the result is an existing folder
-     *
-     * @return          rooms data storage folder
-     *
-     * @exception       RuntimeException in case if the folder was removed while
-     *                  the server was working
-     * */
-    public File getRoomsDir() {
-        if (roomsDir == null) {
-            String roomsDirPath = config.getProperty("roomsDir");
-            if (roomsDir == null) {
-                throw new RuntimeException(
-                        buildMessage("Unable to get property \"roomsDir\" from the configuration"
-                                , config.toString())
-                );
-            }
-            File roomsDir = new File(roomsDirPath);
-            if (!roomsDir.isDirectory()) {
-                throw new RuntimeException(buildMessage("Unable to find a folder:", roomsDir.getAbsolutePath()));
-            }
-            this.roomsDir = roomsDir;
-        }
-        if (roomsDir.isDirectory()) {
-            return roomsDir;
-        } else {
-            throw new RuntimeException(buildMessage("Unable to find a rooms folder", roomsDir.getAbsolutePath()));
-        }
-    }
-
     public Shell<Map<Integer, ClientListener>> getOnlineClients() {
         return onlineClients;
     }
@@ -138,8 +94,10 @@ public class Server extends Thread implements Saveable {
             LoggersProcessing.setLoggersFilesSysProperties(config);
             LoggersProcessing.resetLoggers();
             serverConfigFile = serverPropertiesFile;
-            onlineClients = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
-            onlineRooms = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+            onlineClients =
+                    new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+            onlineRooms =
+                    new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
         } catch (IOException e) {
             LOGGER.error(e.getLocalizedMessage());
             throw new RuntimeException(e);
@@ -148,11 +106,13 @@ public class Server extends Thread implements Saveable {
     }
 
     private void initOnlineClients() {
-        onlineClients = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+        onlineClients =
+                new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
     }
 
     private void initOnlineRooms() {
-        onlineRooms = new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
+        onlineRooms =
+                new Shell<>(FXCollections.synchronizedObservableMap(FXCollections.observableMap(new TreeMap<>())));
     }
 
     @Override
@@ -227,7 +187,9 @@ public class Server extends Thread implements Saveable {
             synchronized (onlineRooms.safe()) {
                 for (Map.Entry<Integer, Room> onlineRooms : onlineRooms.safe().entrySet()) {
                     if (!onlineRooms.getValue().save()) {
-                        LOGGER.error(buildMessage("Failed to save the room (id", onlineRooms.getValue().getRoomId()));
+                        LOGGER.error(
+                                buildMessage("Failed to save the room (id"
+                                        , onlineRooms.getValue().getRoomId(), ')'));
                         return false;
                     }
                 }
@@ -241,23 +203,31 @@ public class Server extends Thread implements Saveable {
             return false;
         }
     }
-    private boolean interruptOnlineClientsThreads() {
+
+    private void interruptOnlineClientsThreads() {
         synchronized (onlineClients.safe()) {
             for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.safe().entrySet()) {
                 clientListenerEntry.getValue().interrupt();
                 LocalDateTime timeOut = LocalDateTime.now().plusSeconds(3);
-                while (clientListenerEntry.getValue().getState().equals(State.RUNNABLE) || LocalDateTime.now().isBefore(timeOut)) {
-
+                while (clientListenerEntry.getValue().getState().equals(State.RUNNABLE)
+                        || LocalDateTime.now().isBefore(timeOut)) {
+                    try {
+                        sleep(1000);
+                    } catch (InterruptedException e) {
+                        if (LOGGER.isEnabledFor(Level.ERROR)) {
+                            LOGGER.error(
+                                    buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
+                        }
+                    }
                 }
                 if (!clientListenerEntry.getValue().isInterrupted()) {
                     LOGGER.error(buildMessage("Failed to interrupt client's (id"
                             , clientListenerEntry.getValue().getClient().getClientId(), ") thread"));
-                    return false;
                 }
             }
         }
-        return true;
     }
+
     @Override
     public void interrupt() {
         if (serverSocket != null && !serverSocket.isClosed()) {
@@ -278,5 +248,13 @@ public class Server extends Thread implements Saveable {
                 break;
             }
         }
+    }
+
+    public static void setLogger(Logger logger) {
+        LOGGER = logger;
+    }
+
+    public Properties getConfig() {
+        return config;
     }
 }

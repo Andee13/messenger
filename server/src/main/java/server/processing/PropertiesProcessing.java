@@ -24,9 +24,6 @@ public class PropertiesProcessing {
      *                  {@code false} otherwise
      * */
     public static boolean arePropertiesValid(@NotNull Properties properties) {
-        if (properties == null) {
-            return false;
-        }
         try {
             int port = Integer.parseInt(properties.getProperty("port"));
             if (port < 0 || port > 65536) {
@@ -121,9 +118,6 @@ public class PropertiesProcessing {
      *                  to start a server using them, {@code false} otherwise
      * */
     public static synchronized boolean arePropertiesValid(@NotNull File propertyFile) {
-        if (propertyFile == null) {
-            return false;
-        }
         if(!propertyFile.isFile()) {
             return false;
         }
@@ -163,8 +157,8 @@ public class PropertiesProcessing {
         // a port number on which the server will be started
         properties.setProperty("port", "5940");
         // a server
-        properties.setProperty("server_login", "God");
-        properties.setProperty("server_password","change_me");
+        properties.setProperty("serverLogin", "God");
+        properties.setProperty("serverPassword","change_me");
         // a path to the folder where clients' data will be stored
         properties.setProperty("clientsDir", buildMessage("change",
                 File.separatorChar, "the", File.separatorChar, "clients",
@@ -200,21 +194,23 @@ public class PropertiesProcessing {
         ServerProcessing.defaultProperties = properties;
     }
 
-    public static Properties loadPropertiesFromFile (File propertiesFile, boolean xml) {
+    /**
+     *  This method unpacks the properties the from the file specified by the passed abstract filepath
+     *
+     * NOTE! The properties are stored in XML format.
+     *
+     * @param           propertiesFile the file the properties are stored in
+     *
+     * */
+    static Properties loadPropertiesFromFile(File propertiesFile) {
         Properties properties = new Properties();
         try (InputStream is = new BufferedInputStream(new FileInputStream(propertiesFile))) {
-            if (xml) {
-                properties.loadFromXML(is);
-            } else {
-                properties.load(is);
-            }
+            properties.loadFromXML(is);
         } catch (IOException e) {
             LOGGER.error(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
         }
         return properties;
     }
-
-
 
     protected static void setLogger(Logger logger) {
         if (LOGGER == null) {

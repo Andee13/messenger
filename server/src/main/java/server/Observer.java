@@ -15,14 +15,14 @@ import static common.Utils.buildMessage;
 /**
  * The {@code Observer} class handles with the users who are AFK too long and rooms which do not have online users
  *
- * @see         Server
- * @see         ServerProcessing
- * @see         ClientListener
- * @see         Room
+ * @see             Server
+ * @see             ServerProcessing
+ * @see             ClientListener
+ * @see             Room
  * */
 public class Observer extends Thread {
     private Server server;
-    private static volatile Logger LOGGER = Logger.getLogger("Observer");
+    private static volatile Logger LOGGER = Logger.getLogger(Observer.class.getSimpleName());
     public static void setLogger(Logger logger) {
         LOGGER = logger;
     }

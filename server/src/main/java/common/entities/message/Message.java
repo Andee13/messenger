@@ -4,7 +4,6 @@ import server.processing.ServerProcessing;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
-import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
@@ -16,21 +15,15 @@ import java.util.Objects;
 public class Message {
     @XmlJavaTypeAdapter(value = Message.LocalDateTimeAdapter.class)
     private LocalDateTime creationDateTime;
-    @XmlElement
     private MessageStatus status;
-    @XmlElement
     private String text;
-    @XmlElement
     private String login;
-    @XmlElement
     private String password;
-    @XmlElement
     private Integer fromId;
-    @XmlElement
     private Integer toId;
-    @XmlElement
     private Integer roomId;
 
+    @SuppressWarnings("unused")
     public Message() {
         setCreationDateTime(LocalDateTime.now());
     }
@@ -136,17 +129,15 @@ public class Message {
                 '}';
     }
 
-    public Message setCreationDateTime(LocalDateTime creationDateTime) {
+    private void setCreationDateTime(LocalDateTime creationDateTime) {
         this.creationDateTime = creationDateTime;
-        return this;
     }
 
     public static class LocalDateTimeAdapter extends XmlAdapter<String, LocalDateTime> {
-        public LocalDateTime unmarshal(String v) throws Exception {
+        public LocalDateTime unmarshal(String v) {
             return LocalDateTime.from(ServerProcessing.DATE_TIME_FORMATTER.parse(v));
         }
-
-        public String marshal(LocalDateTime v) throws Exception {
+        public String marshal(LocalDateTime v) {
             return ServerProcessing.DATE_TIME_FORMATTER.format(v);
         }
     }

@@ -1,16 +1,17 @@
 package server.room;
 
+import common.entities.Saveable;
 import common.entities.Shell;
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
-import common.entities.Saveable;
-import javafx.collections.*;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableSet;
+import javafx.collections.SetChangeListener;
 import org.apache.log4j.Logger;
-import server.*;
+import server.Server;
 import server.client.ClientListener;
 import server.processing.ServerProcessing;
 import server.room.history.MessageHistory;
-import server.room.history.MessageListener;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -45,15 +46,12 @@ public class Room implements Saveable {
                 FXCollections.observableSet(new TreeSet<>()));
         initMembersListener(oMembers);
         messageHistory = new MessageHistory(ServerProcessing.MESSAGE_HISTORY_DIMENSION);
-        messageHistory.setMessageListener(new MessageListener() {
-            @Override
-            public void newMessage(Message message) {
-                synchronized (server.getOnlineClients().safe()) {
-                    for (int clientId : members.safe()) {
-                        if (server.getOnlineClients().safe().containsKey(clientId)) {
-                            server.getOnlineClients().safe().get(clientId)
-                                    .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
-                        }
+        messageHistory.setMessageListener(message -> {
+            synchronized (server.getOnlineClients().safe()) {
+                for (int clientId : members.safe()) {
+                    if (server.getOnlineClients().safe().containsKey(clientId)) {
+                        server.getOnlineClients().safe().get(clientId)
+                                .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
                     }
                 }
             }
@@ -61,7 +59,7 @@ public class Room implements Saveable {
         members = new Shell<>(oMembers);
     }
 
-    public void initMembersListener(ObservableSet<Integer> members) {
+    private void initMembersListener(ObservableSet<Integer> members) {
         members.addListener((SetChangeListener<Integer>) change -> {
             Message notificationMessage;
             int clientId;
@@ -90,14 +88,6 @@ public class Room implements Saveable {
 
     public int getRoomId() {
         return roomId;
-    }
-
-    public int getAdminId() {
-        return adminId;
-    }
-
-    public void setMessageHistory(MessageHistory messageHistory) {
-        this.messageHistory = messageHistory;
     }
 
     public void setAdminId(int adminId) {
@@ -142,32 +132,12 @@ public class Room implements Saveable {
         this.server = server;
     }
 
-    /*@Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Room room = (Room) o;
-        if (!room.getMembers().safe().containsAll(members.safe())
-                || !members.safe().containsAll(room.getMembers().safe())
-                || (members.safe().toArray().length != room.getMembers().safe().toArray().length)) {
-            return false;
-        }
-        if (!room.getMessageHistory().safe().containsAll(messageHistory.safe())
-                || !messageHistory.safe().containsAll(room.getMessageHistory().safe())
-                || (messageHistory.safe().toArray().length != room.getMessageHistory().safe().toArray().length)) {
-            return false;
-        }
-        if (room.roomId != roomId) {
-            return false;
-        }
-        return true;
-    }*/
-
     @Override
     public int hashCode() {
         return roomId;
     }
 
+    @SuppressWarnings("WeakerAccess")
     @XmlAccessorType(XmlAccessType.FIELD)
     private static final class MembersObservableSetWrapper {
         @XmlElement(name="clientId")
@@ -177,12 +147,12 @@ public class Room implements Saveable {
         public HashSet<Integer> getMembers() {
             return members;
         }
-
         public void setMembers(Set<Integer> members) {
             this.members = new HashSet<>(members);
         }
     }
 
+    @SuppressWarnings({"WeakerAccess", "unused"})
     @XmlAccessorType(XmlAccessType.FIELD)
     private static class MessageHistoryObservableListWrapper {
         @XmlElement(name="message")
@@ -212,9 +182,7 @@ public class Room implements Saveable {
         }
         public MessageHistoryObservableListWrapper marshal(MessageHistory messageHistory) {
             MessageHistoryObservableListWrapper m = new MessageHistoryObservableListWrapper();
-            for (Message message : messageHistory.getMessageHistory()) {
-                m.messages.add(message);
-            }
+            m.messages.addAll(messageHistory.getMessageHistory());
             return m;
         }
     }

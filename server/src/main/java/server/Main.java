@@ -13,7 +13,6 @@ import java.io.*;
 import java.net.Socket;
 import java.net.URISyntaxException;
 
-@Log4j
 public class Main {
 
     //private static final Logger logger = Logger.getLogger(Main.class);
@@ -214,7 +213,7 @@ public class Main {
         System.out.println(dataInputStream.readUTF());*/
 
         // AUTHORIZATION + ROOM CREATING
-        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -259,7 +258,7 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream.readUTF());*/
+        System.out.println(dataInputStream.readUTF());
 
         // STOP_SERVER
         /*Socket socket1 = new Socket("localhost", 5940);
@@ -364,7 +363,7 @@ public class Main {
         System.out.println(stringBuilder);*/
 
         //AUTH + RESTARTING
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -385,6 +384,6 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream.readUTF());
+        System.out.println(dataInputStream.readUTF());*/
     }
 }

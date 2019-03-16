@@ -9,7 +9,8 @@ public class RoomNotFoundException extends NoSuchElementException {
         this.roomId = roomId;
     }
 
-    public RoomNotFoundException(int roomId) {
-        this.roomId = roomId;
+    @SuppressWarnings("unused")
+    public int getRoomId() {
+        return roomId;
     }
 }

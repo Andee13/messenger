@@ -53,40 +53,48 @@ public class LoggersProcessing {
                 .getAbsolutePath());
         System.setProperty("roomProcessingLogFile", new File(logsDir, serverConfig.getProperty("roomProcessingLogFile"))
                 .getAbsolutePath());
-        System.setProperty("serverProcessingLogFile", new File(logsDir, serverConfig.getProperty("serverProcessingLogFile"))
+        System.setProperty("serverProcessingLogFile"
+                , new File(logsDir, serverConfig.getProperty("serverProcessingLogFile"))
                 .getAbsolutePath());
-        System.setProperty("clientLogFile", new File(logsDir, serverConfig.getProperty("clientLogFile")).getAbsolutePath());
-        System.setProperty("propertiesProcessingLogFile", new File(logsDir, serverConfig.getProperty("propertiesProcessingLogFile"))
+        System.setProperty("clientLogFile"
+                , new File(logsDir, serverConfig.getProperty("clientLogFile")).getAbsolutePath());
+        System.setProperty("propertiesProcessingLogFile"
+                , new File(logsDir, serverConfig.getProperty("propertiesProcessingLogFile"))
                 .getAbsolutePath());
-        System.setProperty("clientProcessingLogFile", new File(logsDir, serverConfig.getProperty("clientProcessingLogFile"))
+        System.setProperty("clientProcessingLogFile"
+                , new File(logsDir, serverConfig.getProperty("clientProcessingLogFile"))
                 .getAbsolutePath());
         System.setProperty("restarterLogFile", new File(logsDir, serverConfig.getProperty("restarterLogFile"))
                 .getAbsolutePath());
     }
 
-    public static void setDefaultLoggersFiles(File currentDir) {
-        if (!currentDir.isDirectory()) {
+    static void setDefaultLoggersFiles() {
+        if (!ServerProcessing.currentFolder.isDirectory()) {
             throw new RuntimeException(buildMessage("The passed folder is not an existing directory "
-                    , currentDir.getAbsolutePath()));
+                    , ServerProcessing.currentFolder.getAbsolutePath()));
         }
-        System.setProperty("observerLogFile", new File(currentDir, "observer.log")
+        System.setProperty("observerLogFile", new File(ServerProcessing.currentFolder, "observer.log")
                 .getAbsolutePath());
-        System.setProperty("serverLogFile", new File(currentDir, "server.log")
+        System.setProperty("serverLogFile", new File(ServerProcessing.currentFolder, "server.log")
                 .getAbsolutePath());
-        System.setProperty("clientListenerLogFile", new File(currentDir, "clientListener.log")
+        System.setProperty("clientListenerLogFile", new File(ServerProcessing.currentFolder, "clientListener.log")
                 .getAbsolutePath());
-        System.setProperty("roomLogFile", new File(currentDir, "room.log")
+        System.setProperty("roomLogFile", new File(ServerProcessing.currentFolder, "room.log")
                 .getAbsolutePath());
-        System.setProperty("roomProcessingLogFile", new File(currentDir, "roomProcessing.log")
+        System.setProperty("roomProcessingLogFile", new File(ServerProcessing.currentFolder, "roomProcessing.log")
                 .getAbsolutePath());
-        System.setProperty("serverProcessingLogFile", new File(currentDir, "serverProcessing.log")
+        System.setProperty("serverProcessingLogFile", new File(ServerProcessing.currentFolder
+                , "serverProcessing.log")
                 .getAbsolutePath());
-        System.setProperty("clientLogFile", new File(currentDir, "client.log").getAbsolutePath());
-        System.setProperty("propertiesProcessingLogFile", new File(currentDir, "propertiesProcessing.log")
+        System.setProperty("clientLogFile", new File(ServerProcessing.currentFolder, "client.log")
                 .getAbsolutePath());
-        System.setProperty("clientProcessingLogFile", new File(currentDir, "clientProcessing.log")
+        System.setProperty("propertiesProcessingLogFile", new File(ServerProcessing.currentFolder
+                , "propertiesProcessing.log")
                 .getAbsolutePath());
-        System.setProperty("restarterLogFile", new File(currentDir, "restarter.log")
+        System.setProperty("clientProcessingLogFile", new File(ServerProcessing.currentFolder
+                , "clientProcessing.log")
+                .getAbsolutePath());
+        System.setProperty("restarterLogFile", new File(ServerProcessing.currentFolder, "restarter.log")
                 .getAbsolutePath());
     }
 }

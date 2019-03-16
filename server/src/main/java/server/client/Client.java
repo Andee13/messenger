@@ -14,7 +14,6 @@ import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -33,6 +32,7 @@ public class Client implements Saveable {
     private Shell<Set<Integer>> friends;
     private String login;
     private String password;
+    @SuppressWarnings("unused")
     private boolean isAdmin;
     private boolean baned;
     @XmlJavaTypeAdapter(value = Message.LocalDateTimeAdapter.class)
@@ -41,37 +41,35 @@ public class Client implements Saveable {
     private Server server;
     private String name;
 
-    public String getName() {
+    String getName() {
         return name;
     }
 
-    public void setName(String name) {
+    void setName(String name) {
         this.name = name;
     }
 
-    public LocalDateTime getIsBannedUntill() {
+    LocalDateTime getIsBannedUntill() {
         return isBannedUntill;
     }
 
-    public Client setIsBannedUntill(LocalDateTime isBannedUntill) {
+    void setIsBannedUntil(LocalDateTime isBannedUntill) {
         this.isBannedUntill = isBannedUntill;
-        return this;
     }
 
     public static void setLogger(Logger logger) {
         LOGGER = logger;
     }
 
-    public boolean isBaned() {
+    boolean isBaned() {
         return baned;
     }
 
-    public Client setBaned(boolean baned) {
+    void setBaned(boolean baned) {
         this.baned = baned;
-        return this;
     }
 
-    private static volatile Logger LOGGER = Logger.getLogger("Client");
+    private static volatile Logger LOGGER = Logger.getLogger(Client.class.getSimpleName());
 
     public Server getServer() {
         return server;
@@ -86,47 +84,43 @@ public class Client implements Saveable {
         rooms = new Shell<>(FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>())));
     }
 
-    public boolean isAdmin() {
+    boolean isAdmin() {
         return isAdmin;
-    }
-
-    public void setAdmin(boolean admin) {
-        isAdmin = admin;
     }
 
     public int getClientId() {
         return clientId;
     }
 
-    public void setClientId(int clientId) {
+    void setClientId(int clientId) {
         this.clientId = clientId;
     }
 
-    public Shell<Set<Integer>> getRooms() {
+    Shell<Set<Integer>> getRooms() {
         return rooms;
     }
 
-    public Shell<Set<Integer>> getFriends() {
+    Shell<Set<Integer>> getFriends() {
         return friends;
     }
 
-    public String getLogin() {
+    private String getLogin() {
         return login;
     }
 
-    public void setLogin(String login) {
+    void setLogin(String login) {
         this.login = login;
     }
 
-    public String getPassword() {
+    String getPassword() {
         return password;
     }
 
-    public void setPassword(String password) {
+    void setPassword(String password) {
         this.password = password;
     }
 
-    private static class SetAdapter extends XmlAdapter<Integer[], Set<Integer>> {
+    /*private static class SetAdapter extends XmlAdapter<Integer[], Set<Integer>> {
         @Override
         public Set<Integer> unmarshal(Integer[] v) {
             return FXCollections.synchronizedObservableSet(FXCollections.observableSet(v));
@@ -140,7 +134,7 @@ public class Client implements Saveable {
             }
             return result;
         }
-    }
+    }*/
 
     /**
      *  The {@code clientId} of a client is considered as it's {@code hashCode} value
@@ -237,15 +231,7 @@ public class Client implements Saveable {
         }
     }
 
-    public static Client from(File clientFile) throws FileNotFoundException {
-        try {
-            return (Client) JAXBContext.newInstance(Client.class).createUnmarshaller().unmarshal(clientFile);
-        } catch (JAXBException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            throw new RuntimeException(e);
-        }
-    }
-
+    @SuppressWarnings({"unused", "WeakerAccess"})
     @XmlAccessorType(XmlAccessType.FIELD)
     private static final class RoomsWrapper {
         @XmlElement(name="roomId")
@@ -279,6 +265,7 @@ public class Client implements Saveable {
         }
     }
 
+    @SuppressWarnings({"unused", "WeakerAccess"})
     @XmlAccessorType(XmlAccessType.FIELD)
     private static final class FriendsWrapper {
         @XmlElement(name="clientId")

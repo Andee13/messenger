@@ -10,7 +10,6 @@ import server.InvocationMode;
 import server.Server;
 import server.room.Room;
 
-import javax.security.auth.login.FailedLoginException;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
@@ -32,10 +31,10 @@ import static server.processing.PropertiesProcessing.arePropertiesValid;
  * */
 public class ServerProcessing {
     public static volatile Logger LOGGER;
-    public static Properties defaultProperties;
+    static Properties defaultProperties;
     public static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
     public static final int MESSAGE_HISTORY_DIMENSION = 100;
-    private static final File currentFolder;
+    static final File currentFolder;
 
     public static void setLogger(Logger logger) {
         LOGGER = logger;
@@ -47,7 +46,7 @@ public class ServerProcessing {
         try {
             currentFolder = new File(ServerProcessing.class.getProtectionDomain()
                     .getCodeSource().getLocation().toURI()).getParentFile();
-            LoggersProcessing.setDefaultLoggersFiles(currentFolder);
+            LoggersProcessing.setDefaultLoggersFiles();
             PropertyConfigurator.configure(ServerProcessing.class.getResourceAsStream("../../log4j.properties"));
             LOGGER = Logger.getLogger("ServerProcessing");
             PropertiesProcessing.setLogger(Logger.getLogger(PropertiesProcessing.class.getSimpleName()));
@@ -97,7 +96,7 @@ public class ServerProcessing {
         switch (invocationMode) {
             case START:
                 try {
-                    serverProperties = PropertiesProcessing.loadPropertiesFromFile(serverProperiesFile, true);
+                    serverProperties = PropertiesProcessing.loadPropertiesFromFile(serverProperiesFile);
                     startServer(serverProperties);
                 } catch (IOException e) {
                     if (LOGGER.isEnabledFor(Level.ERROR)) {
@@ -116,7 +115,7 @@ public class ServerProcessing {
                 }
                 break;
             case RESTART:
-                serverProperties = PropertiesProcessing.loadPropertiesFromFile(serverProperiesFile, true);
+                serverProperties = PropertiesProcessing.loadPropertiesFromFile(serverProperiesFile);
                 sendRestartMessage(serverProperties);
                 break;
             case CREATE_DEFAULT_SERVER:
@@ -167,8 +166,8 @@ public class ServerProcessing {
         try (Socket socket = new Socket("localhost", Integer.parseInt(serverConfig.getProperty("port")));
              DataOutputStream out = new DataOutputStream(socket.getOutputStream())) {
             Message message = new Message(MessageStatus.RESTART_SERVER)
-                    .setLogin(serverConfig.getProperty("server_login"))
-                    .setPassword(serverConfig.getProperty("server_password"));
+                    .setLogin(serverConfig.getProperty("serverLogin"))
+                    .setPassword(serverConfig.getProperty("serverPassword"));
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Marshaller marshaller = jaxbContext.createMarshaller();
             StringWriter stringWriter = new StringWriter();
@@ -348,7 +347,7 @@ public class ServerProcessing {
         LOGGER.info(buildMessage("Server thread status:", server.getState()));
     }
 
-    public static void startServer(Properties serverConfiguration) throws IOException {
+    static void startServer(Properties serverConfiguration) throws IOException {
         if (!arePropertiesValid(serverConfiguration)) {
             String errorMessage = buildMessage("The passed server configuration file/path is not valid");
             if (LOGGER.isEnabledFor(Level.ERROR)) {
@@ -360,33 +359,9 @@ public class ServerProcessing {
     }
 
     /**
-     *  The method {@code isServerLaunched} provides with information whether the server, specified by the
-     * {@code serverProperties} is currently being launched on localhost
-     *
-     * @param           serverProperties the configuration of a server
-     *
-     * @return          {@code true} if and only if the server, specified by the {@code serverProperties} exists and
-     *                  is currently working i.e. the port the server is launched is not free for listening
-     *                  {@code false} otherwise
-     * */
-    public static boolean isServerLaunched(Properties serverProperties) throws InvalidPropertiesFormatException {
-        if (!arePropertiesValid(serverProperties)) {
-            throw new InvalidPropertiesFormatException("Properties are not valid");
-        }
-        int port = Integer.parseInt(serverProperties.getProperty("port"));
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            return false;
-        } catch (BindException e) {
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    /**
      *  The method {@code sendStopServerMessage} stops the server specified by the properties
      * */
-    public static void sendStopServerMessage(@NotNull Properties serverProperties) {
+    private static void sendStopServerMessage(@NotNull Properties serverProperties) {
         if (!arePropertiesValid(serverProperties)) {
             LOGGER.error(buildMessage("Invalid server properties passed", serverProperties));
             return;
@@ -405,8 +380,8 @@ public class ServerProcessing {
                 LOGGER.info("The server is launched");
             }
             Message message = new Message(MessageStatus.STOP_SERVER)
-                    .setPassword(serverProperties.getProperty("server_password"))
-                    .setLogin(serverProperties.getProperty("server_login"));
+                    .setPassword(serverProperties.getProperty("serverPassword"))
+                    .setLogin(serverProperties.getProperty("serverLogin"));
             socket.setSoTimeout(10000);
             StringWriter stringWriter = new StringWriter();
             JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
@@ -421,7 +396,6 @@ public class ServerProcessing {
             LOGGER.info("The server is not launched");
         } catch (IOException | JAXBException e) {
             LOGGER.error(e.getMessage());
-            return;
         }
     }
 
@@ -433,11 +407,8 @@ public class ServerProcessing {
      *
      * @throws          IOException in case if {@code serverPropertiesFile} does not contains valid server configuration,
      *                  if an I/O error occurs while reading the specified file
-     *
-     * @throws          FailedLoginException in case if the authorization on the server has been failed
-     *                  e.g. a wrong server login/password has/have been entered
      * */
-    public static void sendStopServerMessage(@NotNull File serverPropertiesFile) throws IOException, FailedLoginException {
+    private static void sendStopServerMessage(@NotNull File serverPropertiesFile) throws IOException {
         if (!arePropertiesValid(serverPropertiesFile)) {
             throw new InvalidPropertiesFormatException("The properties file are not valid");
         }

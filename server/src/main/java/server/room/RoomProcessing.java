@@ -24,7 +24,6 @@ import static common.Utils.buildMessage;
  * The class {@code PropertiesProcessing} is just a container of methods related with instances of the {@code Room} class
  * */
 public class RoomProcessing {
-
     private static volatile Logger LOGGER = Logger.getLogger("PropertiesProcessing");
 
     public static void setLogger(Logger logger) {
@@ -107,11 +106,11 @@ public class RoomProcessing {
         if (!PropertiesProcessing.arePropertiesValid(server.getConfig())) {
             throw new InvalidPropertiesFormatException("The specified server configurations are not valid");
         }
-        if (!ClientProcessing.hasAccountBeenRegistered(server.getConfig(), adminId)) {
+        if (ClientProcessing.hasNotAccountBeenRegistered(server.getConfig(), adminId)) {
             throw new ClientNotFoundException(adminId);
         }
         for (int id : clientsIds) {
-            if (!ClientProcessing.hasAccountBeenRegistered(server.getConfig(), id)) {
+            if (ClientProcessing.hasNotAccountBeenRegistered(server.getConfig(), id)) {
                 throw new ClientNotFoundException(id);
             }
         }
@@ -202,8 +201,6 @@ public class RoomProcessing {
      * @param           server the server where where the room is located
      * @param           message the text message to be sent
      *
-     * @return          {@code true} in case if message has been added to the room history
-     *
      * @throws          IOException in case if some kind of I/O exception has occurred
      *                  e.g. {@code sever.getConfig()} does not return a valid configuration set,
      *
@@ -212,7 +209,7 @@ public class RoomProcessing {
      * @exception       RoomNotFoundException in case if the room specified by the {@code message.getRoomId()}
      *                  has not been created on server or it's data is unreachable
      * */
-    public static boolean sendMessage(@NotNull Server server, @NotNull Message message) throws IOException {
+    public static void sendMessage(@NotNull Server server, @NotNull Message message) throws IOException {
         // checking the message status
         if (message.getStatus() != MessageStatus.MESSAGE) {
             throw new IllegalArgumentException(buildMessage("Message status is expected to be"
@@ -234,7 +231,7 @@ public class RoomProcessing {
         int fromId = message.getFromId();
         int roomId = message.getRoomId();
         // Checking whether the specified user exists
-        if (!ClientProcessing.hasAccountBeenRegistered(server.getConfig(), fromId)) {
+        if (ClientProcessing.hasNotAccountBeenRegistered(server.getConfig(), fromId)) {
             throw new ClientNotFoundException(fromId);
         }
         // Checking whether the specified room exists
@@ -249,6 +246,6 @@ public class RoomProcessing {
         }
         Room room = server.getOnlineRooms().safe().get(roomId);
         room.getMessageHistory().addMessage(message,true);
-        return room.save();
+        room.save();
     }
 }

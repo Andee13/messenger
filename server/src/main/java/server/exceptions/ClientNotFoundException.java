@@ -7,29 +7,13 @@ import java.util.NoSuchElementException;
  * For example it can be a {@code Room}, clients folder either friend list
  * */
 public class ClientNotFoundException extends NoSuchElementException {
-    private String message;
     private final int clientId;
-    public ClientNotFoundException(int clientId, String message) {
-        this.message = message;
-        this.clientId = clientId;
-    }
 
     public ClientNotFoundException(int clientId) {
         this.clientId = clientId;
     }
 
-    public ClientNotFoundException(int clientId, String s, String message) {
-        super(s);
-        this.message = message;
-        this.clientId = clientId;
-    }
-
     public int getClientId() {
         return clientId;
-    }
-
-    @Override
-    public String getMessage() {
-        return message;
     }
 }
