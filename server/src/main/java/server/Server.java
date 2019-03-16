@@ -32,6 +32,14 @@ public class Server extends Thread implements Saveable {
     private File serverConfigFile;
     private volatile ServerSocket serverSocket;
 
+    public static void setLogger(Logger logger) {
+        LOGGER = logger;
+    }
+
+    public Properties getConfig() {
+        return config;
+    }
+
     /**
      *  This method returns an instance of {@code File} that represents
      * an abstract path to the folder where onlineClients data is stored.
@@ -204,6 +212,10 @@ public class Server extends Thread implements Saveable {
         }
     }
 
+    /**
+     *  This method saves and stops the clients with their threads. As it has worked all the clients
+     * that had been being listened in the {@code onlineClients} set are saved in the corresponding files
+     * */
     private void interruptOnlineClientsThreads() {
         synchronized (onlineClients.safe()) {
             for (Map.Entry<Integer, ClientListener> clientListenerEntry : onlineClients.safe().entrySet()) {
@@ -248,13 +260,5 @@ public class Server extends Thread implements Saveable {
                 break;
             }
         }
-    }
-
-    public static void setLogger(Logger logger) {
-        LOGGER = logger;
-    }
-
-    public Properties getConfig() {
-        return config;
     }
 }
