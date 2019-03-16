@@ -191,6 +191,7 @@ public class PropertiesProcessing {
         properties.setProperty("propertiesProcessingLogFile", "propertiesProcessing.log");
         properties.setProperty("clientProcessingLogFile", "clientProcessing.log");
         properties.setProperty("restarterLogFile", "restarter.log");
+        properties.setProperty("requestHandlerLogFile", "requestHandlerLog.log");
         ServerProcessing.defaultProperties = properties;
     }
 
