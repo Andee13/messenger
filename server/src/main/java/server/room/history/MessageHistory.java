@@ -5,6 +5,7 @@ import org.apache.commons.collections4.queue.CircularFifoQueue;
 
 import java.util.Queue;
 
+@SuppressWarnings("CanBeFinal")
 public class MessageHistory {
     private CircularFifoQueue<Message> messageHistory;
     private MessageListener messageListener;

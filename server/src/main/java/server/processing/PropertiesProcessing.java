@@ -213,7 +213,7 @@ public class PropertiesProcessing {
         return properties;
     }
 
-    protected static void setLogger(Logger logger) {
+    static void setLogger(Logger logger) {
         if (LOGGER == null) {
             LOGGER = logger;
         }

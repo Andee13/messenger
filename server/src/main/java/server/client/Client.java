@@ -22,6 +22,7 @@ import java.util.Set;
 
 import static common.Utils.buildMessage;
 
+@SuppressWarnings("CanBeFinal")
 @XmlAccessorType(XmlAccessType.FIELD)
 @XmlRootElement(name="client")
 public class Client implements Saveable {

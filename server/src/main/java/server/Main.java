@@ -2,17 +2,22 @@ package server;
 
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
-import lombok.extern.log4j.Log4j;
 import org.xml.sax.SAXException;
 
-import javax.xml.bind.*;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLStreamException;
-import javax.xml.xpath.*;
-import java.io.*;
+import javax.xml.xpath.XPathExpressionException;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.StringWriter;
 import java.net.Socket;
 import java.net.URISyntaxException;
 
+@SuppressWarnings("RedundantThrows")
 public class Main {
 
     //private static final Logger logger = Logger.getLogger(Main.class);

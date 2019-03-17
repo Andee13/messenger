@@ -18,7 +18,6 @@ public enum MessageStatus {
     NEW_MESSAGE,
     NEW_ROOM_MEMBER,
     MEMBER_LEFT_ROOM,
-    FRIEND_LIST,
     ROOM_LIST,
     RESTART_SERVER,
     ROOM_MEMBERS,

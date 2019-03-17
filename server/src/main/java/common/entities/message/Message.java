@@ -38,6 +38,7 @@ public class Message {
         return this;
     }
 
+    @SuppressWarnings("unused")
     public Message setFromId(Integer fromId) {
         this.fromId = fromId;
         return this;

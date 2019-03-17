@@ -8,6 +8,7 @@ import java.util.Properties;
 
 import static common.Utils.buildMessage;
 
+@SuppressWarnings("CanBeFinal")
 public class RestartingEnvironment extends Thread {
     private static volatile Logger LOGGER = Logger.getLogger(RestartingEnvironment.class.getSimpleName());
     private Server server;

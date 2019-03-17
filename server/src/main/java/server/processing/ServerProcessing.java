@@ -30,7 +30,7 @@ import static server.processing.PropertiesProcessing.arePropertiesValid;
  * @see Server
  * */
 public class ServerProcessing {
-    public static volatile Logger LOGGER;
+    private static volatile Logger LOGGER;
     static Properties defaultProperties;
     public static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_DATE_TIME;
     public static final int MESSAGE_HISTORY_DIMENSION = 100;

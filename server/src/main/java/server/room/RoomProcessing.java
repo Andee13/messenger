@@ -2,7 +2,7 @@ package server.room;
 
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
-import jdk.internal.org.xml.sax.InputSource;
+import org.xml.sax.InputSource;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.w3c.dom.NodeList;

@@ -6,7 +6,6 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import server.exceptions.ClientNotFoundException;
-import server.exceptions.IllegalPasswordException;
 import server.exceptions.RoomNotFoundException;
 import server.processing.ClientProcessing;
 import server.processing.RestartingEnvironment;
@@ -34,9 +33,10 @@ import static server.processing.ClientProcessing.loadClient;
  *
  * @see ClientListener
  * */
-public class RequestHandler {
+@SuppressWarnings("CanBeFinal")
+class RequestHandler {
     private ClientListener clientListener;
-    public static Logger LOGGER = Logger.getLogger(RequestHandler.class.getSimpleName());
+    private static Logger LOGGER = Logger.getLogger(RequestHandler.class.getSimpleName());
 
     void handle(Message message) {
         Message responseMessage = new Message(MessageStatus.ERROR)
@@ -158,8 +158,7 @@ public class RequestHandler {
      * such as a login and a password.
      *
      * @param message a message of {@code MessageStatus.AUTH} containing a login and a password
-     * @throws IllegalPasswordException in case if the password from the {@code message}
-     *                                  does not match the one from the userfile
+     *
      * @throws ClientNotFoundException  if the specified client's file has not been found
      *                                  in the {@code clientsDir} folder or there is not user data file
      * @throws NullPointerException     in case when message equals {@code null}

@@ -27,6 +27,7 @@ import static common.Utils.buildMessage;
  * been performed properly the methods return instances of {@code Message} of statuses {@code MessageStatus.ERROR}
  * or {@code MessageStatus.DENIED}. Some additional information may be provided in the field {@code Message.text}
  * */
+@SuppressWarnings("CanBeFinal")
 public class ClientListener extends Thread {
 
     private volatile Socket socket;
