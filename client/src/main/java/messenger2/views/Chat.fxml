@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import com.jfoenix.controls.JFXToggleNode?>
 <?import javafx.geometry.Insets?>
 <?import javafx.geometry.Point3D?>
 <?import javafx.scene.Cursor?>
@@ -61,7 +62,7 @@
             <right>
                 <HBox prefHeight="24.0" prefWidth="30.0" BorderPane.alignment="CENTER">
                     <children>
-                        <ImageView fitHeight="23.0" fitWidth="30.0" pickOnBounds="true" preserveRatio="true" styleClass="button">
+                        <ImageView fx:id="unnecessaryButton" fitHeight="23.0" fitWidth="30.0" pickOnBounds="true" preserveRatio="true" styleClass="button">
                             <HBox.margin>
                                 <Insets right="30.0" top="30.0" />
                             </HBox.margin>
@@ -69,17 +70,10 @@
                                 <Cursor fx:constant="HAND" />
                             </cursor>
                         </ImageView>
-                        <ImageView fx:id="humburger" fitHeight="22.0" fitWidth="21.0" pickOnBounds="true" preserveRatio="true" styleClass="button">
-                            <image>
-                                <Image url="@../res/more.png" />
-                            </image>
-                            <HBox.margin>
-                                <Insets right="30.0" top="30.0" />
-                            </HBox.margin>
-                            <cursor>
-                                <Cursor fx:constant="HAND" />
-                            </cursor>
-                        </ImageView>
+                  <JFXToggleNode fx:id="add" prefHeight="25.0" prefWidth="16.0">
+                     <HBox.margin>
+                        <Insets top="25.0" />
+                     </HBox.margin></JFXToggleNode>
                     </children>
                 </HBox>
             </right>

@@ -10,6 +10,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.text.Text;
 import messenger2.App;
 import messenger2.ReaderThread;
+import messenger2.Utils;
 import messenger2.message.Message;
 import messenger2.message.MessageStatus;
 import javax.xml.bind.JAXBException;
@@ -63,6 +64,9 @@ public class LoginController {
                     getMarshaller().marshal(message, stringWriter);
                     String str = stringWriter.toString();
                     writer.writeUTF(str);
+                    name = Username.getText();
+                    id = name.hashCode();
+                    Utils.password = password.getText();
                 } catch (JAXBException ex){
                     System.out.println("67"+ex);
                 }
