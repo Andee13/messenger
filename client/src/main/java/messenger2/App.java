@@ -42,9 +42,9 @@ public class App extends Application {
     public void start(Stage primaryStage) throws Exception {
         stage = primaryStage;
         //String[] conf = getServerConfigurations();
-        socket = new Socket("localhost", 5940);
-        reader = new DataInputStream(socket.getInputStream());
-        writer = new DataOutputStream(socket.getOutputStream());
+//        socket = new Socket("localhost", 5940);
+//        reader = new DataInputStream(socket.getInputStream());
+//        writer = new DataOutputStream(socket.getOutputStream());
 
         //Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Login.fxml"));
         Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Login.fxml"));

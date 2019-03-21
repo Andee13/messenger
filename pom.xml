@@ -8,9 +8,10 @@
 
 
     <modules>
-    <module>server</module>
-    <module>client</module>
-</modules>
+        <module>server</module>
+        <module>client</module>
+    </modules>
+
     <name>messenger2</name>
 
     <!-- FIXME change it to the project's website-->
