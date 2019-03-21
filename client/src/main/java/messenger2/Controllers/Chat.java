@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.ResourceBundle;
 
+import com.jfoenix.controls.JFXButton;
+import com.jfoenix.controls.JFXPopup;
 import com.jfoenix.controls.JFXToggleNode;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
@@ -97,8 +99,12 @@ public class Chat {
         if(imageView == null) {
             System.out.println("gdsg");
         }
-        unnecessaryButton.setImage(image);
-        add.setGraphic(imageView);
+//        unnecessaryButton.setImage(image);
+//        add.setGraphic(imageView);
+
+
+
+
         //imageView.imageProperty().bind(Bindings.when(add.selectedProperty()).then(avatar).otherwise(avatar));
 
 
@@ -125,6 +131,14 @@ public class Chat {
             }
         });
 
+
+        JFXButton button = new JFXButton("Popup!");
+        StackPane main = new StackPane();
+        main.getChildren().add(button);
+
+        JFXPopup popup = new JFXPopup(userList);
+//        popup.setPopupContent(list);
+        button.setOnAction(e -> popup.show(button, JFXPopup.PopupVPosition.TOP, JFXPopup.PopupHPosition.LEFT));
         sendMessenge(new Message(MessageStatus.ROOM_LIST).setFromId(32));
 
         Waiter waiter = new Waiter();

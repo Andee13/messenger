@@ -50,4 +50,9 @@ public class Utils {
         }
     }
 
+
+    @Override
+    public int hashCode() {
+        return name.hashCode();
+    }
 }
