@@ -201,7 +201,7 @@ public class Main {
         System.err.println(properties.equals(properties1));*/
 
         // REGISTRATION
-        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -215,10 +215,10 @@ public class Main {
         dataOutputStream.writeUTF(stringWriter.toString());
         dataOutputStream.flush();
 
-        System.out.println(dataInputStream.readUTF());*/
+        System.out.println(dataInputStream.readUTF());
 
         // AUTHORIZATION + ROOM CREATING
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -263,7 +263,7 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream.readUTF());
+        System.out.println(dataInputStream.readUTF());*/
 
         // STOP_SERVER
         /*Socket socket1 = new Socket("localhost", 5940);

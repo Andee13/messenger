@@ -38,7 +38,7 @@ public class RoomProcessing {
      * of two or more clients
      *
      *  !NOTE This method puts the room into the server online rooms map, that is why it may remove previous
-     * instance of this room from the map. It is recommended to check whether the room is now in the map before call.
+     * instance of this room from the map. It is recommended to check whether the room is in the map before call.
      *
      * @param           roomId is an id of the room to be searched
      * @param           server a server containing {@code room}
@@ -63,7 +63,7 @@ public class RoomProcessing {
         File roomFile = new File(roomDir, roomDir.getName().concat(".xml"));
         if(roomFile.isFile()) {
             try {
-                LOGGER.trace("Loading the room id ".concat(String.valueOf(roomId)));
+                LOGGER.trace(buildMessage("Loading the room id", String.valueOf(roomId)));
                 JAXBContext jaxbContext = JAXBContext.newInstance(Room.class);
                 Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
                 Room room = (Room) unmarshaller.unmarshal(roomFile);
@@ -76,9 +76,9 @@ public class RoomProcessing {
                                     .sendMessageToConnectedClient(message.setStatus(MessageStatus.NEW_MESSAGE));
                         }
                     }
-                    server.getOnlineRooms().safe().put(roomId, room);
                 }
                 });
+                server.getOnlineRooms().safe().put(roomId, room);
                 return room;
             } catch (JAXBException e) {
                 LOGGER.error(e.getLocalizedMessage());
