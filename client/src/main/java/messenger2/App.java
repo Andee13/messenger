@@ -48,7 +48,7 @@ public class App extends Application {
 
         //Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Login.fxml"));
 
-        Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Chat.fxml"));
+        Parent root = FXMLLoader.load(getClass().getResource("/messenger2/views/Registration.fxml"));
         primaryStage.setTitle("Hello World");
         primaryStage.setScene(new Scene(root, 800, 500));
         String css = getClass().getResource("/messenger2/res/style.css").toString();

@@ -7,18 +7,23 @@ import com.jfoenix.controls.JFXPopup;
 import com.jfoenix.controls.JFXToggleNode;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
+import javafx.scene.text.TextAlignment;
 
 
 public class Chat {
 
 
-    private JFXPopup popUp;
+    @FXML
+    private JFXListView<Label> messegersList;
+
+//    private JFXPopup popUp;
 
     @FXML
     private JFXListView<Label> JFXListView;
@@ -132,6 +137,7 @@ public class Chat {
 */
         for (int i = 0; i < 20; i++) {
             Label label = new Label("User " + i);
+            label.setPadding(new Insets(10));
             ImageView image = new ImageView(new Image("messenger2/res/user.png"));
             image.setFitHeight(20);
             image.setFitWidth(20);
@@ -146,14 +152,15 @@ public class Chat {
 
     }*/
 
-        JFXButton button = new JFXButton("Popup!");
-        StackPane main = new StackPane();
-        main.getChildren().add(button);
+//        JFXButton button = new JFXButton("Popup!");
+//        StackPane main = new StackPane();
+//        main.getChildren().add(button);
 
 
-        JFXPopup popup = new JFXPopup(userList);
+
+        //JFXPopup popup = new JFXPopup(userList);
 //        popup.setPopupContent(list);
-        button.setOnAction(e -> popup.show(button, JFXPopup.PopupVPosition.TOP, JFXPopup.PopupHPosition.LEFT));
+        //button.setOnAction(e -> popup.show(button, JFXPopup.PopupVPosition.TOP, JFXPopup.PopupHPosition.LEFT));
 //        sendMessenge(new Message(MessageStatus.ROOM_LIST).setFromId(32));
 
 
@@ -167,12 +174,43 @@ public class Chat {
 
         //chatPane.setBackground(new Background());
 
-
+        JFXListView.getSelectionModel().select(0);
+        renderMessages();
     }
-    void initPopUp() {
+    void renderMessages() {
+        for(int i = 0; i < 5; i++) {
+            Label label = new Label("message " + i);
+            label.setPadding(new Insets(10));
+            label.setAlignment(Pos.CENTER_RIGHT);
+            messegersList.getItems().add(label);
+        }
+        messegersList.setCellFactory(list -> new CenteredListViewCell());
+    }
+
+    final class CenteredListViewCell extends ListCell<Label> {
+        @Override
+        protected void updateItem(Label label1, boolean empty) {
+            super.updateItem(label1, empty);
+            if (empty) {
+                setGraphic(null);
+            } else {
+                // Create the HBox
+                HBox hBox = new HBox();
+                hBox.setAlignment(Pos.CENTER_RIGHT);
+                VBox vBox = new VBox();
+                // Create centered Label
+                Label label = new Label("fsaf\n");
+                label.setAlignment(Pos.CENTER_RIGHT);
 
 
-
+                //label.setPadding(new Insets(1));
+                vBox.getChildren().add(label);
+                vBox.getChildren().add(new Label("hi"));
+                System.out.println(vBox.getChildren().get(1));
+                hBox.getChildren().add(vBox);
+                setGraphic(hBox);
+            }
+        }
     }
 
     @FXML
