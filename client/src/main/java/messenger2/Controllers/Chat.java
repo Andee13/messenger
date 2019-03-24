@@ -1,35 +1,27 @@
 package messenger2.Controllers;
 
-import java.awt.geom.Ellipse2D;
-import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.net.URL;
-import java.util.ResourceBundle;
 
 import com.jfoenix.controls.JFXButton;
+import com.jfoenix.controls.JFXListView;
 import com.jfoenix.controls.JFXPopup;
 import com.jfoenix.controls.JFXToggleNode;
-import javafx.beans.binding.Bindings;
-import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
+import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
-import javafx.scene.shape.Rectangle;
-import javafx.util.Callback;
-import messenger2.Waiter;
-import messenger2.message.Message;
-import messenger2.message.MessageStatus;
 
-import static messenger2.Utils.*;
-import javax.imageio.ImageIO;
-import javax.naming.Binding;
 
 public class Chat {
+
+
+    private JFXPopup popUp;
+
+    @FXML
+    private JFXListView<Label> JFXListView;
 
     @FXML
     private BorderPane borderPane;
@@ -70,7 +62,7 @@ public class Chat {
 
 
     @FXML
-    void initialize() {
+    void initialize() {/*
         buttonSend.setOnAction(e -> {
             sendMessenge(new Message(MessageStatus.ROOM_LIST).setFromId(id));//.setLogin(name).setPassword(password));
         });
@@ -130,23 +122,79 @@ public class Chat {
                 }
             }
         });
+*/
+    //try {
+        /*File file = new File("/messenger2/res/style.css");
+        System.out.println(file.getAbsolutePath());
+        String css = getClass().getResource("/messenger2/res/style.css").toString();
+        System.out.println(css);
+        JFXListView.getScene().getStylesheets().add(css);
+*/
+        for (int i = 0; i < 20; i++) {
+            Label label = new Label("User " + i);
+            ImageView image = new ImageView(new Image("messenger2/res/user.png"));
+            image.setFitHeight(20);
+            image.setFitWidth(20);
+            label.setGraphic(image);
+            JFXListView.getItems().add(label);
+        }
+        JFXListView.setExpanded(true);
+        JFXListView.depthProperty().set(1);
+   /* } catch(IOException ex) {
+        System.out.println(ex);
+        System.out.println(new File("").getAbsolutePath());
 
+    }*/
 
         JFXButton button = new JFXButton("Popup!");
         StackPane main = new StackPane();
         main.getChildren().add(button);
 
+
         JFXPopup popup = new JFXPopup(userList);
 //        popup.setPopupContent(list);
         button.setOnAction(e -> popup.show(button, JFXPopup.PopupVPosition.TOP, JFXPopup.PopupHPosition.LEFT));
-        sendMessenge(new Message(MessageStatus.ROOM_LIST).setFromId(32));
+//        sendMessenge(new Message(MessageStatus.ROOM_LIST).setFromId(32));
 
-        Waiter waiter = new Waiter();
-        waiter.setDaemon(true);
-        waiter.start();
+
+
+
+//        Waiter waiter = new Waiter();
+//        waiter.setDaemon(true);
+//        waiter.start();
+
+
 
         //chatPane.setBackground(new Background());
 
 
     }
+    void initPopUp() {
+
+
+
+    }
+
+    @FXML
+    private void showPopup(MouseEvent event){
+        if(event.getButton() == MouseButton.SECONDARY) {
+            JFXPopup popUp = new JFXPopup();
+            JFXButton jfxButton1 = new JFXButton("Start conversation");
+            jfxButton1.setOnAction(e -> {
+                System.out.println("Button clicked");
+                popUp.hide();
+            });
+            JFXButton jfxButton2 = new JFXButton("Cancel");
+            jfxButton2.setMinWidth(jfxButton1.getPrefWidth());
+            jfxButton1.setPadding(new Insets(10));
+            jfxButton2.setPadding(new Insets(10));
+
+            VBox vBox = new VBox(jfxButton1, jfxButton2);
+            popUp.setPopupContent(vBox);
+            popUp.show(JFXListView, JFXPopup.PopupVPosition.TOP, JFXPopup.PopupHPosition.LEFT, event.getX(), event.getY());
+        }
+        //this.popUp.show(JFXPopup.PopupVPosition.TOP, JFXPopup.PopupHPosition.LEFT );
+
+    }
+
 }

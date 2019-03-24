@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import com.jfoenix.controls.JFXListView?>
 <?import com.jfoenix.controls.JFXToggleNode?>
 <?import javafx.geometry.Insets?>
 <?import javafx.geometry.Point3D?>
@@ -17,7 +16,7 @@
 <?import javafx.scene.layout.VBox?>
 <?import javafx.scene.text.Font?>
 
-<BorderPane fx:id="borderPane" maxHeight="620.0" maxWidth="1040.0" prefHeight="620.0" prefWidth="1040.0" xmlns="http://javafx.com/javafx/10.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="messenger2.Controllers.Chat">
+<BorderPane fx:id="borderPane" maxHeight="620.0" maxWidth="1040.0" prefHeight="620.0" prefWidth="1040.0" xmlns="http://javafx.com/javafx/10.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="messenger2.Controllers.Chat" stylesheets="@messenger2/res/style.css">
     <center>
         <VBox maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308">
             <children>
@@ -43,7 +42,8 @@
         <VBox maxHeight="1.7976931348623157E308" BorderPane.alignment="CENTER">
             <children>
                 <HBox fx:id="onlineUsersHbox" minHeight="-Infinity" minWidth="-Infinity" prefHeight="50.0" prefWidth="217.0" />
-            <JFXListView fx:id="JFXListView" onMouseClicked="#showPopup" prefHeight="502.0" prefWidth="218.0" />
+                <ListView fx:id="userList" focusTraversable="false" maxHeight="1.7976931348623157E308" prefHeight="495.0" prefWidth="217.0" style="-fx-border-image-width: 0;">
+                </ListView>
             </children>
         </VBox>
     </left>
