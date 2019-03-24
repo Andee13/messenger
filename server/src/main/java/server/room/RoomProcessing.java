@@ -38,7 +38,7 @@ public class RoomProcessing {
      * of two or more clients
      *
      *  !NOTE This method puts the room into the server online rooms map, that is why it may remove previous
-     * instance of this room from the map. It is recommended to check whether the room is in the map before call.
+     * instance of this room from the map. It is recommended to check whether the room is in the map prior call.
      *
      * @param           roomId is an id of the room to be searched
      * @param           server a server containing {@code room}

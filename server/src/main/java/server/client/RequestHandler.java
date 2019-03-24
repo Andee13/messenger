@@ -108,6 +108,9 @@ class RequestHandler {
                 case GET_CLIENT_NAME:
                     responseMessage = getClientName(message);
                     break;
+                case GET_ROOM_MEMBERS:
+                    responseMessage = getRoomMembers(message);
+                    break;
                 default:
                     responseMessage = new Message(MessageStatus.ERROR)
                             .setText(buildMessage("Unknown message status", message.getStatus().toString()));
@@ -663,49 +666,6 @@ class RequestHandler {
                 .setRoomId(message.getRoomId());
     }
 
-    private synchronized Message getRoomMembers(Message message) {
-        if (!clientListener.isLogged()) {
-            return new Message(MessageStatus.DENIED).setText("Log in first");
-        }
-        if (isMessageNotFromThisLoggedClient(message)) {
-            return new Message(MessageStatus.DENIED).setText("Log in first");
-        }
-        if (message.getRoomId() == null) {
-            return new Message(MessageStatus.ERROR).setText("Unset room id");
-        }
-        if (RoomProcessing.hasRoomBeenCreated(clientListener.getServer().getConfig(), message.getRoomId()) != 0L) {
-            return new Message(MessageStatus.ERROR).setText("Unable to find a room id"
-                    .concat(String.valueOf(message.getRoomId())));
-        }
-        Room room;
-        if (!clientListener.getServer().getOnlineRooms().safe().containsKey(message.getRoomId())) {
-            try {
-                RoomProcessing.loadRoom(clientListener.getServer(), message.getRoomId());
-            } catch (InvalidPropertiesFormatException e) {
-                if (LOGGER.isEnabledFor(Level.ERROR)) {
-                    LOGGER.error(e.getLocalizedMessage());
-                }
-                return new Message(MessageStatus.MESSAGE).setText("Server configuration error occurred");
-            }
-        }
-        room = clientListener.getServer().getOnlineRooms().safe().get(message.getRoomId());
-        if (!room.getMembers().safe().contains(clientListener.getClient().getClientId())) {
-            return new Message(MessageStatus.DENIED)
-                    .setRoomId("Not a member of the room").setRoomId(message.getRoomId());
-        }
-        StringBuilder stringBuilder = new StringBuilder();
-        synchronized (room.getMembers().safe()) {
-            for (int clientId : room.getMembers().safe()) {
-                stringBuilder.append(clientId).append(',');
-            }
-        }
-        if (stringBuilder.length() == 0) {
-            return new Message(MessageStatus.ACCEPTED).setRoomId(message.getRoomId()).setText("");
-        }
-        return new Message(MessageStatus.ACCEPTED).setRoomId(message.getRoomId())
-                .setText(stringBuilder.substring(0,stringBuilder.length() - 1));
-    }
-
     private synchronized Message getRooms() {
         if (clientListener.getClient().getRooms().safe().size() == 0) {
             return new Message(MessageStatus.ROOM_LIST).setText("");
@@ -863,7 +823,7 @@ class RequestHandler {
     private Message getClientName(Message message) {
         if (isMessageNotFromThisLoggedClient(message)) {
             return new Message(MessageStatus.DENIED)
-                    .setText("Log in prior to request any information");
+                    .setText("Log in prior to request information");
         }
         if (message.getToId() == null) {
             return new Message(MessageStatus.ERROR).setText("Unspecified client id");
@@ -880,5 +840,53 @@ class RequestHandler {
             client = ClientProcessing.loadClient(clientListener.getServer().getConfig(), clientId);
         }
         return new Message(MessageStatus.ACCEPTED).setFromId(clientId).setText(client.getLogin());
+    }
+
+    /**
+     *  The method returns a string that contains enumerated clients ids of the {@code Room}
+     * specified by the {@code roomId} in passed {@code message}.
+     *
+     * @param           message a message that contains following information:
+     *                          1) {@code fromId} the {@code clientId} of the client who requests members
+     *                          2) {@code roomId} the corresponding parameter of the room
+     *
+     * @return          an instance of {@code Message} that contains information about room members
+     *                  (of {@code MessageStatus.ACCEPTED} or error message of {@code MessageStatus.ERROR}
+     *                  or {@code MessageStatus.DENIED}). The message of status {@code MessageStatus.ACCEPTED}
+     *                  contains ids of the clients enumerated in the {@code text} field
+     *                  of the message separated by comas.
+     * */
+    private Message getRoomMembers(Message message) {
+        if (isMessageNotFromThisLoggedClient(message)) {
+            return new Message(MessageStatus.DENIED).setText("Log in prior to request information");
+        }
+        if (message.getRoomId() == null) {
+            return new Message(MessageStatus.ERROR).setText("Unspecified roomId");
+        }
+        int roomId = message.getRoomId();
+        if (RoomProcessing.hasRoomBeenCreated(clientListener.getServer().getConfig(), roomId) == 0) {
+            return new Message(MessageStatus.ERROR)
+                    .setText(buildMessage("Unable to find the room (id", roomId, ')'));
+        }
+        Room room;
+        if (!clientListener.getServer().getOnlineRooms().safe().containsKey(roomId)) {
+            try {
+                RoomProcessing.loadRoom(clientListener.getServer(), roomId);
+            } catch (InvalidPropertiesFormatException e) {
+                if (LOGGER.isEnabledFor(Level.ERROR)) {
+                    LOGGER.error(buildMessage(e.getClass().getName(), "occurred:", e.getLocalizedMessage()));
+                }
+                return new Message(MessageStatus.ERROR).setText("Internal error occurred");
+            }
+        }
+        room = clientListener.getServer().getOnlineRooms().safe().get(roomId);
+        StringBuilder stringBuilder = new StringBuilder();
+        synchronized (room.getMembers().safe()) {
+            for (int clientId : room.getMembers().safe()) {
+                stringBuilder.append(clientId).append(",");
+            }
+        }
+        return new Message(MessageStatus.ACCEPTED)
+                .setText(stringBuilder.substring(0, stringBuilder.length() - 1)).setRoomId(roomId);
     }
 }
