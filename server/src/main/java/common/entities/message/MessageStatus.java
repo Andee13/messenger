@@ -22,6 +22,5 @@ public enum MessageStatus {
     RESTART_SERVER,
     ROOM_MEMBERS,
     MESSAGE_HISTORY,
-    CLIENT_INFO
-
+    GET_CLIENT_NAME
 }

@@ -105,8 +105,8 @@ class RequestHandler {
                 case MESSAGE_HISTORY:
                     responseMessage = getRoomMessages(message);
                     break;
-                case CLIENT_INFO:
-                    responseMessage = getClientInfo(message);
+                case GET_CLIENT_NAME:
+                    responseMessage = getClientName(message);
                     break;
                 default:
                     responseMessage = new Message(MessageStatus.ERROR)
@@ -219,21 +219,6 @@ class RequestHandler {
             LOGGER.fatal(e.getLocalizedMessage());
             return new Message(MessageStatus.ERROR).setText("Internal error");
         }
-    }
-
-    private Message getClientInfo(Message message) {
-        if (isMessageNotFromThisLoggedClient(message)) {
-            return new Message(MessageStatus.DENIED).setText("Log in first");
-        }
-        if (message.getToId() == null) {
-            return new Message(MessageStatus.ERROR).setText("Unspecified client id");
-        }
-        if (ClientProcessing.hasNotAccountBeenRegistered(clientListener.getServer().getConfig(), message.getToId())) {
-            return new Message(MessageStatus.ERROR).setText("Unable to find the specified client")
-                    .setToId(message.getToId());
-        }
-        Client client = loadClient(clientListener.getServer().getConfig(), message.getToId());
-        return new Message(MessageStatus.ACCEPTED).setText(client.getName()).setFromId(client.getClientId());
     }
 
     /**
@@ -450,7 +435,6 @@ class RequestHandler {
             client.setLogin(login);
             client.setServer(clientListener.getServer());
             client.setPassword(password);
-            client.setName(message.getText() == null ? login : message.getText());
             client.setClientId(login.hashCode());
             client.getRooms().safe().add(0);
             if (!clientListener.getServer().getOnlineClients().safe().containsKey(0)) {
@@ -874,5 +858,27 @@ class RequestHandler {
             LOGGER.trace(infoString);
         }
         return new Message(MessageStatus.ACCEPTED).setText(infoString);
+    }
+
+    private Message getClientName(Message message) {
+        if (isMessageNotFromThisLoggedClient(message)) {
+            return new Message(MessageStatus.DENIED)
+                    .setText("Log in prior to request any information");
+        }
+        if (message.getToId() == null) {
+            return new Message(MessageStatus.ERROR).setText("Unspecified client id");
+        }
+        int clientId = message.getToId();
+        if (ClientProcessing.hasNotAccountBeenRegistered(clientListener.getServer().getConfig(), clientId)) {
+            return new Message(MessageStatus.DENIED)
+                    .setText(buildMessage("Unable to find client id", clientId));
+        }
+        Client client;
+        if (clientListener.getServer().getOnlineClients().safe().containsKey(clientId)) {
+            client = clientListener.getServer().getOnlineClients().safe().get(clientId).getClient();
+        } else {
+            client = ClientProcessing.loadClient(clientListener.getServer().getConfig(), clientId);
+        }
+        return new Message(MessageStatus.ACCEPTED).setFromId(clientId).setText(client.getLogin());
     }
 }

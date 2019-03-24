@@ -40,15 +40,6 @@ public class Client implements Saveable {
     private LocalDateTime isBannedUntill;
     @XmlTransient
     private Server server;
-    private String name;
-
-    String getName() {
-        return name;
-    }
-
-    void setName(String name) {
-        this.name = name;
-    }
 
     LocalDateTime getIsBannedUntill() {
         return isBannedUntill;
@@ -101,7 +92,7 @@ public class Client implements Saveable {
         return rooms;
     }
 
-    private String getLogin() {
+    String getLogin() {
         return login;
     }
 
