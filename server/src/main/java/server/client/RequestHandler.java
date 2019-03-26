@@ -8,6 +8,7 @@ import org.jetbrains.annotations.NotNull;
 import server.exceptions.ClientNotFoundException;
 import server.exceptions.RoomNotFoundException;
 import server.handlers.AuthorizationRequestHandler;
+import server.handlers.MessageSendingRequestHandler;
 import server.handlers.RegistrationRequestHandler;
 import server.processing.ClientProcessing;
 import server.processing.RestartingEnvironment;
@@ -46,41 +47,40 @@ class RequestHandler {
         try {
             switch (message.getStatus()) {
                 case AUTH:
-                    rh = new AuthorizationRequestHandler(message);
-                    rh.setClientListener(clientListener);
+                    rh = new AuthorizationRequestHandler(clientListener, message);
                     responseMessage = rh.handle();
                     break;
                 case REGISTRATION:
-                    rh = new RegistrationRequestHandler(message);
-                    rh.setClientListener(clientListener);
+                    rh = new RegistrationRequestHandler(clientListener, message);
                     responseMessage = rh.handle();
                     break;
                 case MESSAGE:
-                    responseMessage = sendMessage(message);
+                    rh = new MessageSendingRequestHandler(clientListener, message);
+                    responseMessage = rh.handle();
                     break;
                 case CLIENTBAN:
                     responseMessage = clientBan(message);
                     break;
                 case CREATE_ROOM:
-                    if (isMessageNotFromThisLoggedClient(message)) {
+                    if (clientListener.isMessageNotFromThisLoggedClient(message)) {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
                     }
                     responseMessage = createRoom(message);
                     break;
                 case DELETE_ROOM:
-                    if (isMessageNotFromThisLoggedClient(message)) {
+                    if (clientListener.isMessageNotFromThisLoggedClient(message)) {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
                     }
                     break;
                 case INVITE_USER:
-                    if (isMessageNotFromThisLoggedClient(message)) {
+                    if (clientListener.isMessageNotFromThisLoggedClient(message)) {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
                     } else {
                         responseMessage = addClientToRoom(message);
                     }
                     break;
                 case UNINVITE_USER:
-                    if (isMessageNotFromThisLoggedClient(message)) {
+                    if (clientListener.isMessageNotFromThisLoggedClient(message)) {
                         responseMessage = new Message(MessageStatus.DENIED).setText("Wrong passed clientId");
                     } else {
                         responseMessage = kickClientFromRoom(message);
@@ -138,30 +138,6 @@ class RequestHandler {
     }
 
     /**
-     * This methods may inform if the message is from current client
-     *
-     * @param message a {@code Message} to be checked
-     * @return {@code true} if and only if the client has logged in and his {@code clientId}
-     * is equal to {@code fromId} of the {@code message}, {@code false otherwise}
-     */
-    private boolean isMessageNotFromThisLoggedClient(Message message) {
-        if (message == null) {
-            LOGGER.error("Passed null-message value to check the addresser id");
-            return true;
-        }
-        if (!clientListener.isLogged()) {
-            LOGGER.trace("Passed message to check before log-in: ".concat(message.toString()));
-            return true;
-        }
-        if (message.getFromId() == null || message.getFromId() != clientListener.getClient().getClientId()) {
-            LOGGER.info(buildMessage("Expected to receive clientId", clientListener.getClient().getClientId()
-                    , "but found", message.getFromId()));
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * The method {@code clientBan} handles with requests of blocking a user.
      *
      * @param message an instance of {@code Message} that represents a request about blocking a user.
@@ -190,7 +166,7 @@ class RequestHandler {
             LOGGER.trace(errorMessage);
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
-        if (isMessageNotFromThisLoggedClient(message) && !(
+        if (clientListener.isMessageNotFromThisLoggedClient(message) && !(
                 clientListener.getServer().getConfig().getProperty("serverLogin").equals(message.getLogin())
                         && clientListener.getServer().getConfig().getProperty("serverPassword")
                         .equals(message.getPassword())
@@ -267,7 +243,7 @@ class RequestHandler {
     }
 
     private Message restartServer(Message message) {
-        if ((isMessageNotFromThisLoggedClient(message))
+        if ((clientListener.isMessageNotFromThisLoggedClient(message))
                 && !message.getLogin().equals(clientListener.getServer().getConfig().getProperty("serverLogin"))
                 && !message.getPassword().equals(
                         clientListener.getServer().getConfig().getProperty("serverPassword"))) {
@@ -296,52 +272,6 @@ class RequestHandler {
         return new Message(MessageStatus.ACCEPTED).setText("Server is going to shut down");
     }
 
-
-    /**
-     * The method {@code sendMessage} sends an instance of {@code Message} of the {@code MessageStatus.MESSAGE}
-     * to the certain {@code Room}
-     * It is expected, that {@code message} contains (at least) set following parameters :
-     * {@code fromId}
-     * {@code roomId}
-     * {@code text}
-     *
-     * @param message a {@code Message} to be sent
-     * @return an instance of {@code Message} containing information about the operation execution
-     * it may be of {@code MessageStatus.ERROR} either {@code MessageStatus.ACCEPTED}
-     * or {@code MessageStatus.DENIED} status
-     */
-    private Message sendMessage(Message message) {
-        if (message == null) {
-            LOGGER.error("Message is null");
-            return new Message(MessageStatus.ERROR).setText("Internal error. Message is null");
-        }
-        if (isMessageNotFromThisLoggedClient(message)) {
-            return new Message(MessageStatus.DENIED).setText("Please, log in first");
-        }
-        if (message.getText() == null) {
-            return new Message(MessageStatus.ERROR).setText("Message text has not been set");
-        }
-        if (message.getFromId() == null) {
-            return new Message(MessageStatus.ERROR).setText("Addresser's id has not been set");
-        }
-        if (message.getRoomId() == null) {
-            return new Message(MessageStatus.ERROR).setText("The room id is not set");
-        }
-        Message responseMessage;
-        try {
-            RoomProcessing.sendMessage(clientListener.getServer(), message);
-            responseMessage = new Message(MessageStatus.ACCEPTED);
-        } catch (IOException e) {
-            LOGGER.error(e.getLocalizedMessage());
-            responseMessage = new Message(MessageStatus.ERROR).setText("An internal error occurred");
-        } catch (RoomNotFoundException e) {
-            LOGGER.trace(buildMessage("Room id", message.getRoomId(), "has not been found"));
-            responseMessage = new Message(MessageStatus.ERROR)
-                    .setText(buildMessage("Unable to find the room (id", message.getRoomId(), ')'));
-        }
-        return responseMessage;
-    }
-
     /**
      * The method {@code createRoom} handles with an input request representing by {@code Message}
      * having {@code MessageStatus.CREATE_ROOM} status
@@ -350,7 +280,7 @@ class RequestHandler {
      * @return an instance of {@code Message} that informs whether new room was created or not
      */
     private Message createRoom(@NotNull Message message) {
-        if (isMessageNotFromThisLoggedClient(message)) {
+        if (clientListener.isMessageNotFromThisLoggedClient(message)) {
             return new Message(MessageStatus.DENIED).setText("Please, log in first");
         }
         if (!MessageStatus.CREATE_ROOM.equals(message.getStatus())) {
@@ -414,7 +344,7 @@ class RequestHandler {
             return new Message(MessageStatus.ERROR).setText(errorMessage);
         }
         int toId = message.getToId();
-        if (isMessageNotFromThisLoggedClient(message) && !(
+        if (clientListener.isMessageNotFromThisLoggedClient(message) && !(
                 clientListener.getServer().getConfig().getProperty("serverLogin").equals(message.getLogin())
                         && clientListener.getServer().getConfig().getProperty("serverPassword")
                         .equals(message.getPassword())
@@ -491,7 +421,7 @@ class RequestHandler {
         if (message == null) {
             return new Message(MessageStatus.ERROR).setText("Internal error occurred. Message is null");
         }
-        if (isMessageNotFromThisLoggedClient(message)) {
+        if (clientListener.isMessageNotFromThisLoggedClient(message)) {
             return new Message(MessageStatus.DENIED).setText("Log in first");
         }
         if (message.getRoomId() == null) {
@@ -689,7 +619,7 @@ class RequestHandler {
     }
 
     private Message getClientName(Message message) {
-        if (isMessageNotFromThisLoggedClient(message)) {
+        if (clientListener.isMessageNotFromThisLoggedClient(message)) {
             return new Message(MessageStatus.DENIED)
                     .setText("Log in prior to request information");
         }
@@ -725,7 +655,7 @@ class RequestHandler {
      *                  of the message separated by comas.
      * */
     private Message getRoomMembers(Message message) {
-        if (isMessageNotFromThisLoggedClient(message)) {
+        if (clientListener.isMessageNotFromThisLoggedClient(message)) {
             return new Message(MessageStatus.DENIED).setText("Log in prior to request information");
         }
         if (message.getRoomId() == null) {

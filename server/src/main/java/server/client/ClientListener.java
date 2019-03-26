@@ -178,4 +178,29 @@ public class ClientListener extends Thread {
         }
         super.interrupt();
     }
+
+    /**
+     *  This methods may inform if the message is from current client
+     *
+     * @param           message a {@code Message} to be checked
+     *
+     * @return          {@code true} if and only if the client has logged in and his {@code clientId}
+     *                  is equal to {@code fromId} of the {@code message}, {@code false otherwise}
+     */
+    public boolean isMessageNotFromThisLoggedClient(Message message) {
+        if (message == null) {
+            LOGGER.error("Passed null-message value to check the addresser id");
+            return true;
+        }
+        if (!isLogged()) {
+            LOGGER.trace("Passed message to check before log-in: ".concat(message.toString()));
+            return true;
+        }
+        if (message.getFromId() == null || message.getFromId() != client.getClientId()) {
+            LOGGER.info(buildMessage("Expected to receive clientId", client.getClientId()
+                    , "but found", message.getFromId()));
+            return true;
+        }
+        return false;
+    }
 }

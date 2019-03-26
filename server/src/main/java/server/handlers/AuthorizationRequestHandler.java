@@ -4,6 +4,7 @@ import common.entities.message.Message;
 import common.entities.message.MessageStatus;
 import org.apache.log4j.Level;
 import server.client.Client;
+import server.client.ClientListener;
 import server.exceptions.ClientNotFoundException;
 import server.processing.ServerProcessing;
 
@@ -18,6 +19,10 @@ import static common.Utils.buildMessage;
 public class AuthorizationRequestHandler extends RequestHandler {
     public AuthorizationRequestHandler(Message message) {
         super(message);
+    }
+
+    public AuthorizationRequestHandler(ClientListener clientListener, Message message) {
+        super(clientListener, message);
     }
 
     @Override

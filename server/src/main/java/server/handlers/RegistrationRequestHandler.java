@@ -21,6 +21,11 @@ public class RegistrationRequestHandler extends RequestHandler {
     public RegistrationRequestHandler(Message message) {
         super(message);
     }
+
+    public RegistrationRequestHandler(ClientListener clientListener, Message message) {
+        super(clientListener, message);
+    }
+
     @Override
     public Message handle() {
         return registration(message);
