@@ -76,7 +76,7 @@ public class Client implements Saveable {
         rooms = new Shell<>(FXCollections.synchronizedObservableSet(FXCollections.observableSet(new HashSet<>())));
     }
 
-    boolean isAdmin() {
+    public boolean isAdmin() {
         return isAdmin;
     }
 

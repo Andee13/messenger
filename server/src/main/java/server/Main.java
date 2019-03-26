@@ -3,6 +3,7 @@ package server;
 import common.entities.message.Message;
 import common.entities.message.MessageStatus;
 import org.xml.sax.SAXException;
+import server.processing.ServerProcessing;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.net.Socket;
 import java.net.URISyntaxException;
+import java.time.LocalDateTime;
 
 @SuppressWarnings("RedundantThrows")
 public class Main {
@@ -205,7 +207,7 @@ public class Main {
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
-        Message message = new Message(MessageStatus.REGISTRATION).setLogin("Puser").setPassword("password");
+        Message message = new Message(MessageStatus.REGISTRATION).setLogin("ToBeBanned").setPassword("password");
         Socket socket = new Socket("localhost", 5940);
         DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
         DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
@@ -218,7 +220,7 @@ public class Main {
         System.out.println(dataInputStream.readUTF());*/
 
         // AUTHORIZATION + ROOM CREATING
-        JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+        /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
         Marshaller marshaller = jaxbContext.createMarshaller();
         StringWriter stringWriter = new StringWriter();
 
@@ -263,7 +265,7 @@ public class Main {
         marshaller.marshal(message, stringWriter);
         dataOutputStream.writeUTF(stringWriter.toString());
 
-        System.out.println(dataInputStream.readUTF());
+        System.out.println(dataInputStream.readUTF());*/
 
         // STOP_SERVER
         /*Socket socket1 = new Socket("localhost", 5940);
@@ -314,7 +316,7 @@ public class Main {
 
 
         // TESTING BAN
-        /*try (Socket socket = new Socket("localhost", 5940);
+        try (Socket socket = new Socket("localhost", 5940);
             DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
             DataInputStream dataInputStream = new DataInputStream(socket.getInputStream())) {
 
@@ -322,7 +324,7 @@ public class Main {
             Marshaller marshaller = jaxbContext.createMarshaller();
             StringWriter stringWriter = new StringWriter();
 
-            Message message = new Message(MessageStatus.CLIENTBAN).setLogin("God").setPassword("change_me").setToId(3329)
+            Message message = new Message(MessageStatus.CLIENTBAN).setLogin("God").setPassword("change_me").setToId(-1898799876)
                     .setText(ServerProcessing.DATE_TIME_FORMATTER.format(LocalDateTime.now().plusHours(1)));
 
             marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
@@ -334,7 +336,7 @@ public class Main {
 
         } catch (JAXBException e) {
             e.printStackTrace();
-        }*/
+        }
 
 
         // AUTH + UNBAN

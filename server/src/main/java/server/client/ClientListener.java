@@ -141,8 +141,7 @@ public class ClientListener extends Thread {
             LOGGER.error(e.getLocalizedMessage());
         } finally {
             if (LOGGER.isEnabledFor(Level.TRACE)) {
-                LOGGER.trace(
-                        buildMessage("Client (",
+                LOGGER.trace(buildMessage("Client (",
                                 client == null ? "UNLOGGED" : buildMessage("id", client.getClientId())
                                 , "disconnected"));
             }
@@ -168,8 +167,7 @@ public class ClientListener extends Thread {
     public void interrupt() {
         if (LOGGER.isEnabledFor(Level.TRACE)) {
             LOGGER.trace(buildMessage("Stopping the client ",
-                    buildMessage("Client ",
-                            (logged ? buildMessage("(id", client.getClientId(),')') : ("(not logged in)"))
+                    buildMessage((logged ? buildMessage("(id", client.getClientId(),')') : ("(not logged in)"))
                             , "disconnected"), " session"));
         }
         if (client != null && !client.save()) {

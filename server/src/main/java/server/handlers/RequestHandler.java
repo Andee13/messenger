@@ -20,6 +20,7 @@ public abstract class RequestHandler {
 
     public RequestHandler(ClientListener clientListener, Message message) {
         this.message = message;
+        this.clientListener = clientListener;
     }
 
     public void setClientListener(ClientListener clientListener) {
