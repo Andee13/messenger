@@ -84,11 +84,11 @@ public class Client implements Saveable {
         return clientId;
     }
 
-    void setClientId(int clientId) {
+    public void setClientId(int clientId) {
         this.clientId = clientId;
     }
 
-    Shell<Set<Integer>> getRooms() {
+    public Shell<Set<Integer>> getRooms() {
         return rooms;
     }
 
@@ -96,7 +96,7 @@ public class Client implements Saveable {
         return login;
     }
 
-    void setLogin(String login) {
+    public void setLogin(String login) {
         this.login = login;
     }
 
@@ -104,7 +104,7 @@ public class Client implements Saveable {
         return password;
     }
 
-    void setPassword(String password) {
+    public void setPassword(String password) {
         this.password = password;
     }
 

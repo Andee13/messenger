@@ -8,7 +8,6 @@ import common.entities.message.Message;
  * */
 public abstract class RequestHandler {
     protected Message message;
-
     public RequestHandler(Message message) {
         this.message = message;
     }
