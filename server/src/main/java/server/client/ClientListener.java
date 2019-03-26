@@ -64,11 +64,11 @@ public class ClientListener extends Thread {
         return server;
     }
 
-    boolean isLogged() {
+    public boolean isLogged() {
         return logged;
     }
 
-    void setLogged(boolean logged) {
+    public void setLogged(boolean logged) {
         this.logged = logged;
     }
 

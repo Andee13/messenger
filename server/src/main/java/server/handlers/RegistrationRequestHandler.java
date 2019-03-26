@@ -16,23 +16,15 @@ import java.io.IOException;
 import java.util.InvalidPropertiesFormatException;
 
 import static common.Utils.buildMessage;
-import static server.client.RequestHandler.LOGGER;
 
 public class RegistrationRequestHandler extends RequestHandler {
-    private ClientListener clientListener;
     public RegistrationRequestHandler(Message message) {
         super(message);
     }
-
-    public void setClientListener(ClientListener clientListener) {
-        this.clientListener = clientListener;
-    }
-
     @Override
     public Message handle() {
         return registration(message);
     }
-
     private Message registration(Message message) {
         if (message == null) {
             return new Message(MessageStatus.ERROR).setText("Message came as null");

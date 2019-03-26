@@ -41,11 +41,11 @@ public class Client implements Saveable {
     @XmlTransient
     private Server server;
 
-    LocalDateTime getIsBannedUntill() {
+    public LocalDateTime getIsBannedUntill() {
         return isBannedUntill;
     }
 
-    void setIsBannedUntil(LocalDateTime isBannedUntill) {
+    public void setIsBannedUntil(LocalDateTime isBannedUntill) {
         this.isBannedUntill = isBannedUntill;
     }
 
@@ -53,11 +53,11 @@ public class Client implements Saveable {
         LOGGER = logger;
     }
 
-    boolean isBaned() {
+    public boolean isBaned() {
         return baned;
     }
 
-    void setBaned(boolean baned) {
+    public void setBaned(boolean baned) {
         this.baned = baned;
     }
 
@@ -100,7 +100,7 @@ public class Client implements Saveable {
         this.login = login;
     }
 
-    String getPassword() {
+    public String getPassword() {
         return password;
     }
 
